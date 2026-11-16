@@ -2240,7 +2240,9 @@ AppDatabase? _database;
 
 /// 独立产品可在首次访问前注入数据库；既有构造器和缺省路径保持。
 void initializeApplicationDatabase(AppDatabase instance) {
-  if (_database != null) throw StateError('数据库已经初始化');
+  if (_database != null) {
+    throw StateError('Application database already initialized');
+  }
   _database = instance;
 }
 
