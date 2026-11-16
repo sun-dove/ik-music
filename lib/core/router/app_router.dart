@@ -91,19 +91,19 @@ final appRouter = GoRouter(
         reverseTransitionDuration: AppMotion.routeReverse,
         transitionsBuilder: (context, animation, secondaryAnimation, child) =>
             buildAppPageTransition(
-          animation: animation,
-          secondaryAnimation: secondaryAnimation,
-          reduceMotion: MediaQuery.disableAnimationsOf(context),
-          child: AppBackgroundShell(
-            drawImage: false,
-            drawScrim: false,
-            baseOpacity: secondaryBackingOpacity,
-            child: SizedBox.expand(
-              key: const Key('app-route-background-surface'),
-              child: SecondaryGlassSurface(child: child),
+              animation: animation,
+              secondaryAnimation: secondaryAnimation,
+              reduceMotion: MediaQuery.disableAnimationsOf(context),
+              child: AppBackgroundShell(
+                drawImage: false,
+                drawScrim: false,
+                baseOpacity: secondaryBackingOpacity,
+                child: SizedBox.expand(
+                  key: const Key('app-route-background-surface'),
+                  child: SecondaryGlassSurface(child: child),
+                ),
+              ),
             ),
-          ),
-        ),
         child: const QueuePage(),
       ),
     ),
@@ -330,6 +330,7 @@ double routeBackingOpacityFor(String location) =>
 CustomTransitionPage<void> _appPage(
   GoRouterState state,
   Widget child, {
+
   /// Wrap the page in the frosted sheet. False for the shell page, which paints
   /// the capsules and must stay transparent above the app background.
   required bool frost,
@@ -412,12 +413,7 @@ CustomTransitionPage<void> _appShellPage(GoRouterState state, Widget child) =>
 /// Frosted unless it is the home tab host, and always carrying its own bottom
 /// clearance.
 CustomTransitionPage<void> _appLeafPage(GoRouterState state, Widget child) =>
-    _appPage(
-      state,
-      child,
-      frost: state.uri.path != '/',
-      insetContent: true,
-    );
+    _appPage(state, child, frost: state.uri.path != '/', insetContent: true);
 
 /// Hands the shell's live tab index to the home screen.
 ///

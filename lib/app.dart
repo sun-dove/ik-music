@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+
 import 'core/network/platform_http.dart';
 import 'core/router/app_router.dart';
 import 'core/share/deep_link_service.dart';
@@ -122,9 +123,7 @@ class MconnectApp extends ConsumerStatefulWidget {
     Widget? child,
     UiStyle uiStyle,
   ) {
-    final content = AppBackgroundShell(
-      child: child ?? const SizedBox.shrink(),
-    );
+    final content = AppBackgroundShell(child: child ?? const SizedBox.shrink());
 
     if (uiStyle != UiStyle.miuix) return content;
 

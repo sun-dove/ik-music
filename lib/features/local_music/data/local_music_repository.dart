@@ -12,7 +12,8 @@ import 'local_music_scan_result.dart';
 import 'local_scan_snapshot.dart';
 import 'local_track_store.dart';
 
-export 'local_music_scan_result.dart' show LocalMusicScanResult, LocalMusicScanner;
+export 'local_music_scan_result.dart'
+    show LocalMusicScanResult, LocalMusicScanner;
 
 /// Desktop / Dart-side local music scanner.
 ///
@@ -41,7 +42,8 @@ class LocalMusicRepository implements LocalMusicScanner {
     '.aif',
   };
 
-  static const supportedLyricsExtensions = LocalLyricsLoader.supportedExtensions;
+  static const supportedLyricsExtensions =
+      LocalLyricsLoader.supportedExtensions;
 
   LocalMusicRepository({
     LocalMetadataReader? metadataReader,
@@ -105,9 +107,7 @@ class LocalMusicRepository implements LocalMusicScanner {
     );
     return reconciler.reconcile(
       rootPath: rootPath,
-      files: [
-        for (final record in walked) LocalScannedFile.fromMap(record),
-      ],
+      files: [for (final record in walked) LocalScannedFile.fromMap(record)],
       stopwatch: stopwatch,
     );
   }

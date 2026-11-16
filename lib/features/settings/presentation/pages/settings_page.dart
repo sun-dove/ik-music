@@ -61,7 +61,11 @@ bool canUseDecodedBackgroundImage({
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key, this.diagnosticsExport, this.diagnosticsShare});
+  const SettingsPage({
+    super.key,
+    this.diagnosticsExport,
+    this.diagnosticsShare,
+  });
 
   /// Test seam for the 「导出诊断日志」 row.
   ///
@@ -508,7 +512,9 @@ class SettingsFloatingLyricsPage extends ConsumerWidget {
             secondary: const Icon(Icons.picture_in_picture_alt_outlined),
             title: Text(context.l10n.floatingLyricsEnable),
             subtitle: Text(
-              isWindows ? context.l10n.floatingLyricsEnableSubtitle : context.l10n.floatingLyricsPermissionSubtitle,
+              isWindows
+                  ? context.l10n.floatingLyricsEnableSubtitle
+                  : context.l10n.floatingLyricsPermissionSubtitle,
             ),
             value: floatingLyrics.enabled,
             onChanged: (value) async {
@@ -623,8 +629,7 @@ class SettingsAudioPage extends ConsumerWidget {
                   : '关：失败只降一档音质，然后跳到下一首',
             ),
             value: autoSourceSwitch.enabled,
-            onChanged: (value) =>
-                autoSourceSwitchNotifier.setEnabled(value),
+            onChanged: (value) => autoSourceSwitchNotifier.setEnabled(value),
           ),
           SwitchListTile(
             secondary: const Icon(Icons.graphic_eq),
@@ -738,15 +743,21 @@ class SettingsAudioPage extends ConsumerWidget {
             title: Text(context.l10n.audioSleepTimer),
             subtitle: Text(
               sleepTimer.enabled
-                  ? context.l10n.audioSleepTimerRemaining(_formatTimerRemaining(sleepTimer.remaining))
-                  : context.l10n.audioSleepTimerCountdown(audioEffects.sleepTimerDuration.inMinutes),
+                  ? context.l10n.audioSleepTimerRemaining(
+                      _formatTimerRemaining(sleepTimer.remaining),
+                    )
+                  : context.l10n.audioSleepTimerCountdown(
+                      audioEffects.sleepTimerDuration.inMinutes,
+                    ),
             ),
             value: sleepTimer.enabled,
             onChanged: sleepTimerNotifier.setEnabled,
           ),
           _SliderTile(
             title: context.l10n.audioSleepTimerDuration,
-            subtitle: context.l10n.audioMinutes(audioEffects.sleepTimerDuration.inMinutes),
+            subtitle: context.l10n.audioMinutes(
+              audioEffects.sleepTimerDuration.inMinutes,
+            ),
             icon: Icons.timer_outlined,
             value: audioEffects.sleepTimerDuration.inMinutes.toDouble(),
             min: 5,
@@ -817,7 +828,11 @@ class _AppBackgroundTile extends StatelessWidget {
       key: const Key('app-background-tile'),
       leading: const Icon(Icons.wallpaper_outlined),
       title: Text(context.l10n.customBackground),
-      subtitle: Text(enabled ? context.l10n.customBackgroundEnabledHint : context.l10n.customBackgroundChooseHint),
+      subtitle: Text(
+        enabled
+            ? context.l10n.customBackgroundEnabledHint
+            : context.l10n.customBackgroundChooseHint,
+      ),
       trailing: enabled
           ? IconButton(
               tooltip: context.l10n.removeBackground,
@@ -1460,7 +1475,10 @@ class _DiagnosticsTile extends StatelessWidget {
             case 'copy':
               await Clipboard.setData(ClipboardData(text: path));
               if (!context.mounted) return;
-              showSuccessSnackBar(context, context.l10n.diagnosticsLogPathCopied);
+              showSuccessSnackBar(
+                context,
+                context.l10n.diagnosticsLogPathCopied,
+              );
               break;
             case 'clear':
               await diagnostics.clear();
@@ -1605,10 +1623,15 @@ class _PlatformLoginTile extends StatelessWidget {
       title: Text(platform.label(context.l10n)),
       subtitle: isLoggedIn
           ? Text(
-              user!.nickname.isNotEmpty ? user!.nickname : context.l10n.accountLoggedIn,
+              user!.nickname.isNotEmpty
+                  ? user!.nickname
+                  : context.l10n.accountLoggedIn,
               style: TextStyle(color: cs.outline, fontSize: 13),
             )
-          : Text(context.l10n.accountTapToLogin, style: TextStyle(color: cs.outline, fontSize: 13)),
+          : Text(
+              context.l10n.accountTapToLogin,
+              style: TextStyle(color: cs.outline, fontSize: 13),
+            ),
       trailing: isLoggedIn
           ? IconButton(
               icon: Icon(Icons.logout, size: 20, color: cs.error),
@@ -1617,7 +1640,11 @@ class _PlatformLoginTile extends StatelessWidget {
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: Text(context.l10n.accountLogout),
-                    content: Text(context.l10n.accountLogoutConfirm(platform.label(context.l10n))),
+                    content: Text(
+                      context.l10n.accountLogoutConfirm(
+                        platform.label(context.l10n),
+                      ),
+                    ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx),

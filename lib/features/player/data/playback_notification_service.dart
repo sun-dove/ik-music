@@ -315,6 +315,7 @@ class MconnectAudioHandler extends BaseAudioHandler
   List<Song>? _publishedPlaylist;
   Song? _publishedSong;
   int _publishedQueueIndex = -1;
+
   /// The raw `currentIndex` argument that produced the published structure.
   ///
   /// `_normalizeCurrentIndex` returns the caller's index only when it already
@@ -461,7 +462,9 @@ class MconnectAudioHandler extends BaseAudioHandler
     if (structural) {
       queue.add(buildPlaybackNotificationQueue(effectivePlaylist));
       mediaItem.add(
-        song == null ? null : createPlaybackMediaItem(song, duration: _duration),
+        song == null
+            ? null
+            : createPlaybackMediaItem(song, duration: _duration),
       );
       _publishedPlaylist = effectivePlaylist;
       _publishedSong = song;
@@ -479,7 +482,9 @@ class MconnectAudioHandler extends BaseAudioHandler
       // published (just_audio reports it asynchronously). Refresh the item and
       // nothing else — a duration tick must not rebuild the queue.
       mediaItem.add(
-        song == null ? null : createPlaybackMediaItem(song, duration: _duration),
+        song == null
+            ? null
+            : createPlaybackMediaItem(song, duration: _duration),
       );
       _publishedItemDuration = itemDuration;
     }

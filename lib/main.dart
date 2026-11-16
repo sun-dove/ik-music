@@ -1,8 +1,10 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
+
 import 'app.dart';
 import 'core/constants/app_constants.dart';
 import 'core/diagnostics/crash_reporter.dart';
@@ -106,13 +108,11 @@ void main() async {
         child: const MconnectApp(),
       ),
     ),
-    (
-      error,
-      stack,
-    ) {
-    debugPrint('Uncaught error: $error\n$stack');
-    onZoneError(error, stack);
-  });
+    (error, stack) {
+      debugPrint('Uncaught error: $error\n$stack');
+      onZoneError(error, stack);
+    },
+  );
 }
 
 /// Pre-warms the liquid-glass fragment shader (a disk read).

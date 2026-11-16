@@ -337,10 +337,7 @@ class FloatingLyricsSyncController {
 
   void _updateSweepTimer({required bool running}) {
     if (running && _sweepTimer == null) {
-      _sweepTimer = Timer.periodic(
-        _sweepInterval,
-        (_) => unawaited(sync()),
-      );
+      _sweepTimer = Timer.periodic(_sweepInterval, (_) => unawaited(sync()));
     } else if (!running && _sweepTimer != null) {
       _sweepTimer!.cancel();
       _sweepTimer = null;
