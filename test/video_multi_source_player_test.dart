@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -220,7 +221,8 @@ void main() {
         );
       },
       isOfflineModeEnabled: () => offline,
-      offlineFilePathResolver: (_) async => 'D:/cache/song.mp3',
+      offlineFilePathResolver: (_) async =>
+          Directory.systemTemp.uri.resolve('song.mp3').toFilePath(),
       audioController: audio,
       audioControllerFactory: () => audio,
       notificationController: const NoopPlaybackNotificationController(),

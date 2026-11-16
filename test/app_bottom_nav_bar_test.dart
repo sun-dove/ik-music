@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mconnect/core/platform/platform_utils.dart';
 import 'package:mconnect/core/theme/ui_style_provider.dart';
 import 'package:mconnect/core/widgets/app_bottom_nav_bar.dart';
 import 'package:mconnect/core/widgets/floating_glass_nav_bar.dart';
@@ -66,6 +67,8 @@ void main() {
   testWidgets('miuix branch renders the floating capsule placeholder', (
     tester,
   ) async {
+    PlatformUtils.setDebugOverride(AppPlatform.windows);
+    addTearDown(() => PlatformUtils.setDebugOverride(null));
     await tester.pumpWidget(
       wrap(
         style: UiStyle.miuix,

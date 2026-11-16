@@ -337,7 +337,14 @@ void main() {
       final stack = tester.widget<Stack>(
         find.descendant(
           of: find.byType(MiuixBottomStack),
-          matching: find.byType(Stack),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Stack &&
+                widget.children.any(
+                  (child) =>
+                      child is Positioned && child.child is MiniPlayerBar,
+                ),
+          ),
         ),
       );
       final playerIndex = stack.children.indexWhere(

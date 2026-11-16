@@ -1249,7 +1249,8 @@ void main() {
         audioControllerFactory: () => _FakeAudioController(),
         keepAliveController: const NoopPlaybackKeepAliveController(),
         isOfflineModeEnabled: () => true,
-        offlineFilePathResolver: (song) async => r'C:\music\offline-1.mp3',
+        offlineFilePathResolver: (song) async =>
+            Directory.systemTemp.uri.resolve('offline-1.mp3').toFilePath(),
       );
       addTearDown(notifier.dispose);
 
@@ -1350,8 +1351,9 @@ void main() {
         playbackMemorySaveInterval: Duration.zero,
         keepAliveController: const NoopPlaybackKeepAliveController(),
         isOfflineModeEnabled: () => true,
-        offlineFilePathResolver: (song) async =>
-            r'C:\music\offline-restored.flac',
+        offlineFilePathResolver: (song) async => Directory.systemTemp.uri
+            .resolve('offline-restored.flac')
+            .toFilePath(),
       );
       addTearDown(notifier.dispose);
 
