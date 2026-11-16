@@ -2061,6 +2061,8 @@ class SmartPlaylistSnapshotsDao extends DatabaseAccessor<AppDatabase>
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
+  AppDatabase.withExecutor(super.e);
+
   AppDatabase.forTesting(super.e);
 
   /// v1 → v2 adds the album/artist ids on [Songs], the local-library and chart
@@ -2235,6 +2237,12 @@ LazyDatabase _openConnection() {
 
 // --- Singleton ---
 AppDatabase? _database;
+
+/// 独立产品可在首次访问前注入数据库；既有构造器和缺省路径保持。
+void initializeApplicationDatabase(AppDatabase instance) {
+  if (_database != null) throw StateError('数据库已经初始化');
+  _database = instance;
+}
 
 AppDatabase get database {
   _database ??= AppDatabase();

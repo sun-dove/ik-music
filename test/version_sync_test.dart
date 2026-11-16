@@ -264,8 +264,9 @@ void main() {
         if (first.isEmpty || first == '包名' || first.startsWith('-')) continue;
         for (final part in first.split('+')) {
           final package = part.trim().split(RegExp(r'\s+')).first;
-          if (RegExp(r'^[a-z0-9_]+$').hasMatch(package))
+          if (RegExp(r'^[a-z0-9_]+$').hasMatch(package)) {
             documented.add(package);
+          }
         }
       }
       expect(documented, isNotEmpty, reason: '§8 的依赖表解析失败，护栏会空转');

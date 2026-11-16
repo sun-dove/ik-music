@@ -176,4 +176,6 @@ SourceCollection 的 v1 键、首选镜像、下载授权和播放策略不破�
 
 收口时确认Hive.initFlutter在Windows默认使用共享的用户文档目录，可能与原产品的settings.hive冲突。按已确认的独立数据目录场景，先新增红门，再新增initializeWindowsVideoHive，仅由main_video的Windows分支调用应用专属Support目录；诊断服务同样注入该目录。Android仍按原顺序初始化Hive、settings与诊断，公开接口不变。回滚为停用Windows新增入口，原产品文件不迁移、不覆盖。
 
+同场景追加确认：原database单例也直接使用文档目录的mconnect.sqlite。先新增数据库隔离红门，再为AppDatabase新增执行器构造入口和首次初始化注入方法，由Windows新装配选择Support目录中的yueyin.sqlite。既有构造器、forTesting、database getter及默认连接实现不改；只有Windows独立入口调用新方法。受影响调用方为悦音Windows通过既有database getter使用的本地曲库、历史与缓存DAO；Android和默认Mconnect继续原路径。回滚为关闭Windows新装配，不移动或覆盖旧数据库，不更改表结构或迁移版本。这是已批准目录隔离场景的缺陷收口。
+
 20源全部固定版本诊断；主机和Windows真实宿主结果独立记录。Windows主程序的本地C++工具安装被自动审批拒绝，独立宿主已用现成编译器验证；主程序构建改由已有工具链的GitHub Windows runner尝试。实际出包及未测项目见本轮验收记录。

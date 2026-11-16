@@ -132,8 +132,9 @@ class _ScrobbleSettingsSectionState
                       // 这里 guard 的必须是**这个 BuildContext 自己**的 mounted：
                       // `context` 是 build 的参数，不是 State.context，用 State 的
                       // `mounted` 会被 analyzer 判定为"不相关的守卫"。
-                      if (context.mounted)
+                      if (context.mounted) {
                         showErrorSnackBar(context, '切换失败：$error');
+                      }
                     } finally {
                       _setBusy(false);
                     }

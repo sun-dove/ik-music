@@ -6,7 +6,7 @@
 
 安装器可选择安装目录，包括 D:/Applications。便携 ZIP 必须完整解压后运行其中的 EXE；不要单独复制 EXE，音频库、Flutter 数据和 data/lx-host 都是运行依赖。“便携”表示免安装，不表示设置写回 EXE 目录；设置仍保存至本用户应用数据目录。Windows 与 Android 不自动同步账号或音源。
 
-设置使用系统应用支持目录下的sun-dove/YueyinMusic，诊断日志也位于该应用目录。不会读取或覆盖用户文档目录中原Mconnect的同名Hive文件；此隔离由独立存储回归门验证。Android继续使用既有目录。
+设置使用系统应用支持目录下的sun-dove/YueyinMusic，曲库数据库yueyin.sqlite与诊断日志也位于该应用目录。不会读取或覆盖用户文档目录中原Mconnect的同名Hive文件或mconnect.sqlite；两种存储均由独立回归门验证。Android继续使用既有目录。
 
 缺少 VC++ 时，安装器会提示先安装运行库。音源宿主或 WebView2 不完整时，应用会显示“Windows音源运行环境未就绪”，应恢复完整发行包或安装 WebView2，再检查音源。
 

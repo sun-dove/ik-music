@@ -63,6 +63,9 @@ Future<void> main() async {
   final windowsStorage = PlatformUtils.isWindows
       ? await initializeWindowsVideoHive()
       : null;
+  if (windowsStorage != null) {
+    await initializeWindowsVideoDatabase(windowsStorage);
+  }
   if (windowsStorage == null) await Hive.initFlutter();
   final settings = await Hive.openBox('settings');
   final diagnostics = windowsStorage == null

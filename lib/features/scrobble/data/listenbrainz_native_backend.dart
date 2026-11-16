@@ -108,8 +108,9 @@ class ListenBrainzNativeBackend implements ScrobbleBackend {
   @override
   Future<ScrobbleResult> scrobble(List<ScrobbleEntry> entries) async {
     if (entries.isEmpty) return ScrobbleResult.ok(accepted: 0);
-    if (!isConfigured)
+    if (!isConfigured) {
       return ScrobbleResult.failed('尚未填写 $displayName 的用户 token');
+    }
     if (entries.length > kListenBrainzMaxListensPerRequest) {
       return ScrobbleResult.failed(
         '$displayName 单次最多提交 $kListenBrainzMaxListensPerRequest 条，收到 ${entries.length} 条',
