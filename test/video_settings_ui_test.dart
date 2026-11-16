@@ -47,7 +47,7 @@ void main() {
     await tester.ensureVisible(find.text('12 MB / 10240 MB'));
     await tester.tap(find.text('12 MB / 10240 MB'));
     expect(cache, 1);
-    await tester.scrollUntilVisible(find.text('悦音音乐 · 0.3.3'), 200);
-    expect(find.text('悦音音乐 · 0.3.3'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('悦音音乐 · 0.4.0'), 200);
+    expect(find.text('悦音音乐 · 0.4.0'), findsOneWidget);
   });
 }

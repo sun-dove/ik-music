@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">悦音音乐浅色图标方案 B：奶白与淡紫</title>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1"><stop stop-color="#FFFCF8"/><stop offset="1" stop-color="#ECEAFB"/></linearGradient>
+    <linearGradient id="record" x2="1" y2="1"><stop stop-color="#D2CCF2"/><stop offset="1" stop-color="#A9A3DB"/></linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="57" fill="url(#background)"/>
+  <circle cx="119" cy="137" r="69" fill="url(#record)"/>
+  <circle cx="119" cy="137" r="51" fill="none" stroke="#F7F5FF" stroke-width="2" opacity=".62"/>
+  <circle cx="119" cy="137" r="37" fill="none" stroke="#F7F5FF" stroke-width="2" opacity=".62"/>
+  <circle cx="119" cy="137" r="17" fill="#FBFAFF"/>
+  <path d="M169 70v72" fill="none" stroke="#615890" stroke-width="15" stroke-linecap="round"/>
+  <path d="m169 70 27-6v22l-27 7z" fill="#615890"/>
+  <ellipse cx="157" cy="149" rx="20" ry="15" transform="rotate(-20 157 149)" fill="#615890"/>
+</svg>

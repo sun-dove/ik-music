@@ -26,12 +26,17 @@ import 'custom_source/custom_source_models.dart';
 import 'custom_source/custom_source_storage.dart';
 import 'data/video_auth_notifier.dart';
 import 'data/video_catalog.dart';
+import 'data/video_kugou_catalog.dart';
 import 'lx_source/lx_source.dart';
 import 'lx_source/lx_runtime.dart';
 import 'lx_source/lx_http.dart';
+import 'lx_source/lx_importer_v3.dart';
+import 'multi_source/source_checks.dart';
 import 'multi_source/source_collection.dart';
 import 'multi_source/multi_source_player.dart';
+import 'ui/source_manager_page.dart';
 import 'ui/source_collection_page.dart';
+import 'ui/kugou_playlists_page.dart';
 import 'playback/video_stream_state.dart';
 import 'ui/catalog_pages.dart';
 import 'ui/custom_source_page.dart';
@@ -51,6 +56,8 @@ class VideoMusicApp extends StatefulWidget {
     this.onCustomSourceChanged,
     this.sourceSettings,
     this.sourceEngine,
+    this.catalog,
+    this.expandedPlatforms = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -58,6 +65,8 @@ class VideoMusicApp extends StatefulWidget {
   final VoidCallback? onCustomSourceChanged;
   final SourceSettings? sourceSettings;
   final LxSourceEngine? sourceEngine;
+  final ExpandedVideoCatalog? catalog;
+  final bool expandedPlatforms;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
@@ -83,6 +92,8 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
       onCustomSourceChanged: widget.onCustomSourceChanged,
       sourceSettings: widget.sourceSettings,
       sourceEngine: widget.sourceEngine,
+      catalog: widget.catalog,
+      expandedPlatforms: widget.expandedPlatforms,
       onThemeChanged: () => setState(() {}),
     ),
   );
@@ -97,6 +108,8 @@ class _VideoHome extends ConsumerStatefulWidget {
     required this.onThemeChanged,
     this.sourceSettings,
     this.sourceEngine,
+    this.catalog,
+    this.expandedPlatforms = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore customSourceCredentials;
@@ -105,13 +118,20 @@ class _VideoHome extends ConsumerStatefulWidget {
   final VoidCallback onThemeChanged;
   final SourceSettings? sourceSettings;
   final LxSourceEngine? sourceEngine;
+  final ExpandedVideoCatalog? catalog;
+  final bool expandedPlatforms;
   @override
   ConsumerState<_VideoHome> createState() => _VideoHomeState();
 }
 
 class _VideoHomeState extends ConsumerState<_VideoHome>
     with WidgetsBindingObserver {
-  final _catalog = VideoCatalog();
+  late final VideoCatalog _catalog = widget.catalog ?? VideoCatalog();
+  List<PlatformType> get _platforms => [
+    PlatformType.qq,
+    PlatformType.netease,
+    if (widget.expandedPlatforms) PlatformType.kugou,
+  ];
   final _query = LatestVideoQuery<VideoPage>();
   final _search = TextEditingController();
   final _libraries = <PlatformType, VideoLibrary>{};
@@ -120,7 +140,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   final _pendingLikes = <String>{};
   var _result = const VideoCatalogViewState();
   var _searchPlatform = PlatformType.qq;
-  var _index = 3;
+  late var _index = widget.expandedPlatforms ? 4 : 3;
   var _page = 0;
   var _submitted = false;
   var _localReady = false;
@@ -140,7 +160,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     unawaited(_initializeLocal());
     await ref.read(authProvider.notifier).init();
     if (!mounted) return;
-    for (final platform in [PlatformType.qq, PlatformType.netease]) {
+    for (final platform in _platforms) {
       if (ref.read(authProvider).isLoggedIn(platform)) {
         unawaited(_sync(platform));
       }
@@ -429,6 +449,34 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   void _pushLikes() => ref
       .read(playerProvider.notifier)
       .updateLikedSongs(_libraries.values.expand((lib) => lib.songs).toList());
+
+  Future<void> _kugouPlaylists() async {
+    const platform = PlatformType.kugou;
+    final user = ref.read(authProvider).userFor(platform);
+    if (user == null) {
+      await _account(platform);
+      return;
+    }
+    final epoch = _authEpoch(platform);
+    final catalog = _catalog;
+    if (catalog is! ExpandedVideoCatalog) return;
+    bool current() =>
+        mounted &&
+        _authEpoch(platform) == epoch &&
+        ref.read(authProvider).userFor(platform)?.id == user.id;
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => VideoKugouPlaylistsPage(
+          isSessionCurrent: current,
+          loadPlaylists: () => catalog.kugou.playlists(userId: user.id),
+          loadSongs: (playlist) =>
+              catalog.kugou.playlistSongs(playlist, userId: user.id),
+          onPlay: (song, songs) => unawaited(_play(song, songs)),
+          onDownload: (songs) => unawaited(_download(songs)),
+        ),
+      ),
+    );
+  }
 
   void _retrySearch() => unawaited(
     _runSearch(_committedQuery, more: _page > 0 && _result.hasMore),
@@ -1184,29 +1232,57 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     try {
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
-          builder: (_) => SourceCollectionPage(
-            initial: settings.value,
-            warning: settings.loadError,
-            onImport: (link, token) => LxSourceImporter(
-              dio: dio,
-              engine: engine,
-            ).importLink(link, cancelToken: token),
-            onInspect: (config, token) async {
-              await engine.inspect(config.script, cancelToken: token);
-            },
-            onSave: (value) async {
-              await settings.save(value);
-              widget.onCustomSourceChanged?.call();
-              if (mounted) {
-                setState(() {});
-                Navigator.pop(context);
-              }
-            },
-            onHttp: () {
-              Navigator.pop(context);
-              unawaited(_httpCustomSource());
-            },
-          ),
+          builder: (_) => widget.expandedPlatforms
+              ? SourceManagerPage(
+                  initial: settings.value,
+                  warning: settings.loadError,
+                  runtimeId: '${Theme.of(context).platform.name}-lx3',
+                  initialChecks: SourceCheckStore(widget.preferences.box)
+                      .load(),
+                  onChecksChanged: SourceCheckStore(widget.preferences.box)
+                      .save,
+                  onImport: (link, token) => LxSourceImporterV3(
+                    dio: dio,
+                    engine: engine,
+                  ).importLink(link, cancelToken: token),
+                  onInspect: (config, token) async {
+                    await engine.inspect(config.script, cancelToken: token);
+                  },
+                  onSave: (value) async {
+                    await settings.save(value);
+                    widget.onCustomSourceChanged?.call();
+                    if (mounted) {
+                      setState(() {});
+                    }
+                  },
+                  onHttp: () {
+                    Navigator.pop(context);
+                    unawaited(_httpCustomSource());
+                  },
+                )
+              : SourceCollectionPage(
+                  initial: settings.value,
+                  warning: settings.loadError,
+                  onImport: (link, token) => LxSourceImporter(
+                    dio: dio,
+                    engine: engine,
+                  ).importLink(link, cancelToken: token),
+                  onInspect: (config, token) async {
+                    await engine.inspect(config.script, cancelToken: token);
+                  },
+                  onSave: (value) async {
+                    await settings.save(value);
+                    widget.onCustomSourceChanged?.call();
+                    if (mounted) {
+                      setState(() {});
+                      Navigator.pop(context);
+                    }
+                  },
+                  onHttp: () {
+                    Navigator.pop(context);
+                    unawaited(_httpCustomSource());
+                  },
+                ),
         ),
       );
     } finally {
@@ -1346,10 +1422,12 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     }
 
     return VideoShell(
+      expandedPlatforms: widget.expandedPlatforms,
       index: _index,
       onSelect: (index) => setState(() => _index = index),
       pages: [
         VideoSearchPage(
+          platforms: [PlatformType.local, ..._platforms],
           controller: _search,
           onSearch: (text) => _runSearch(text),
           platform: _searchPlatform,
@@ -1370,9 +1448,12 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           likedKeys: liked,
           currentSong: player.currentSong,
         ),
-        for (final platform in [PlatformType.qq, PlatformType.netease])
+        for (final platform in _platforms)
           VideoLibraryPage(
             platform: platform,
+            onPlaylists: platform == PlatformType.kugou
+                ? _kugouPlaylists
+                : null,
             result: libraryState(platform),
             loggedIn: auth.isLoggedIn(platform),
             onLogin: () => _account(platform),
@@ -1392,11 +1473,12 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             syncComplete: _libraries[platform]?.complete ?? false,
           ),
         VideoMyPage(
+          platforms: _platforms,
           localSongCount: _localReady
               ? ref.watch(localMusicProvider).songs.length
               : null,
           accounts: {
-            for (final platform in [PlatformType.qq, PlatformType.netease])
+            for (final platform in _platforms)
               if (auth.userFor(platform) case final user?)
                 platform: VideoAccountSummary(
                   nickname: user.nickname,
@@ -1415,7 +1497,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             _ => VideoStrings.lightTheme,
           },
           qualityLabels: {
-            for (final platform in [PlatformType.qq, PlatformType.netease]) ...{
+            for (final platform in _platforms) ...{
               '${platform.name}:play':
                   widget.sourceSettings?.value.highestQuality == true
                   ? SourceStrings.highest

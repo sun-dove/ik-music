@@ -1,6 +1,11 @@
 cmake_minimum_required(VERSION 3.14)
 project(runner LANGUAGES CXX)
 
+set(RUNNER_RESOURCE "Runner.rc")
+if(YUEYIN_BUILD)
+  set(RUNNER_RESOURCE "Yueyin.rc")
+endif()
+
 add_executable(${BINARY_NAME} WIN32
   "flutter_window.cpp"
   "floating_lyrics_channel.cpp"
@@ -9,11 +14,15 @@ add_executable(${BINARY_NAME} WIN32
   "utils.cpp"
   "win32_window.cpp"
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
-  "Runner.rc"
+  "${RUNNER_RESOURCE}"
   "runner.exe.manifest"
 )
 
 apply_standard_settings(${BINARY_NAME})
+if(YUEYIN_BUILD)
+  target_compile_definitions(${BINARY_NAME} PRIVATE "YUEYIN_BUILD")
+  target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
+endif()
 
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION_MAJOR=${FLUTTER_VERSION_MAJOR}")

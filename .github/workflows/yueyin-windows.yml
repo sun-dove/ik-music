@@ -1,0 +1,45 @@
+name: 悦音 Windows 构建
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'lib/**'
+      - 'windows/**'
+      - 'scripts/build_video_windows.ps1'
+      - 'scripts/build_windows_lx_host.ps1'
+      - 'installer/yueyin.iss'
+      - '.github/workflows/yueyin-windows.yml'
+permissions:
+  contents: read
+concurrency:
+  group: yueyin-windows-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: 获取依赖
+        run: flutter pub get
+      - name: 完整静态检查和回归
+        run: |
+          flutter analyze --no-pub
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          flutter test --no-pub -j 1
+          exit $LASTEXITCODE
+      - name: 编译独立宿主、原生验收与发行包
+        shell: powershell
+        run: ./scripts/build_video_windows.ps1 -FlutterSdk $env:FLUTTER_ROOT -DependencyDirectory "$env:RUNNER_TEMP/yueyin-native"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yueyin-0.4.0-windows-x64
+          path: build/yueyin-release/*
+          if-no-files-found: error
+          retention-days: 14

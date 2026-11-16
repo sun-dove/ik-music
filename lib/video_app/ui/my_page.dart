@@ -39,6 +39,7 @@ class VideoMyPage extends StatelessWidget {
     this.localSongCount,
     this.customSourceLabel = VideoStrings.customSourceNotConfigured,
     this.onCustomSource,
+    this.platforms = const [PlatformType.qq, PlatformType.netease],
   });
   final Map<PlatformType, VideoAccountSummary> accounts;
   final String cacheLabel, downloadLabel, themeLabel;
@@ -49,6 +50,7 @@ class VideoMyPage extends StatelessWidget {
   final int? localSongCount;
   final String customSourceLabel;
   final VoidCallback? onCustomSource;
+  final List<PlatformType> platforms;
 
   @override
   Widget build(BuildContext context) => ListView(
@@ -59,7 +61,7 @@ class VideoMyPage extends StatelessWidget {
         style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
       ),
       const SizedBox(height: 17),
-      for (final platform in [PlatformType.qq, PlatformType.netease]) ...[
+      for (final platform in platforms) ...[
         _account(context, platform),
         const SizedBox(height: 12),
       ],
@@ -78,6 +80,10 @@ class VideoMyPage extends StatelessWidget {
               VideoStrings.neteaseLikes:
                   accounts[PlatformType.netease]?.total ??
                   accounts[PlatformType.netease]?.loaded,
+              if (platforms.contains(PlatformType.kugou))
+                VideoStrings.kugouLikes:
+                    accounts[PlatformType.kugou]?.total ??
+                    accounts[PlatformType.kugou]?.loaded,
               VideoStrings.localSongs: localSongCount,
             }.entries)
               Expanded(
@@ -112,7 +118,7 @@ class VideoMyPage extends StatelessWidget {
           Icons.hub_outlined,
           onCustomSource ?? () {},
         ),
-        for (final platform in [PlatformType.qq, PlatformType.netease])
+        for (final platform in platforms)
           _row(
             context,
             VideoStrings.platformQuality(videoPlatformLabel(platform)),
@@ -131,7 +137,7 @@ class VideoMyPage extends StatelessWidget {
       ]),
       _heading(VideoStrings.downloadSettings),
       _group(context, [
-        for (final platform in [PlatformType.qq, PlatformType.netease])
+        for (final platform in platforms)
           _row(
             context,
             VideoStrings.platformQuality(
@@ -190,6 +196,11 @@ class VideoMyPage extends StatelessWidget {
   Widget _account(BuildContext context, PlatformType platform) {
     final user = accounts[platform];
     final qq = platform == PlatformType.qq;
+    final color = platform == PlatformType.kugou
+        ? const Color(0xFF2A92DE)
+        : qq
+        ? const Color(0xFF22B783)
+        : const Color(0xFFE84D56);
     final count = user == null
         ? VideoStrings.loginToSyncLikes
         : VideoStrings.accountLikes(user.loaded, user.total);
@@ -205,18 +216,14 @@ class VideoMyPage extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 23,
-                backgroundColor:
-                    (qq ? const Color(0xFF22B783) : const Color(0xFFE84D56))
-                        .withValues(alpha: .12),
+                backgroundColor: color.withValues(alpha: .12),
                 backgroundImage: user?.avatarUrl == null
                     ? null
                     : NetworkImage(user!.avatarUrl!),
                 child: user?.avatarUrl == null
                     ? Icon(
                         qq ? Icons.music_note_rounded : Icons.cloud_rounded,
-                        color: qq
-                            ? const Color(0xFF22B783)
-                            : const Color(0xFFE84D56),
+                        color: color,
                         size: 27,
                       )
                     : null,

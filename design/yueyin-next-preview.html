@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>悦音音乐 · 下一版设计预览</title>
+<style>
+  :root{color-scheme:light;--ink:#193936;--muted:#667d79;--line:#e1ebe7;--mint:#216d64;--pale:#e7f3ed;--paper:#f6f8f5}
+  *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.6 "Segoe UI","Microsoft YaHei",sans-serif}
+  main{max-width:1160px;margin:auto;padding:42px 28px 60px}h1{font-size:30px;letter-spacing:-1px;margin:6px 0}h2{font-size:18px;margin:0 0 16px}p{margin:6px 0;color:var(--muted)}.eyebrow{font-size:12px;letter-spacing:2px;color:var(--mint)}
+  .intro{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:30px}.notice{font-size:12px;max-width:280px;border-left:2px solid #aacbbf;padding-left:14px}.section{margin:34px 0}.icons{display:flex;gap:34px;flex-wrap:wrap}.icon-option{display:flex;align-items:center;gap:18px;min-width:260px}.icon-option>img{width:106px;height:106px;filter:drop-shadow(0 8px 13px #31594e0e)}.sizes{display:flex;align-items:center;gap:12px;margin-top:10px}.sizes img{width:32px;height:32px}.sizes img:last-child{width:48px;height:48px}.tag{font-size:11px;padding:2px 7px;border-radius:6px;background:var(--pale);color:var(--mint)}
+  .app{display:grid;grid-template-columns:175px minmax(0,1fr);border:1px solid #dbe5df;border-radius:18px;overflow:hidden;background:#fff;box-shadow:0 18px 44px #203b3310}.sidebar{background:#f0f5f0;padding:25px 15px;display:flex;flex-direction:column;gap:7px}.brand{display:flex;align-items:center;gap:9px;font-size:16px;font-weight:650;margin-bottom:24px}.brand img{width:35px;height:35px}.nav-item{padding:10px 13px;color:#637973;border-radius:8px}.nav-item.active{color:var(--mint);background:#dfece3;font-weight:600}.nav-title{font-size:11px;letter-spacing:1px;padding:14px 13px 3px;color:#71857d}.app-main{padding:30px 32px}.heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}.heading h2{font-size:23px;margin:0}.caption{font-size:12px;color:var(--muted)}button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:8px;background:white;padding:8px 12px;color:var(--ink)}button.primary{background:var(--mint);border-color:var(--mint);color:white}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #40877b;outline-offset:3px}.tools{display:flex;gap:9px;flex-wrap:wrap;margin:22px 0 16px}input,select{border:1px solid var(--line);border-radius:8px;padding:8px 11px;min-width:0;background:#fff;color:var(--ink)}input{flex:1;min-width:150px}.strategy{padding:12px 14px;border:1px solid var(--line);border-radius:9px;margin-bottom:12px;display:flex;gap:12px;align-items:center;justify-content:space-between}.strategy .caption{font-size:11px}.source{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:12px;align-items:center;border-bottom:1px solid var(--line);padding:17px 0}.grip{color:#9bafa5;font-size:20px}.source-title{font-weight:600;display:flex;flex-wrap:wrap;align-items:center;gap:8px}.version{color:#8b9b95;font-weight:400;font-size:11px}.meta{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-top:5px;font-size:11px;color:#6c8078}.platform{color:#506d62;background:#f3f6f2;padding:1px 6px;border-radius:4px}.result{margin-top:6px;font-size:12px;color:#538173}.result.failed{color:#a66b31}.actions{display:flex;align-items:center;gap:8px}.switch{width:36px;height:21px;background:#26776c;border:0;border-radius:20px;padding:3px}.switch:after{content:"";display:block;width:15px;height:15px;background:white;border-radius:50%;margin-left:15px}.switch[aria-checked="false"]{background:#d5ded8}.switch[aria-checked="false"]:after{margin-left:0}.more{border:0;font-size:20px;padding:1px 7px}.save{display:flex;justify-content:space-between;align-items:center;gap:12px;padding-top:20px}.save .caption{max-width:400px}.player{grid-column:1/-1;border-top:1px solid var(--line);padding:15px 24px;display:grid;grid-template-columns:1fr auto 1fr;gap:20px;align-items:center;background:#fbfcfa}.album{width:32px;height:32px;background:#d8e8dc;border-radius:7px;display:grid;place-items:center;color:#4e7965;font-size:19px}.track{display:flex;gap:10px;align-items:center}.controls{letter-spacing:10px;color:#326a5b}.quality{text-align:right;font-size:11px;color:#789083}.empty{color:var(--muted);padding:40px 0}.examples{margin-top:9px;font-size:11px}.dialog{border:1px solid var(--line);border-radius:13px;max-width:400px;padding:22px;color:var(--ink)}.dialog::backdrop{background:#173b3540}.dialog h3{margin-top:0}.dialog p{white-space:pre-line}.dialog form{text-align:right}
+  @media(max-width:760px){main{padding:25px 14px}.intro{align-items:flex-start;flex-direction:column;gap:12px}.notice{max-width:none}.app{grid-template-columns:1fr}.sidebar{display:none}.app-main{padding:23px 17px}.heading h2{font-size:20px}.strategy{align-items:flex-start;flex-direction:column;gap:3px}.player{padding:13px 17px;grid-template-columns:1fr auto}.quality{display:none}.save{align-items:flex-start}.icons{gap:23px}.icon-option{min-width:0}.icon-option>img{width:88px;height:88px}.source{gap:8px}.meta{gap:5px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="intro"><div><div class="eyebrow">YUEYIN · 悦音音乐</div><h1>浅一些，清楚一些。</h1><p>音源管理、酷狗入口与 Windows 布局提案</p></div><div class="notice">2026.11.16 · 待确认设计<br>以下源名称与结果均为演示数据，当前应用尚未修改。</div></header>
+  <section class="section"><h2>浅色图标</h2><div class="icons">
+    <div class="icon-option"><img src="yueyin-light-mint.svg" alt="奶白与薄荷青唱片音符图标"><div><strong>A · 奶白薄荷</strong> <span class="tag">推荐</span><p class="caption">浅色唱片，深青音符</p><div class="sizes"><img src="yueyin-light-mint.svg" alt="32像素图标"><img src="yueyin-light-mint.svg" alt="48像素图标"></div></div></div>
+    <div class="icon-option"><img src="yueyin-light-lilac.svg" alt="奶白与淡紫唱片音符图标"><div><strong>B · 奶白淡紫</strong><p class="caption">保留一点原来的紫色</p><div class="sizes"><img src="yueyin-light-lilac.svg" alt="32像素图标"><img src="yueyin-light-lilac.svg" alt="48像素图标"></div></div></div>
+  </div></section>
+  <section class="section"><h2>音源管理 · 宽屏预览</h2><div class="app">
+    <nav class="sidebar" aria-label="设计导航"><div class="brand"><img src="yueyin-light-mint.svg" alt="">悦音音乐</div><div class="nav-item">搜索音乐</div><div class="nav-title">我的音乐</div><div class="nav-item">QQ 音乐</div><div class="nav-item">网易云音乐</div><div class="nav-item">酷狗音乐</div><div class="nav-item">本地音乐</div><div class="nav-title">偏好设置</div><div class="nav-item active">音源管理</div><div class="nav-item">我的</div></nav>
+    <div class="app-main"><div class="heading"><div><h2>音源管理</h2><div class="caption" id="summary">已保存 3 个 · 已启用 2 个</div></div><button class="primary" id="import">＋ 导入音源</button></div>
+      <div class="tools"><input id="query" type="search" placeholder="查找音源名称" aria-label="查找音源名称"><select id="platform" aria-label="按平台筛选"><option value="all">全部平台</option><option value="tx">QQ 音乐</option><option value="wy">网易云音乐</option><option value="kg">酷狗音乐</option></select><button id="check">检查脚本</button></div>
+      <div class="strategy"><div><strong>播放策略</strong><div class="caption">音源优先 · 失败自动切换 · 优先最高可用音质</div></div><button id="strategy">调整策略</button></div>
+      <div id="sources">
+        <article class="source" data-name="示例 清风" data-platforms="tx wy kg"><span class="grip" aria-hidden="true">⠿</span><div><div class="source-title">示例 · 清风 <span class="version">v1.2</span><span class="tag">首选</span></div><div class="meta"><span class="platform">QQ</span><span class="platform">网易云</span><span class="platform">酷狗</span><span>最高声明 Hi-Res</span></div><div class="result">初始化通过 · 尚未验证歌曲播放</div></div><div class="actions"><button class="switch" role="switch" aria-label="启用示例清风" aria-checked="true"></button><button class="more" aria-label="示例清风更多操作">⋯</button></div></article>
+        <article class="source" data-name="示例 回声" data-platforms="tx kg"><span class="grip" aria-hidden="true">⠿</span><div><div class="source-title">示例 · 回声 <span class="version">v2.0</span></div><div class="meta"><span class="platform">QQ</span><span class="platform">酷狗</span><span>最高声明无损</span></div><div class="result">未检查</div></div><div class="actions"><button class="switch" role="switch" aria-label="启用示例回声" aria-checked="true"></button><button class="more" aria-label="示例回声更多操作">⋯</button></div></article>
+        <article class="source" data-name="示例 远山" data-platforms="wy"><span class="grip" aria-hidden="true">⠿</span><div><div class="source-title">示例 · 远山 <span class="version">v1.0</span></div><div class="meta"><span class="platform">网易云</span><span>最高声明 HQ</span></div><div class="result failed">上次检查超时 · 可重试</div></div><div class="actions"><button class="switch" role="switch" aria-label="启用示例远山" aria-checked="false"></button><button class="more" aria-label="示例远山更多操作">⋯</button></div></article>
+      </div><div id="empty" class="empty" hidden>没有匹配的音源</div>
+      <div class="save"><div class="caption" id="status" role="status" aria-live="polite">设置已保存</div><button class="primary" id="save">保存设置</button></div>
+      <p class="examples">演示控件可查找、筛选、切换启用状态；不会连接音源或改动应用设置。</p>
+    </div>
+    <div class="player"><div class="track"><div class="album">♪</div><div><strong>选择一首喜欢的歌</strong><div class="caption">QQ · 网易云 · 酷狗</div></div></div><div class="controls" aria-hidden="true">⏮ ▶ ⏭</div><div class="quality">最高可用音质　☷</div></div>
+  </div></section>
+  <dialog id="dialog" class="dialog"><h3 id="dialog-title">设计预览</h3><p id="dialog-text"></p><form method="dialog"><button>关闭</button></form></dialog>
+</main>
+<script>
+  const rows=[...document.querySelectorAll('.source')];
+  const query=document.getElementById('query');
+  const platform=document.getElementById('platform');
+  const status=document.getElementById('status');
+  const dialog=document.getElementById('dialog');
+  let dirty=false;
+  function notify(title,text){document.getElementById('dialog-title').textContent=title;document.getElementById('dialog-text').textContent=text;dialog.showModal();}
+  function filter(){let shown=0;for(const row of rows){row.hidden=!(row.dataset.name.includes(query.value.trim())&&(platform.value==='all'||row.dataset.platforms.split(' ').includes(platform.value)));row.style.display=row.hidden?'none':'';if(!row.hidden)shown++;}document.getElementById('empty').hidden=shown!==0;status.textContent=dirty?'有未保存的更改':query.value||platform.value!=='all'?'筛选只影响显示，不改变播放顺序。':'设置已保存';}
+  function count(){const enabled=rows.filter(row=>row.querySelector('[role="switch"]').getAttribute('aria-checked')==='true').length;document.getElementById('summary').textContent=`已保存 3 个 · 已启用 ${enabled} 个`;}
+  query.addEventListener('input',filter);platform.addEventListener('change',filter);
+  for(const button of document.querySelectorAll('[role="switch"]'))button.addEventListener('click',()=>{button.setAttribute('aria-checked',String(button.getAttribute('aria-checked')!=='true'));dirty=true;count();status.textContent='有未保存的更改';});
+  document.getElementById('save').addEventListener('click',()=>{dirty=false;status.textContent='预览设置已保存（仅本页演示）';});
+  document.getElementById('import').addEventListener('click',()=>notify('导入音源','正式页面将接收具体的 HTTPS 脚本链接。导入失败时保留已保存的音源，新音源默认关闭。'));
+  document.getElementById('strategy').addEventListener('click',()=>notify('播放策略','音源优先 / 官方优先\n失败自动切换\n最高可用 / 固定音质\n下载许可在各音源详情中单独设置。'));
+  document.getElementById('check').addEventListener('click',()=>notify('检查脚本','正式功能会逐项检查当前筛选结果，显示完成数并支持取消。初始化通过不等于歌曲可以播放。'));
+  for(const button of document.querySelectorAll('.more'))button.addEventListener('click',()=>notify('音源详情','设为首选\n上移 / 下移\n更新 / 检查脚本\n允许下载\n删除音源'));
+</script>
+</body>
+</html>

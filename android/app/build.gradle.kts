@@ -35,8 +35,14 @@ android {
         manifestPlaceholders["appLabel"] = if (videoAppBuild) "悦音音乐" else "Mconnect"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = if (videoAppBuild) 6 else flutter.versionCode
-        versionName = if (videoAppBuild) "0.3.3" else flutter.versionName
+        versionCode = if (videoAppBuild) 7 else flutter.versionCode
+        versionName = if (videoAppBuild) "0.4.0" else flutter.versionName
+    }
+
+    if (videoAppBuild) {
+        listOf("debug", "profile", "release").forEach { variant ->
+            sourceSets.maybeCreate(variant).res.srcDir("src/yueyin/res")
+        }
     }
 
     if (videoAppBuild) {

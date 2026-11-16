@@ -1,6 +1,9 @@
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
 #include <windows.h>
+#ifdef YUEYIN_BUILD
+#include <shobjidl.h>
+#endif
 
 #include "flutter_window.h"
 #include "utils.h"
@@ -16,6 +19,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+#ifdef YUEYIN_BUILD
+  ::SetCurrentProcessExplicitAppUserModelID(L"sun-dove.YueyinMusic");
+#endif
 
   flutter::DartProject project(L"data");
 
@@ -27,7 +33,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1200, 800);
-  if (!window.Create(L"Mconnect", origin, size)) {
+#ifdef YUEYIN_BUILD
+  const wchar_t* title = L"悦音音乐";
+#else
+  const wchar_t* title = L"Mconnect";
+#endif
+  if (!window.Create(title, origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetMinimumSize(Win32Window::Size(900, 600));

@@ -1,7 +1,7 @@
 /// 视频独立入口的中文资源；显示文案与组件实现分开维护。
 abstract final class VideoStrings {
   static const appName = '悦音音乐';
-  static const appVersion = '悦音音乐 · 0.3.3';
+  static const appVersion = '悦音音乐 · 0.4.0';
   static const qqMusic = 'QQ 音乐';
   static const netease = '网易云';
   static const local = '本地';
@@ -127,6 +127,7 @@ abstract final class VideoStrings {
   static const qualityUnknown = '音质信息待获取';
   static const qqLikes = 'QQ 音乐喜欢';
   static const neteaseLikes = '网易云喜欢';
+  static const kugouLikes = '酷狗喜欢';
   static const localSongs = '本地歌曲';
   static const playLoaded = '播放已载入';
   static const downloadLoaded = '下载已载入';

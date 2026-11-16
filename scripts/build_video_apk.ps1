@@ -2,13 +2,14 @@ param(
     [string]$FlutterSdk,
     [string]$AndroidSdk,
     [string]$Jdk = 'D:/Applications/Java/jdk-17',
-    [string]$SigningProperties
+    [string]$SigningProperties,
+    [string]$ToolchainsRoot
 )
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $taskRoot = Split-Path -Parent (Split-Path -Parent $projectRoot)
-$toolchainsRoot = Join-Path $taskRoot 'work/toolchains'
+if (-not $ToolchainsRoot) { $ToolchainsRoot = Join-Path $taskRoot 'work/toolchains' }
 if (-not $FlutterSdk) { $FlutterSdk = Join-Path $toolchainsRoot 'flutter' }
 if (-not $AndroidSdk) { $AndroidSdk = Join-Path $toolchainsRoot 'android-sdk' }
 if (-not $SigningProperties) { $SigningProperties = Join-Path $taskRoot 'work/signing/video-music-signing.properties' }

@@ -288,6 +288,12 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       settings.value.autoSwitch ||
       settings.value.highestQuality ||
       settings.value.sourceFirst;
+
+  /// 可由新版入口扩展平台；旧入口仍使用原候选规则。
+  List<SourceCandidate> candidatesFor(Song song, AudioLevel quality) =>
+      buildSourceCandidates(song, quality, settings.value);
+  List<String> exclusionsFor(Song song, AudioLevel quality) =>
+      sourceExclusions(song, quality, settings.value);
   void _settingsChanged() {
     final wasGuarded = router.guarded;
     cancelSourceAttempts();
@@ -356,15 +362,13 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       error: () => null,
     );
     _session = SourceSession(
-      exclusions: sourceExclusions(
+      exclusions: exclusionsFor(
         song,
         _fixedOverride ?? router.fixedQuality(song.platform),
-        settings.value,
       ),
-      candidates: buildSourceCandidates(
+      candidates: candidatesFor(
         song,
         _fixedOverride ?? router.fixedQuality(song.platform),
-        settings.value,
       ),
       resolve: (candidate, token) => resolve(song, candidate, token),
       onChanged: _report,

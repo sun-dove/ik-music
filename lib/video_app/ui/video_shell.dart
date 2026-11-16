@@ -1,3 +1,5 @@
+import '../../l10n/expanded_strings.dart';
+
 import '../../l10n/video_strings.dart';
 
 import 'dart:ui';
@@ -14,61 +16,123 @@ class VideoShell extends StatelessWidget {
     required this.onSelect,
     required this.pages,
     required this.miniPlayer,
+    this.expandedPlatforms = false,
   });
   final int index;
   final ValueChanged<int> onSelect;
   final List<Widget> pages;
   final Widget miniPlayer;
+  final bool expandedPlatforms;
+  List<String> get _labels => [
+    VideoStrings.search,
+    VideoStrings.qqMusic,
+    VideoStrings.netease,
+    if (expandedPlatforms) VideoStrings.kugou,
+    VideoStrings.my,
+  ];
+  List<IconData> get _icons => [
+    Icons.search_rounded,
+    Icons.format_list_bulleted_rounded,
+    Icons.view_list_rounded,
+    if (expandedPlatforms) Icons.library_music_outlined,
+    Icons.account_circle_outlined,
+  ];
 
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: VideoTheme.canvas(context),
     body: SafeArea(
       bottom: false,
-      child: Column(
-        children: [
-          Expanded(
-            child: IndexedStack(index: index, children: pages),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: miniPlayer,
-          ),
-          Padding(
-            padding: EdgeInsets.fromLTRB(
-              14,
-              6,
-              14,
-              8 + MediaQuery.paddingOf(context).bottom,
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(32),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 7,
-                  ),
-                  color: VideoTheme.surface(context).withValues(alpha: .88),
+      child: expandedPlatforms && MediaQuery.sizeOf(context).width >= 840
+          ? Column(
+              children: [
+                Expanded(
                   child: Row(
                     children: [
-                      for (var i = 0; i < 4; i++)
-                        Expanded(
-                          child: _Tab(
-                            index: i,
-                            selected: index == i,
-                            onTap: () => onSelect(i),
+                      NavigationRail(
+                        extended: true,
+                        selectedIndex: index,
+                        onDestinationSelected: onSelect,
+                        minExtendedWidth: 190,
+                        labelType: NavigationRailLabelType.none,
+                        leading: const Padding(
+                          padding: EdgeInsets.all(16),
+                          child: Text(
+                            ExpandedStrings.appName,
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
+                        destinations: [
+                          for (var i = 0; i < _labels.length; i++)
+                            NavigationRailDestination(
+                              icon: Icon(_icons[i]),
+                              label: Text(_labels[i]),
+                            ),
+                        ],
+                      ),
+                      const VerticalDivider(width: 1),
+                      Expanded(
+                        child: IndexedStack(index: index, children: pages),
+                      ),
                     ],
                   ),
                 ),
-              ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
+                  child: miniPlayer,
+                ),
+              ],
+            )
+          : Column(
+              children: [
+                Expanded(
+                  child: IndexedStack(index: index, children: pages),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  child: miniPlayer,
+                ),
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    14,
+                    6,
+                    14,
+                    8 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(32),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 7,
+                        ),
+                        color: VideoTheme.surface(context)
+                            .withValues(alpha: .88),
+                        child: Row(
+                          children: [
+                            for (var i = 0; i < _labels.length; i++)
+                              Expanded(
+                                child: _Tab(
+                                  index: i,
+                                  label: _labels[i],
+                                  icon: _icons[i],
+                                  selected: index == i,
+                                  onTap: () => onSelect(i),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     ),
   );
 }
@@ -78,22 +142,14 @@ class _Tab extends StatelessWidget {
     required this.index,
     required this.selected,
     required this.onTap,
+    required this.label,
+    required this.icon,
   });
   final int index;
   final bool selected;
   final VoidCallback onTap;
-  static const labels = [
-    VideoStrings.search,
-    VideoStrings.qqMusic,
-    VideoStrings.netease,
-    VideoStrings.my,
-  ];
-  static const icons = [
-    Icons.search_rounded,
-    Icons.format_list_bulleted_rounded,
-    Icons.view_list_rounded,
-    Icons.account_circle_outlined,
-  ];
+  final String label;
+  final IconData icon;
   @override
   Widget build(BuildContext context) => Semantics(
     selected: selected,
@@ -114,7 +170,7 @@ class _Tab extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              icons[index],
+              icon,
               size: 25,
               color: selected
                   ? VideoTheme.primary
@@ -123,7 +179,7 @@ class _Tab extends StatelessWidget {
             ),
             const SizedBox(height: 2),
             Text(
-              labels[index],
+              label,
               maxLines: 1,
               style: TextStyle(
                 fontSize: 10,
@@ -194,6 +250,8 @@ class VideoMiniPlayer extends StatelessWidget {
                               ? VideoStrings.qqMusic
                               : song!.platform.name == 'netease'
                               ? VideoStrings.netease
+                              : song!.platform.name == 'kugou'
+                              ? VideoStrings.kugou
                               : VideoStrings.local}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

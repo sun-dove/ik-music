@@ -20,23 +20,31 @@ import 'features/offline_cache/presentation/providers/offline_cache_provider.dar
 import 'platform/base/platform_registry.dart';
 import 'platform/netease/netease_api.dart';
 import 'platform/netease/netease_endpoints.dart';
+import 'platform/kugou/kugou_api.dart';
+import 'platform/kugou/kugou_platform.dart';
+import 'core/platform/platform_utils.dart';
 import 'models/platform_type.dart';
 import 'models/song.dart';
 import 'l10n/video_strings.dart';
 import 'video_app/data/video_auth_notifier.dart';
 import 'video_app/data/video_qq_playback_api.dart';
 import 'video_app/data/video_session_http.dart';
+import 'video_app/data/video_kugou_catalog.dart';
+import 'video_app/data/video_windows_storage.dart';
 import 'video_app/custom_source/custom_source_client.dart';
 import 'video_app/custom_source/custom_source_models.dart';
 import 'video_app/custom_source/custom_source_playback.dart';
 import 'video_app/custom_source/custom_source_storage.dart';
 import 'video_app/lx_source/lx_source.dart';
 import 'video_app/lx_source/lx_runtime.dart';
-import 'video_app/lx_source/lx_runtime_v2.dart';
+import 'video_app/lx_source/lx_runtime_v3.dart';
+import 'video_app/lx_source/windows_lx_sandbox.dart';
 import 'video_app/multi_source/source_collection.dart';
 import 'video_app/multi_source/source_coordinator.dart';
 import 'video_app/multi_source/source_service.dart';
 import 'video_app/multi_source/multi_source_player.dart';
+import 'video_app/multi_source/expanded_source_player.dart';
+import 'video_app/multi_source/source_candidates_v3.dart';
 import 'video_app/playback/video_platforms.dart';
 import 'video_app/playback/video_stream_state.dart';
 import 'video_app/video_app.dart';
@@ -52,9 +60,14 @@ Future<void> main() async {
       'pako 2.1.0',
     ], await rootBundle.loadString('assets/lx-runtime/pako-LICENSE'));
   });
-  await Hive.initFlutter();
+  final windowsStorage = PlatformUtils.isWindows
+      ? await initializeWindowsVideoHive()
+      : null;
+  if (windowsStorage == null) await Hive.initFlutter();
   final settings = await Hive.openBox('settings');
-  final diagnostics = DiagnosticsService.instance;
+  final diagnostics = windowsStorage == null
+      ? DiagnosticsService.instance
+      : DiagnosticsService(directoryProvider: () async => windowsStorage);
   await diagnostics.initialize();
   await BackgroundAudioInitializer.initialize(diagnostics: diagnostics);
   final preferences = VideoPreferences(settings);
@@ -62,7 +75,12 @@ Future<void> main() async {
   await preferences.loadLxSource();
   final sourceSettings = SourceSettings(preferences)..load();
   late VideoQqPlaybackApi qqApi;
-  final sourceEngine = LxSourceRuntimeV2(
+  final kugouCatalog = VideoKugouCatalog();
+  final catalog = ExpandedVideoCatalog(kugou: kugouCatalog);
+  final sourceEngine = LxSourceRuntimeV3(
+    sandbox: PlatformUtils.isWindows ? WindowsLxSandbox() : null,
+    environment: PlatformUtils.isDesktop ? 'desktop' : 'mobile',
+    kugouInfo: kugouCatalog.musicInfo,
     qqInfoCancellable: (id, token) => qqApi.withCancellation(
       token,
       () async => (await qqApi.ensureMetadata(id))?.lxInfo ?? {},
@@ -97,12 +115,12 @@ Future<void> main() async {
   );
   final playbackCustomSourceFallback = CustomSourcePlaybackFallback(
     resolver: customSourceResolver,
-    config: () => preferences.activeSourceConfig,
+    config: () => preferences.activeExpandedSourceConfig,
     onResolved: (song, result) => customSourceResolved?.call(song, result),
   );
   final downloadCustomSourceFallback = CustomSourcePlaybackFallback(
     resolver: customSourceResolver,
-    config: () => preferences.activeSourceConfig,
+    config: () => preferences.activeExpandedSourceConfig,
   );
   final container = ProviderContainer(
     overrides: [
@@ -114,13 +132,13 @@ Future<void> main() async {
               final policy = sourceSettings.value;
               if (policy.autoSwitch || policy.sourceFirst) {
                 final session = SourceSession(
-                  exclusions: sourceExclusions(
+                  exclusions: sourceExclusionsV3(
                     song,
                     quality,
                     policy,
                     download: true,
                   ),
-                  candidates: buildSourceCandidates(
+                  candidates: buildSourceCandidatesV3(
                     song,
                     quality,
                     policy,
@@ -170,7 +188,7 @@ Future<void> main() async {
         ),
       ),
       playerProvider.overrideWith(
-        (ref) => MultiSourceVideoPlayerNotifier(
+        (ref) => ExpandedSourcePlayerNotifier(
           settings: sourceSettings,
           router: sourceRouter,
           resolve: sourceService.resolve,
@@ -230,8 +248,15 @@ Future<void> main() async {
       'Origin': NeteaseEndpoints.baseUrl,
     },
   );
+  final kugouDio = createPlatformDio(
+    platform: PlatformType.kugou,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36',
+    },
+  );
   attachVideoSessionGuard(qqDio, PlatformType.qq, auth);
   attachVideoSessionGuard(neteaseDio, PlatformType.netease, auth);
+  attachVideoSessionGuard(kugouDio, PlatformType.kugou, auth);
   qqApi = VideoQqPlaybackApi(dio: qqDio);
   PlatformRegistry.register(
     VideoQqPlatform(api: qqApi, onResolved: onResolved),
@@ -242,10 +267,13 @@ Future<void> main() async {
       onResolved: onResolved,
     ),
   );
+  PlatformRegistry.register(KugouPlatform(api: KugouApi(dio: kugouDio)));
   runApp(
     UncontrolledProviderScope(
       container: container,
       child: VideoMusicApp(
+        expandedPlatforms: true,
+        catalog: catalog,
         preferences: preferences,
         customSourceCredentials: customSourceCredentials,
         customSourceDio: customSourceDio,

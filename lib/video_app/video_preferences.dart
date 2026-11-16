@@ -20,6 +20,23 @@ class VideoPreferences {
   CustomSourceConfig? get activeSourceConfig =>
       lxSource?.enabled == true ? lxSource!.fallbackConfig : customSource;
 
+  /// 新入口额外接受酷狗；旧getter与缺省行为保持。
+  CustomSourceConfig? get activeExpandedSourceConfig {
+    final config = lxSource;
+    if (config?.enabled != true) return customSource;
+    return CustomSourceConfig(
+      id: 'lx',
+      name: config!.name,
+      endpoint: config.origin,
+      enabled: config.enabled,
+      allowForDownloads: config.allowForDownloads,
+      platforms: {
+        ...config.fallbackConfig.platforms,
+        if (config.sources.containsKey('kg')) PlatformType.kugou,
+      },
+    );
+  }
+
   Future<void> loadLxSource() async {
     final value = box.get('video.lxSource.config');
     if (value is String) {

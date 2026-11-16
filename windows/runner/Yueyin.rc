@@ -1,0 +1,35 @@
+#pragma code_page(65001)
+#include "resource.h"
+#include "winres.h"
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+IDI_APP_ICON ICON "resources\\yueyin_icon.ico"
+#define VERSION_AS_NUMBER 0,4,0,7
+#define VERSION_AS_STRING "0.4.0"
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION VERSION_AS_NUMBER
+ PRODUCTVERSION VERSION_AS_NUMBER
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0x0L
+ FILEOS VOS__WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE 0x0L
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904e4"
+    BEGIN
+      VALUE "CompanyName", "sun-dove" "\0"
+      VALUE "FileDescription", "悦音音乐" "\0"
+      VALUE "FileVersion", VERSION_AS_STRING "\0"
+      VALUE "InternalName", "yueyin_music" "\0"
+      VALUE "LegalCopyright", "悦音音乐贡献者；保留Mconnect与第三方组件原有声明。" "\0"
+      VALUE "OriginalFilename", "yueyin_music.exe" "\0"
+      VALUE "ProductName", "YueyinMusic" "\0"
+      VALUE "ProductVersion", VERSION_AS_STRING "\0"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1252
+  END
+END

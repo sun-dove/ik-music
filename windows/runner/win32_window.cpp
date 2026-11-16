@@ -181,6 +181,15 @@ Win32Window::MessageHandler(HWND hwnd,
   switch (message) {
     case WM_CLOSE: {
       if (ask_before_close_) {
+#ifdef YUEYIN_BUILD
+        const int choice = MessageBoxW(
+            hwnd,
+            L"是否让悦音音乐在后台继续运行？\n\n"
+            L"选择“是”：最小化窗口并继续播放。\n"
+            L"选择“否”：退出悦音音乐。",
+            L"关闭悦音音乐",
+            MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1);
+#else
         const int choice = MessageBoxW(
             hwnd,
             L"是否让 Mconnect 在后台继续运行？\n\n"
@@ -188,6 +197,7 @@ Win32Window::MessageHandler(HWND hwnd,
             L"选择“否”：退出 Mconnect。",
             L"关闭 Mconnect",
             MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1);
+#endif
         if (choice == IDYES) {
           ShowWindow(hwnd, SW_MINIMIZE);
           return 0;

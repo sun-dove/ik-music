@@ -1,3 +1,5 @@
+import '../../l10n/expanded_strings.dart';
+
 import '../../l10n/video_strings.dart';
 
 import 'package:flutter/material.dart';
@@ -54,6 +56,7 @@ class VideoSearchPage extends StatelessWidget {
   final Set<String> likedKeys;
   final Song? currentSong;
   final Map<String, String> qualityLabels;
+  final List<PlatformType> platforms;
 
   const VideoSearchPage({
     super.key,
@@ -74,6 +77,11 @@ class VideoSearchPage extends StatelessWidget {
     this.likedKeys = const {},
     this.currentSong,
     this.qualityLabels = const {},
+    this.platforms = const [
+      PlatformType.local,
+      PlatformType.qq,
+      PlatformType.netease,
+    ],
   });
 
   @override
@@ -138,11 +146,7 @@ class VideoSearchPage extends StatelessWidget {
                   padding: const EdgeInsets.all(3),
                   child: Row(
                     children: [
-                      for (final source in const [
-                        PlatformType.local,
-                        PlatformType.qq,
-                        PlatformType.netease,
-                      ])
+                      for (final source in platforms)
                         Expanded(child: _platformChip(context, source)),
                     ],
                   ),
@@ -322,6 +326,7 @@ class VideoSearchPage extends StatelessWidget {
 }
 
 class VideoLibraryPage extends StatelessWidget {
+  final VoidCallback? onPlaylists;
   final PlatformType platform;
   final VideoCatalogViewState result;
   final bool loggedIn;
@@ -357,6 +362,7 @@ class VideoLibraryPage extends StatelessWidget {
     this.likedKeys = const {},
     this.currentSong,
     this.qualityLabels = const {},
+    this.onPlaylists,
   });
 
   @override
@@ -379,6 +385,12 @@ class VideoLibraryPage extends StatelessWidget {
                     ),
                   ),
                 ),
+                if (onPlaylists != null)
+                  IconButton(
+                    tooltip: ExpandedStrings.myPlaylists,
+                    onPressed: loggedIn ? onPlaylists : onLogin,
+                    icon: const Icon(Icons.queue_music),
+                  ),
                 IconButton(
                   tooltip: VideoStrings.syncLikes,
                   onPressed: loggedIn && !result.loading ? onRefresh : null,

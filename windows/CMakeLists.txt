@@ -5,6 +5,11 @@ project(mconnect LANGUAGES CXX)
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
 set(BINARY_NAME "mconnect")
+set(YUEYIN_BUILD OFF)
+if("$ENV{VIDEO_MUSIC_BUILD}" STREQUAL "1")
+  set(YUEYIN_BUILD ON)
+  set(BINARY_NAME "yueyin_music")
+endif()
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
