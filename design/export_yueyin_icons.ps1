@@ -1,4 +1,4 @@
-param([switch]$VerifyOnly)
+﻿param([switch]$VerifyOnly)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing

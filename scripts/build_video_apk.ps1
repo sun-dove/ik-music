@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$FlutterSdk,
     [string]$AndroidSdk,
     [string]$Jdk = 'D:/Applications/Java/jdk-17',
