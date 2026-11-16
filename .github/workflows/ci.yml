@@ -38,6 +38,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
+  # 与现有lockfile的来源保持一致；禁止远端构建隐式升级依赖。
+  PUB_HOSTED_URL: 'https://pub.flutter-io.cn'
   # Pinned deliberately. pubspec.yaml requires `sdk: ^3.13.0`; 3.47.5 ships Dart
   # 3.13.4 and is the version this repository is developed against. Bumping it is
   # a deliberate change (see docs/mconnect-improvement-plan.md phase 0), not
@@ -64,7 +66,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Report the toolchain
         run: flutter --version
@@ -149,11 +151,11 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Build split release APKs
         # AGENTS.md §1: never build the universal APK.
-        run: flutter build apk --release --split-per-abi
+        run: flutter build apk --release --split-per-abi --no-pub
 
       - name: Assert no universal APK was produced
         run: |
@@ -190,7 +192,7 @@ jobs:
           cache: true
 
       - name: Install dependencies
-        run: flutter pub get
+        run: flutter pub get --enforce-lockfile
 
       - name: Build Windows (debug)
         # Debug, not release: the question this job answers is "does the runner
