@@ -2,7 +2,7 @@
 
 一款支持 QQ 音乐、网易云与酷狗音乐接入的播放器，提供账号收藏、多音源管理和灵活的播放设置。
 
-当前独立入口版本：**0.4.0**。Android 继续按架构分包；Windows x64 的构建与验证状态见[验收记录](docs/交付文档/悦音音乐040验收记录.md)。
+当前独立入口版本：**0.4.0**，提供 Android 分包、Windows x64 安装器和完整免安装包。下载见[0.4.0 发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.4.0)，实际验证范围见[验收记录](docs/交付文档/悦音音乐040验收记录.md)。
 
 <img src="assets/branding/yueyin/logo-cream.png" width="100" alt="悦音音乐奶白底新图标">
 
@@ -18,15 +18,17 @@
 
 ## 安装
 
-当前提供 Android APK，按设备架构选择：
+按系统和设备架构选择：
 
-| 架构 | 适用设备 |
+| 安装包 | 适用设备 |
 | --- | --- |
-| arm64-v8a | 大多数安卓手机 |
-| armeabi-v7a | 支持的旧款 32 位设备 |
-| x86_64 | x86_64 安卓模拟器或设备 |
+| [Android arm64-v8a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-arm64-v8a.apk) | 大多数安卓手机，推荐 |
+| [Android armeabi-v7a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-armeabi-v7a.apk) | 支持的旧款 32 位设备 |
+| [Android x86_64](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-x86_64.apk) | x86_64 安卓模拟器或设备 |
+| [Windows x64 安装器](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-Setup-0.4.0-x64.exe) | Windows 10/11，可选择安装目录 |
+| [Windows x64 免安装 ZIP](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-windows-x64.zip) | 完整解压后运行 yueyin_music.exe |
 
-Windows 使用独立品牌、宽屏布局和受限 WebView2 音源宿主，完整包包含 EXE、DLL、data 与运行时许可，详见[Windows 说明](docs/交付文档/悦音音乐040Windows说明.md)。iOS 本轮没有构建或交付安装包。
+文件校验值见发行页的 [SHA256SUMS](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/SHA256SUMS)。Windows 使用独立品牌、宽屏布局和受限 WebView2 音源宿主，完整包包含 EXE、DLL、data 与运行时许可，详见[Windows 说明](docs/交付文档/悦音音乐040Windows说明.md)。iOS 本轮没有构建或交付安装包。
 
 ## 使用音源
 

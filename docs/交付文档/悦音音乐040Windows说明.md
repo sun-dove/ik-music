@@ -2,6 +2,8 @@
 
 本版面向 Windows 10/11 x64，应用程序名为 yueyin_music.exe，使用独立的浅色图标、窗口标题、安装 AppId 和应用数据目录。原 Mconnect 工程与缺省构建保留。最低依赖为 .NET Framework 4.6.2、Visual C++ 2015–2022 x64 运行库和 Microsoft Edge WebView2 Runtime。
 
+0.4.0 完整包已通过 [GitHub Windows 构建](https://github.com/sun-dove/yueyin-music/actions/runs/43894665098)。[发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.4.0)提供 `YueyinMusic-Setup-0.4.0-x64.exe` 与 `YueyinMusic-0.4.0-windows-x64.zip`；文件大小及 SHA-256 见[验收记录](悦音音乐040验收记录.md)。
+
 ## 安装与启动
 
 安装器可选择安装目录，包括 D:/Applications。便携 ZIP 必须完整解压后运行其中的 EXE；不要单独复制 EXE，音频库、Flutter 数据和 data/lx-host 都是运行依赖。“便携”表示免安装，不表示设置写回 EXE 目录；设置仍保存至本用户应用数据目录。Windows 与 Android 不自动同步账号或音源。
@@ -31,7 +33,8 @@ Windows 独立实现原有 LxSandbox 接口。每次初始化或取流都使用�
 需要 Flutter 3.47.5、Visual Studio 的 C++ 桌面开发组件、Windows SDK，以及可选的 Inno Setup 6。本机 C++ 工具链安装曾被自动审批拒绝；这不影响使用已有工具链的 GitHub Windows runner 构建。
 
 ```powershell
-flutter pub get
+$env:PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
+flutter pub get --enforce-lockfile
 flutter analyze --no-pub
 flutter test --no-pub -j 1
 ./scripts/build_video_windows.ps1 -FlutterSdk '<Flutter目录>' -DependencyDirectory '<构建缓存目录>'
@@ -41,4 +44,4 @@ flutter test --no-pub -j 1
 
 WebView2 SDK 固定为 1.0.2903.40，来源为 Microsoft.Web.WebView2 官方 NuGet 包；Core、WinForms 与 x64 Loader DLL 的微软签名必须有效，SDK 的 LICENSE.txt 和 NOTICE.txt 随完整包提供。它遵循微软 SDK 许可；悦音自有源码的 MIT 许可不替代该许可。完整 WebView2 浏览器运行时不随项目源码再分发。
 
-主程序构建、安装、实际播放与第三方源结果按[本轮验收记录](悦音音乐040验收记录.md)的最终状态为准；仅具备源代码或独立宿主通过，不能算完整 Windows 安装包交付。
+本轮已实际打开主程序，核对浅色窗口图标、五个宽屏入口、版本、推荐播放策略和保存反馈，并用自有 60 秒静音 WAV 验证本地扫描、检索、时长、进度前进、暂停和进度定位。静音样例只验证媒体与控制流程；本人账号、第三方歌曲完整播放、真实音频档位、安装卸载与其他系统缩放比例仍未实测。详细构建提交、界面验收提交和第三方源结果按[本轮验收记录](悦音音乐040验收记录.md)为准。
