@@ -1,10 +1,10 @@
-# 悦音音乐
+# 乐音音乐
 
 一款支持 QQ 音乐、网易云与酷狗音乐接入的播放器，提供账号收藏、多音源管理和灵活的播放设置。
 
-当前独立入口版本：**0.4.0**，提供 Android 分包、Windows x64 安装器和完整免安装包。下载见[0.4.0 发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.4.0)，实际验证范围见[验收记录](docs/交付文档/悦音音乐040验收记录.md)。
+乐读 **yuè**，原名悦音音乐。当前独立入口版本：**0.5.0**，提供 Android 分包、Windows x64 安装器和完整免安装包。下载见[0.5.0 发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.5.0)，实际验证范围见[验收记录](docs/交付文档/乐音音乐050验收记录.md)。覆盖升级沿用原包名、签名、安装身份与数据目录。
 
-<img src="assets/branding/yueyin/logo-cream.png" width="100" alt="悦音音乐奶白底新图标">
+<img src="assets/branding/yueyin/note-ribbons.png" width="100" alt="乐音音乐黑白音符飘带图标">
 
 ## 功能
 
@@ -15,6 +15,10 @@
 - **自动切换**：启用后，取流或播放失败时自动尝试其他可用音源。
 - **音质优先**：优先尝试最高可用音质，并显示降档与来源信息。
 - **播放详情**：查看尝试记录、失败原因和未试音源，达到单轮等待上限后可继续尝试。
+- **Windows 两项音质**：统一播放音质与下载音质，旧各平台设置保留，暂停续传保持原档。
+- **Windows 个性化**：预览和保存本机背景，选择实际安装的字体或导入 TTF/OTF，使用三平台真实图标。
+- **Windows 完整歌词**：宽屏左封面、右歌词，支持同步跟随、手动浏览和恢复。
+- **Windows 关闭设置**：默认最小化并继续播放，也可设置真正退出，提供独立退出入口。
 
 ## 安装
 
@@ -22,13 +26,13 @@
 
 | 安装包 | 适用设备 |
 | --- | --- |
-| [Android arm64-v8a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-arm64-v8a.apk) | 大多数安卓手机，推荐 |
-| [Android armeabi-v7a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-armeabi-v7a.apk) | 支持的旧款 32 位设备 |
-| [Android x86_64](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-x86_64.apk) | x86_64 安卓模拟器或设备 |
-| [Windows x64 安装器](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-Setup-0.4.0-x64.exe) | Windows 10/11，可选择安装目录 |
-| [Windows x64 免安装 ZIP](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/YueyinMusic-0.4.0-windows-x64.zip) | 完整解压后运行 yueyin_music.exe |
+| [Android arm64-v8a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-arm64-v8a.apk) | 大多数安卓手机，推荐 |
+| [Android armeabi-v7a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-armeabi-v7a.apk) | 支持的旧款 32 位设备 |
+| [Android x86_64](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-x86_64.apk) | x86_64 安卓模拟器或设备 |
+| [Windows x64 安装器](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-Setup-0.5.0-x64.exe) | Windows 10/11，可选择安装目录 |
+| [Windows x64 免安装 ZIP](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-windows-x64.zip) | 完整解压后运行 yueyin_music.exe |
 
-文件校验值见发行页的 [SHA256SUMS](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.4.0/SHA256SUMS)。Windows 使用独立品牌、宽屏布局和受限 WebView2 音源宿主，完整包包含 EXE、DLL、data 与运行时许可，详见[Windows 说明](docs/交付文档/悦音音乐040Windows说明.md)。iOS 本轮没有构建或交付安装包。
+文件校验值见发行页的 [SHA256SUMS](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/SHA256SUMS)。Windows 完整包包含 EXE、DLL、data 与运行时许可，详见[Windows 说明](docs/交付文档/乐音音乐050Windows说明.md)。iOS 本轮没有构建或交付安装包。
 
 ## 使用音源
 
@@ -44,18 +48,18 @@
 
 ## 兼容范围与问题反馈
 
-音源导入成功不等于每首歌曲都能播放。固定版本的全部20个入口已完整诊断：移动协议主机初始化由9个提升到18个，其中17个声明悦音支持的平台；Windows真实宿主初始化17个，其中16个声明支持的平台。平台范围、各源失败及完整SHA-256见[20源兼容矩阵](docs/交付文档/悦音音乐040音源兼容矩阵.md)。Android 本轮没有连接设备，真实账号、完整歌曲播放与音质仍按[验收记录](docs/交付文档/悦音音乐040验收记录.md)列为未测。
+音源导入成功不等于每首歌曲都能播放。0.4.0 的固定版本全部20个入口已完整诊断：移动协议主机18个初始化、17个声明支持平台；Windows真实宿主17个初始化、16个声明支持平台。平台范围、各源失败及完整SHA-256见[历史兼容矩阵](docs/交付文档/悦音音乐040音源兼容矩阵.md)。本版不修改播放算法，真实账号、完整歌曲播放与音质按[本版验收记录](docs/交付文档/乐音音乐050验收记录.md)说明，未用历史初始化结果替代实测。
 
 反馈问题时，请提供应用版本、设备系统、音源名称及版本、歌曲与歌手、操作步骤和页面错误提示。请勿附带账号 Cookie、访问令牌或签名口令。
 
 ## 开发
 
-项目使用 Flutter，悦音音乐入口为 `lib/main_video.dart`，相关界面与兼容层位于 `lib/video_app/`。
+项目使用 Flutter，乐音音乐入口为 `lib/main_video.dart`，相关界面与兼容层位于 `lib/video_app/`，Windows 扩展位于 `lib/video_app/windows/`。
 
 环境配置、测试、自有签名及 APK 分包步骤见[开发与构建](docs/交付文档/悦音音乐开发与构建.md)。
 
 ## 开源说明
 
-悦音音乐基于 Mconnect 修改与扩展，保留上游版权声明和 [MIT 许可证](LICENSE)。第三方组件遵循各自许可证，详情见[第三方组件说明](docs/交付文档/洛雪运行时第三方组件说明.md)。
+乐音音乐基于 Mconnect 修改与扩展，保留上游版权声明和 [MIT 许可证](LICENSE)。第三方组件与平台图标遵循各自许可和权利声明，详情见 [NOTICE](NOTICE.md)。
 
 项目提供播放器与音源接入功能，不附带音乐文件或第三方音源脚本。

@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 
 import '../../models/song.dart';
 import 'video_theme.dart';
+import '../../models/platform_type.dart';
+import '../windows/windows_platform_icon.dart';
 
 class VideoShell extends StatelessWidget {
   const VideoShell({
@@ -17,12 +19,24 @@ class VideoShell extends StatelessWidget {
     required this.pages,
     required this.miniPlayer,
     this.expandedPlatforms = false,
+    this.platformIcons = false,
   });
   final int index;
   final ValueChanged<int> onSelect;
   final List<Widget> pages;
   final Widget miniPlayer;
   final bool expandedPlatforms;
+  final bool platformIcons;
+  Widget _destinationIcon(int index) =>
+      platformIcons && index >= 1 && index <= (expandedPlatforms ? 3 : 2)
+      ? WindowsPlatformIcon(
+          platform: [
+            PlatformType.qq,
+            PlatformType.netease,
+            PlatformType.kugou,
+          ][index - 1],
+        )
+      : Icon(_icons[index]);
   List<String> get _labels => [
     VideoStrings.search,
     VideoStrings.qqMusic,
@@ -55,20 +69,39 @@ class VideoShell extends StatelessWidget {
                         onDestinationSelected: onSelect,
                         minExtendedWidth: 190,
                         labelType: NavigationRailLabelType.none,
-                        leading: const Padding(
+                        leading: Padding(
                           padding: EdgeInsets.all(16),
-                          child: Text(
-                            ExpandedStrings.appName,
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          child: platformIcons
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Image.asset(
+                                      'assets/branding/yueyin/note-ribbons.png',
+                                      width: 28,
+                                      height: 28,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    const Text(
+                                      ExpandedStrings.appName,
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              : const Text(
+                                  ExpandedStrings.appName,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                         ),
                         destinations: [
                           for (var i = 0; i < _labels.length; i++)
                             NavigationRailDestination(
-                              icon: Icon(_icons[i]),
+                              icon: _destinationIcon(i),
                               label: Text(_labels[i]),
                             ),
                         ],
@@ -121,6 +154,12 @@ class VideoShell extends StatelessWidget {
                                   index: i,
                                   label: _labels[i],
                                   icon: _icons[i],
+                                  artwork:
+                                      platformIcons &&
+                                          i >= 1 &&
+                                          i <= (expandedPlatforms ? 3 : 2)
+                                      ? _destinationIcon(i)
+                                      : null,
                                   selected: index == i,
                                   onTap: () => onSelect(i),
                                 ),
@@ -144,12 +183,14 @@ class _Tab extends StatelessWidget {
     required this.onTap,
     required this.label,
     required this.icon,
+    this.artwork,
   });
   final int index;
   final bool selected;
   final VoidCallback onTap;
   final String label;
   final IconData icon;
+  final Widget? artwork;
   @override
   Widget build(BuildContext context) => Semantics(
     selected: selected,
@@ -169,14 +210,15 @@ class _Tab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 25,
-              color: selected
-                  ? VideoTheme.primary
-                  : Theme.of(context).colorScheme.onSurface
-                        .withValues(alpha: .78),
-            ),
+            artwork ??
+                Icon(
+                  icon,
+                  size: 25,
+                  color: selected
+                      ? VideoTheme.primary
+                      : Theme.of(context).colorScheme.onSurface
+                            .withValues(alpha: .78),
+                ),
             const SizedBox(height: 2),
             Text(
               label,

@@ -1,5 +1,7 @@
 import 'l10n/source_strings.dart';
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -38,7 +40,6 @@ import 'video_app/custom_source/custom_source_storage.dart';
 import 'video_app/lx_source/lx_source.dart';
 import 'video_app/lx_source/lx_runtime.dart';
 import 'video_app/lx_source/lx_runtime_v3.dart';
-import 'video_app/lx_source/windows_lx_sandbox.dart';
 import 'video_app/multi_source/source_collection.dart';
 import 'video_app/multi_source/source_coordinator.dart';
 import 'video_app/multi_source/source_service.dart';
@@ -49,6 +50,10 @@ import 'video_app/playback/video_platforms.dart';
 import 'video_app/playback/video_stream_state.dart';
 import 'video_app/video_app.dart';
 import 'video_app/video_preferences.dart';
+import 'video_app/windows/managed_windows_lx_sandbox.dart';
+import 'video_app/windows/windows_music_preferences.dart';
+import 'video_app/windows/windows_appearance.dart';
+import 'video_app/windows/windows_window_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -76,12 +81,18 @@ Future<void> main() async {
   final preferences = VideoPreferences(settings);
   await preferences.loadCustomSource();
   await preferences.loadLxSource();
-  final sourceSettings = SourceSettings(preferences)..load();
+  final SourceSettings sourceSettings = windowsStorage == null
+      ? SourceSettings(preferences)
+      : WindowsSourceSettings(preferences);
+  sourceSettings.load();
   late VideoQqPlaybackApi qqApi;
   final kugouCatalog = VideoKugouCatalog();
   final catalog = ExpandedVideoCatalog(kugou: kugouCatalog);
+  final windowsSandbox = PlatformUtils.isWindows
+      ? ManagedWindowsLxSandbox()
+      : null;
   final sourceEngine = LxSourceRuntimeV3(
-    sandbox: PlatformUtils.isWindows ? WindowsLxSandbox() : null,
+    sandbox: windowsSandbox,
     environment: PlatformUtils.isDesktop ? 'desktop' : 'mobile',
     kugouInfo: kugouCatalog.musicInfo,
     qqInfoCancellable: (id, token) => qqApi.withCancellation(
@@ -89,9 +100,22 @@ Future<void> main() async {
       () async => (await qqApi.ensureMetadata(id))?.lxInfo ?? {},
     ),
   );
+  final windowsAppearance = windowsStorage == null
+      ? null
+      : WindowsAppearance(
+          preferences: WindowsMusicPreferences(
+            preferences,
+            sources: sourceSettings as WindowsSourceSettings,
+          )..load(),
+          directory: Directory('${windowsStorage.path}/appearance'),
+          window: WindowsWindowController(beforeExit: windowsSandbox!.shutdown),
+        );
+  if (windowsAppearance != null) await windowsAppearance.initialize();
+  final effectiveQuality =
+      windowsAppearance?.preferences.quality ?? preferences.quality;
   final sourceRouter = PreparedSourceRouter(
     platformResolver: PlatformRegistry.get,
-    fixedQuality: preferences.quality,
+    fixedQuality: effectiveQuality,
   );
   final streamInfos = <String, VideoStreamInfo>{};
   final sourceService = MultiSourceService(
@@ -225,7 +249,7 @@ Future<void> main() async {
           '${song.platform.name}:${song.id}': VideoStreamInfo(
             platform: song.platform,
             songId: song.id,
-            requestedQuality: preferences.quality(song.platform),
+            requestedQuality: effectiveQuality(song.platform),
             actualQuality: result.actualQuality,
             actualFormat: result.format,
             actualBitrate: result.bitrate,
@@ -282,6 +306,7 @@ Future<void> main() async {
         customSourceDio: customSourceDio,
         sourceSettings: sourceSettings,
         sourceEngine: sourceEngine,
+        windowsAppearance: windowsAppearance,
         onCustomSourceChanged: () {
           playbackCustomSourceFallback.cancel();
           downloadCustomSourceFallback.cancel();

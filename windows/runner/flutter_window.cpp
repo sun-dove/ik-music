@@ -22,6 +22,10 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+#ifdef YUEYIN_BUILD
+  desktop_channel_ = std::make_unique<WindowsDesktopChannel>(
+      flutter_controller_->engine()->messenger(), GetHandle(), desktop_policy_);
+#endif
   floating_lyrics_channel_ = std::make_unique<FloatingLyricsChannel>(
       flutter_controller_->engine()->messenger());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
@@ -35,6 +39,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+#ifdef YUEYIN_BUILD
+  desktop_channel_ = nullptr;
+#endif
   if (flutter_controller_) {
     floating_lyrics_channel_ = nullptr;
     flutter_controller_ = nullptr;
@@ -46,6 +53,14 @@ void FlutterWindow::OnDestroy() {
 LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                                       WPARAM const wparam,
                                       LPARAM const lparam) noexcept {
+#ifdef YUEYIN_BUILD
+  if (desktop_channel_ && message == WM_TIMER && desktop_channel_->HandleTimer(wparam)) return 0;
+  if (desktop_channel_ && message == WM_CLOSE &&
+      desktop_policy_.NeedsExitPreparation() && desktop_channel_->PrepareExit()) return 0;
+  if (auto result = desktop_policy_.HandleMessage(hwnd, message, wparam, lparam)) {
+    return *result;
+  }
+#endif
   if (flutter_controller_) {
     std::optional<LRESULT> result =
         flutter_controller_->HandleTopLevelWindowProc(hwnd, message, wparam,

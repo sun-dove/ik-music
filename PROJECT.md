@@ -21,6 +21,8 @@
 | 数据库 | drift (SQLite) |
 | 持久化 | flutter_secure_storage + Hive |
 
+本仓库另提供乐音音乐（乐读yuè，原名悦音音乐）独立入口 `lib/main_video.dart`，当前版本0.5.0/build8。Windows改版通过可选桌面装配接入，原Mconnect概览中的版本、包名和缺省构建保持。独立发行与验收见 [0.5.0记录](docs/交付文档/乐音音乐050验收记录.md)。
+
 ---
 
 ## 2. 功能列表

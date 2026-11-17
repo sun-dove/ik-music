@@ -46,6 +46,13 @@ import 'ui/player_page.dart';
 import 'ui/video_shell.dart';
 import 'ui/video_theme.dart';
 import 'video_preferences.dart';
+import '../l10n/windows_music_strings.dart';
+import 'windows/windows_appearance.dart';
+import 'windows/windows_appearance_dialogs.dart';
+import 'windows/windows_music_preferences.dart';
+import 'windows/windows_my_page.dart';
+import 'windows/windows_player_page.dart';
+import 'windows/windows_download.dart';
 
 class VideoMusicApp extends StatefulWidget {
   const VideoMusicApp({
@@ -58,6 +65,7 @@ class VideoMusicApp extends StatefulWidget {
     this.sourceEngine,
     this.catalog,
     this.expandedPlatforms = false,
+    this.windowsAppearance,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -67,17 +75,32 @@ class VideoMusicApp extends StatefulWidget {
   final LxSourceEngine? sourceEngine;
   final ExpandedVideoCatalog? catalog;
   final bool expandedPlatforms;
+  final WindowsAppearance? windowsAppearance;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
 
 class _VideoMusicAppState extends State<VideoMusicApp> {
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => widget.windowsAppearance == null
+      ? _app()
+      : ListenableBuilder(
+          listenable: widget.windowsAppearance!,
+          builder: (_, _) => _app(),
+        );
+  Widget _app() => MaterialApp(
     title: VideoStrings.appName,
     debugShowCheckedModeBanner: false,
-    theme: VideoTheme.light,
-    darkTheme: VideoTheme.dark,
+    theme:
+        widget.windowsAppearance?.theme(Brightness.light) ?? VideoTheme.light,
+    darkTheme:
+        widget.windowsAppearance?.theme(Brightness.dark) ?? VideoTheme.dark,
+    builder: widget.windowsAppearance == null
+        ? null
+        : (context, child) => WindowsBackground(
+            appearance: widget.windowsAppearance!,
+            child: child!,
+          ),
     themeMode: switch (widget.preferences.theme) {
       'dark' => ThemeMode.dark,
       'system' => ThemeMode.system,
@@ -94,6 +117,7 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
       sourceEngine: widget.sourceEngine,
       catalog: widget.catalog,
       expandedPlatforms: widget.expandedPlatforms,
+      windowsAppearance: widget.windowsAppearance,
       onThemeChanged: () => setState(() {}),
     ),
   );
@@ -110,6 +134,7 @@ class _VideoHome extends ConsumerStatefulWidget {
     this.sourceEngine,
     this.catalog,
     this.expandedPlatforms = false,
+    this.windowsAppearance,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore customSourceCredentials;
@@ -120,12 +145,22 @@ class _VideoHome extends ConsumerStatefulWidget {
   final LxSourceEngine? sourceEngine;
   final ExpandedVideoCatalog? catalog;
   final bool expandedPlatforms;
+  final WindowsAppearance? windowsAppearance;
   @override
   ConsumerState<_VideoHome> createState() => _VideoHomeState();
 }
 
 class _VideoHomeState extends ConsumerState<_VideoHome>
     with WidgetsBindingObserver {
+  AudioLevel _effectiveQuality(
+    PlatformType platform, {
+    bool download = false,
+  }) =>
+      widget.windowsAppearance?.preferences.quality(
+        platform,
+        download: download,
+      ) ??
+      widget.preferences.quality(platform, download: download);
   late final VideoCatalog _catalog = widget.catalog ?? VideoCatalog();
   List<PlatformType> get _platforms => [
     PlatformType.qq,
@@ -509,6 +544,45 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             final info = ref.watch(videoStreamInfoProvider)[videoSongKey(song)];
             final notifier = ref.read(playerProvider.notifier);
             final source = ref.watch(sourcePlaybackViewProvider);
+            if (widget.windowsAppearance != null) {
+              final document = lyrics.asData?.value;
+              return WindowsPlayerPage(
+                song: song,
+                position: player.position,
+                duration: player.duration,
+                isPlaying: player.isPlaying,
+                isLoading: player.isTransitioning,
+                error: player.error,
+                sourceStatus: source.message.isEmpty
+                    ? null
+                    : _sourceStatus(context, source, notifier),
+                qualityLabel: song.platform == PlatformType.local
+                    ? VideoStrings.localAudio
+                    : source.message.isNotEmpty
+                    ? SourceStrings.qualityAbove
+                    : player.error != null
+                    ? VideoStrings.requestedQuality(
+                        WindowsMusicPreferences.qualityName(
+                          _effectiveQuality(song.platform),
+                        ),
+                      )
+                    : videoStreamLabel(info),
+                isPreview: source.message.isEmpty && info?.isPreview == true,
+                lyrics: document?.lines ?? const [],
+                timedLyrics: document?.format.name != 'unknown',
+                lyricsLoading: lyrics.isLoading,
+                lyricsError: lyrics.hasError ? VideoStrings.lyricsRetry : null,
+                onLyricsRetry: () => ref.invalidate(lyricsProvider),
+                modeLabel: _modeLabel(player),
+                onToggle: notifier.togglePlay,
+                onPrevious: notifier.skipToPrevious,
+                onNext: notifier.skipToNext,
+                onSeek: notifier.seek,
+                onQueue: _queue,
+                onMode: _mode,
+                onQuality: () => _quality(song.platform, false),
+              );
+            }
             return VideoPlayerPage(
               song: song,
               position: player.position,
@@ -678,8 +752,117 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     ),
   );
 
+  Future<bool> _windowsQuality(bool download) async {
+    final preferences = widget.windowsAppearance!.preferences;
+    final highest = preferences.sources?.value.highestQuality == true;
+    final selected = await showModalBottomSheet<(AudioLevel?, bool)>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              title: Text(
+                download
+                    ? WindowsMusicStrings.downloadQuality
+                    : WindowsMusicStrings.playQuality,
+              ),
+              subtitle: const Text(WindowsMusicStrings.qualityHint),
+            ),
+            if (!download && preferences.sources != null)
+              ListTile(
+                title: const Text(WindowsMusicStrings.highest),
+                subtitle: const Text(SourceStrings.highestHint),
+                trailing: highest ? const Icon(Icons.check) : null,
+                onTap: () => Navigator.pop(sheet, (null, true)),
+              ),
+            for (final level in [
+              AudioLevel.low,
+              AudioLevel.high,
+              AudioLevel.lossless,
+              AudioLevel.hires,
+              AudioLevel.master,
+            ])
+              ListTile(
+                title: Text(WindowsMusicPreferences.qualityName(level)),
+                trailing:
+                    (download || !highest) &&
+                        preferences.qualityLabel(download: download) ==
+                            WindowsMusicPreferences.qualityName(level)
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(sheet, (level, false)),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return false;
+    try {
+      await preferences.setQuality(
+        selected.$1,
+        download: download,
+        highest: selected.$2,
+      );
+    } on DesktopConfigurationException catch (error) {
+      _notice(error.toString());
+      return false;
+    }
+    if (!mounted) return true;
+    setState(() {});
+    final song = ref.read(playerProvider).currentSong;
+    if (!download && song != null && song.platform != PlatformType.local) {
+      await ref
+          .read(playerProvider.notifier)
+          .switchQuality(_effectiveQuality(song.platform));
+    }
+    return true;
+  }
+
+  Widget _myPage(VideoMyPage settings) {
+    final appearance = widget.windowsAppearance;
+    if (appearance == null) return settings;
+    return WindowsMyPage(
+      settings: settings,
+      playQuality: appearance.preferences.qualityLabel(),
+      downloadQuality: appearance.preferences.qualityLabel(download: true),
+      onQuality: (download) => _windowsQuality(download),
+      backgroundLabel: appearance.backgroundFile == null
+          ? WindowsMusicStrings.defaultBackground
+          : WindowsMusicStrings.savedBackground,
+      fontLabel: appearance.fontLabel,
+      closeAction: appearance.preferences.closeAction,
+      nativeAvailable: appearance.nativeAvailable,
+      errors: [
+        for (final error in [
+          appearance.preferences.loadError,
+          appearance.backgroundError,
+          appearance.fontError,
+          appearance.nativeError,
+        ].whereType<DesktopFailure>().toSet())
+          WindowsMusicStrings.failure(error),
+      ],
+      onBackground: () => showWindowsBackgroundPicker(context, appearance),
+      onFont: () => showWindowsFontPicker(context, appearance),
+      onClose: () => showWindowsClosePicker(context, appearance),
+      onRetryNative: appearance.initialize,
+      onExit: () async {
+        try {
+          await appearance.window.exitApplication();
+        } on DesktopConfigurationException catch (error) {
+          _notice(error.toString());
+        }
+      },
+    );
+  }
+
   Future<void> _quality(PlatformType platform, bool download) async {
     if (platform == PlatformType.local) return;
+    if (widget.windowsAppearance != null) {
+      await _windowsQuality(download);
+      return;
+    }
     var highest = false;
     final selected = await showModalBottomSheet<AudioLevel>(
       context: context,
@@ -763,7 +946,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     for (final song in songs) {
       await notifier.startDownload(
         song,
-        widget.preferences.quality(song.platform, download: true),
+        _effectiveQuality(song.platform, download: true),
       );
     }
     _notice(VideoStrings.downloadsSubmitted(songs.length));
@@ -844,6 +1027,13 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                                     },
                                 style: const TextStyle(fontSize: 11),
                               ),
+                              if (widget.windowsAppearance != null)
+                                Text(
+                                  WindowsMusicPreferences.qualityName(
+                                    task.quality,
+                                  ),
+                                  style: const TextStyle(fontSize: 11),
+                                ),
                               if (task.status == DownloadStatus.downloading)
                                 LinearProgressIndicator(value: task.progress),
                             ],
@@ -929,6 +1119,28 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     _ => VideoStrings.retryDownload,
   };
   Future<void> _resolveDownload(DownloadTask task) async {
+    if (widget.windowsAppearance != null) {
+      switch (task.failureKind) {
+        case DownloadFailureKind.auth:
+          await _account(task.song.platform);
+        case DownloadFailureKind.vip:
+          if (!await _windowsQuality(true)) return;
+        case DownloadFailureKind.storagePermission:
+          if (!await _windowsDirectory()) return;
+        case DownloadFailureKind.disk:
+          _notice(VideoStrings.freeDeviceSpace);
+        default:
+          break;
+      }
+      if (!mounted) return;
+      await retryWindowsDownload(
+        ref.read(downloadProvider.notifier),
+        task,
+        _effectiveQuality(task.song.platform, download: true),
+        readState: () => ref.read(downloadProvider),
+      );
+      return;
+    }
     switch (task.failureKind) {
       case DownloadFailureKind.auth:
         await _account(task.song.platform);
@@ -947,6 +1159,20 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   Future<void> _directory() async {
     final result = await DownloadDirectoryService().applySafTreeDirectory();
     if (!result.isCancelled) _notice(result.message);
+  }
+
+  Future<bool> _windowsDirectory() async {
+    try {
+      final result = await chooseWindowsDownloadDirectory(
+        ref.read(downloadProvider.notifier),
+      );
+      if (!mounted || result == null) return false;
+      _notice(result.message);
+      return result.isOk;
+    } catch (_) {
+      _notice(WindowsMusicStrings.failure(DesktopFailure.readFailed));
+      return false;
+    }
   }
 
   void _cache() => showModalBottomSheet<void>(
@@ -1019,6 +1245,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                     for (final platform in [
                       PlatformType.qq,
                       PlatformType.netease,
+                      if (widget.windowsAppearance != null &&
+                          widget.expandedPlatforms)
+                        PlatformType.kugou,
                     ]) {
                       await ref
                           .read(downloadProvider.notifier)
@@ -1026,7 +1255,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                             songs
                                 .where((song) => song.platform == platform)
                                 .toList(),
-                            quality: widget.preferences.quality(platform),
+                            quality: _effectiveQuality(platform),
                           );
                     }
                     if (context.mounted) Navigator.pop(context);
@@ -1423,6 +1652,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
     return VideoShell(
       expandedPlatforms: widget.expandedPlatforms,
+      platformIcons: widget.windowsAppearance != null,
       index: _index,
       onSelect: (index) => setState(() => _index = index),
       pages: [
@@ -1472,52 +1702,56 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             currentSong: player.currentSong,
             syncComplete: _libraries[platform]?.complete ?? false,
           ),
-        VideoMyPage(
-          platforms: _platforms,
-          localSongCount: _localReady
-              ? ref.watch(localMusicProvider).songs.length
-              : null,
-          accounts: {
-            for (final platform in _platforms)
-              if (auth.userFor(platform) case final user?)
-                platform: VideoAccountSummary(
-                  nickname: user.nickname,
-                  avatarUrl: user.avatarUrl,
-                  loaded: _libraries[platform]?.loaded ?? 0,
-                  total: _libraries[platform]?.total,
-                  complete: _libraries[platform]?.complete ?? false,
-                ),
-          },
-          cacheLabel:
-              '${_mb(downloads.estimatedOfflineCacheBytes)} / ${cache.sizeLimitMb} MB',
-          downloadLabel: VideoStrings.taskCount(downloads.tasks.length),
-          themeLabel: switch (widget.preferences.theme) {
-            'dark' => VideoStrings.darkTheme,
-            'system' => VideoStrings.systemTheme,
-            _ => VideoStrings.lightTheme,
-          },
-          qualityLabels: {
-            for (final platform in _platforms) ...{
-              '${platform.name}:play':
-                  widget.sourceSettings?.value.highestQuality == true
-                  ? SourceStrings.highest
-                  : widget.preferences
-                        .quality(platform)
-                        .displayNameFor(platform),
-              '${platform.name}:download': widget.preferences
-                  .quality(platform, download: true)
-                  .displayNameFor(platform),
+        _myPage(
+          VideoMyPage(
+            platforms: _platforms,
+            localSongCount: _localReady
+                ? ref.watch(localMusicProvider).songs.length
+                : null,
+            accounts: {
+              for (final platform in _platforms)
+                if (auth.userFor(platform) case final user?)
+                  platform: VideoAccountSummary(
+                    nickname: user.nickname,
+                    avatarUrl: user.avatarUrl,
+                    loaded: _libraries[platform]?.loaded ?? 0,
+                    total: _libraries[platform]?.total,
+                    complete: _libraries[platform]?.complete ?? false,
+                  ),
             },
-          },
-          customSourceLabel: _customSourceLabel,
-          onAccount: _account,
-          onQuality: _quality,
-          onCache: _cache,
-          onDownloads: _downloads,
-          onDirectory: _directory,
-          onTheme: _theme,
-          onLocal: _local,
-          onCustomSource: _customSource,
+            cacheLabel:
+                '${_mb(downloads.estimatedOfflineCacheBytes)} / ${cache.sizeLimitMb} MB',
+            downloadLabel: VideoStrings.taskCount(downloads.tasks.length),
+            themeLabel: switch (widget.preferences.theme) {
+              'dark' => VideoStrings.darkTheme,
+              'system' => VideoStrings.systemTheme,
+              _ => VideoStrings.lightTheme,
+            },
+            qualityLabels: {
+              for (final platform in _platforms) ...{
+                '${platform.name}:play':
+                    widget.sourceSettings?.value.highestQuality == true
+                    ? SourceStrings.highest
+                    : widget.preferences
+                          .quality(platform)
+                          .displayNameFor(platform),
+                '${platform.name}:download': widget.preferences
+                    .quality(platform, download: true)
+                    .displayNameFor(platform),
+              },
+            },
+            customSourceLabel: _customSourceLabel,
+            onAccount: _account,
+            onQuality: _quality,
+            onCache: _cache,
+            onDownloads: _downloads,
+            onDirectory: widget.windowsAppearance == null
+                ? _directory
+                : _windowsDirectory,
+            onTheme: _theme,
+            onLocal: _local,
+            onCustomSource: _customSource,
+          ),
         ),
       ],
       miniPlayer: VideoMiniPlayer(

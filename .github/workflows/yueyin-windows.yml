@@ -1,4 +1,4 @@
-name: 悦音 Windows 构建
+name: 乐音 Windows 构建
 on:
   workflow_dispatch:
   push:
@@ -13,6 +13,7 @@ on:
       - 'scripts/build_video_windows.ps1'
       - 'scripts/build_windows_lx_host.ps1'
       - 'installer/yueyin.iss'
+      - 'docs/交付文档/乐音音乐050Windows说明.md'
       - '.github/workflows/yueyin-windows.yml'
 permissions:
   contents: read
@@ -48,7 +49,7 @@ jobs:
         run: ./scripts/build_video_windows.ps1 -FlutterSdk $env:FLUTTER_ROOT -DependencyDirectory "$env:RUNNER_TEMP/yueyin-native"
       - uses: actions/upload-artifact@v4
         with:
-          name: yueyin-0.4.0-windows-x64
+          name: yueyin-0.5.0-windows-x64
           path: build/yueyin-release/*
           if-no-files-found: error
           retention-days: 14

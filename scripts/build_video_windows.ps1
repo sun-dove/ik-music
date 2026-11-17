@@ -13,10 +13,24 @@ $env:VIDEO_MUSIC_BUILD = '1'
 Push-Location $projectRoot
 try {
     $flutter = Join-Path $FlutterSdk 'bin/flutter.bat'
-    & $flutter test --no-pub -j 1 test/video_windows_sandbox_test.dart
+    & $flutter test --no-pub -j 1 test/video_windows_sandbox_test.dart test/windows_music_native_test.dart
     if ($LASTEXITCODE -ne 0) { throw 'Windows音源原生门未通过，停止打包。' }
-    & $flutter build windows --release --no-pub --target lib/main_video.dart --build-name 0.4.0 --build-number 7
-    if ($LASTEXITCODE -ne 0) { throw '悦音Windows主程序构建失败。' }
+    & $flutter build windows --release --no-pub --target lib/main_video.dart --build-name 0.5.0 --build-number 8
+    if ($LASTEXITCODE -ne 0) { throw '乐音Windows主程序构建失败。' }
+    $cmake = (Get-Command cmake -ErrorAction Stop).Source
+    & $cmake --build (Join-Path $projectRoot 'build/windows/x64') --config Release --target yueyin_desktop_red_gate yueyin_desktop_gate
+    if ($LASTEXITCODE -ne 0) { throw 'Windows窗口与字体原生门编译失败。' }
+    # Windows PowerShell 5 将原生 stderr 包装为错误记录；红门预期失败，单独读取退出码。
+    $previousErrorAction = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        & (Join-Path $projectRoot 'build/windows/x64/desktop-gate/yueyin_desktop_red_gate.exe')
+        $redExitCode = $LASTEXITCODE
+    } finally { $ErrorActionPreference = $previousErrorAction }
+    if ($redExitCode -ne 1) { throw '原生红门必须以断言失败退出，验收无效。' }
+    Write-Output '原生红门已确认：停用新关闭处理器不能满足最小化交互。'
+    & (Join-Path $projectRoot 'build/windows/x64/desktop-gate/yueyin_desktop_gate.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Windows窗口与字体原生门未通过，停止发行。' }
     $bundle = Join-Path $projectRoot 'build/windows/x64/runner/Release'
     foreach ($required in @('yueyin_music.exe', 'flutter_windows.dll', 'data/flutter_assets/AssetManifest.bin')) {
         if (-not (Test-Path -LiteralPath (Join-Path $bundle $required))) { throw "Windows产物缺少 $required" }
@@ -27,13 +41,14 @@ try {
     foreach ($license in @('LICENSE', 'NOTICE.md')) {
         if (Test-Path -LiteralPath (Join-Path $projectRoot $license)) { Copy-Item -LiteralPath (Join-Path $projectRoot $license) -Destination $bundle -Force }
     }
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/交付文档/悦音音乐040Windows说明.md') -Destination $bundle -Force
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/交付文档/乐音音乐050Windows说明.md') -Destination $bundle -Force
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'design/platform-icons-010/来源说明.md') -Destination (Join-Path $bundle '平台图标来源说明.md') -Force
     $release = Join-Path $projectRoot 'build/yueyin-release'
     New-Item -ItemType Directory -Path $release -Force | Out-Null
-    Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath (Join-Path $release 'YueyinMusic-0.4.0-windows-x64.zip') -Force
+    Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath (Join-Path $release 'YueyinMusic-0.5.0-windows-x64.zip') -Force
     if (Test-Path -LiteralPath $InnoCompiler) {
         & $InnoCompiler (Join-Path $projectRoot 'installer/yueyin.iss')
-        if ($LASTEXITCODE -ne 0) { throw '悦音Windows安装器编译失败。' }
+        if ($LASTEXITCODE -ne 0) { throw '乐音Windows安装器编译失败。' }
     } else { Write-Output '未找到Inno Setup，本次只生成完整便携ZIP。' }
     Get-ChildItem -LiteralPath $release -File | Where-Object { $_.Extension -in @('.zip', '.exe') } | Get-FileHash -Algorithm SHA256 | Select-Object Hash,Path
 } finally { Pop-Location }

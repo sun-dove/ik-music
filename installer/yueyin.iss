@@ -1,16 +1,17 @@
 ; 悦音独立安装器；原Mconnect安装器与AppId保留。
-#define MyAppName "悦音音乐"
-#define MyAppVersion "0.4.0"
+#define MyAppName "乐音音乐"
+#define MyAppVersion "0.5.0"
 #define MyAppExeName "yueyin_music.exe"
 #define MyAppSourceDir "..\build\windows\x64\runner\Release"
 [Setup]
 AppId={{54A778C9-2261-4E1F-BA89-EE68844DA7AA}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=悦音音乐贡献者
+AppPublisher=乐音音乐贡献者
 AppPublisherURL=https://github.com/sun-dove/yueyin-music
 DefaultDirName={localappdata}\Programs\YueyinMusic
 DefaultGroupName={#MyAppName}
+UsePreviousGroup=no
 DisableDirPage=no
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -43,4 +44,28 @@ begin
   Result := FileExists(ExpandConstant('{sys}\msvcp140.dll')) and FileExists(ExpandConstant('{sys}\vcruntime140.dll'));
   if not Result then
     MsgBox('请先安装微软 Visual C++ 2015-2022 x64 运行库，然后重新运行安装器。下载说明：https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist', mbInformation, MB_OK);
+end;
+
+procedure RemovePreviousBrandShortcut(const ShortcutPath: String);
+var
+  Shell, Shortcut: Variant;
+begin
+  if not FileExists(ShortcutPath) then Exit;
+  try
+    Shell := CreateOleObject('WScript.Shell');
+    Shortcut := Shell.CreateShortcut(ShortcutPath);
+    if CompareText(Shortcut.TargetPath, ExpandConstant('{app}\{#MyAppExeName}')) = 0 then
+      DeleteFile(ShortcutPath);
+  except
+    Log('旧快捷方式目标无法核对，保留该文件。');
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then begin
+    RemovePreviousBrandShortcut(ExpandConstant('{autodesktop}\悦音音乐.lnk'));
+    RemovePreviousBrandShortcut(ExpandConstant('{userprograms}\悦音音乐\悦音音乐.lnk'));
+    RemoveDir(ExpandConstant('{userprograms}\悦音音乐'));
+  end;
 end;

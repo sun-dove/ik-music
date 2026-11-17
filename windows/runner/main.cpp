@@ -34,7 +34,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1200, 800);
 #ifdef YUEYIN_BUILD
-  const wchar_t* title = L"悦音音乐";
+  const wchar_t* title = L"乐音音乐";
 #else
   const wchar_t* title = L"Mconnect";
 #endif

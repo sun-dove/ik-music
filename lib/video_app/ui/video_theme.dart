@@ -11,14 +11,24 @@ class VideoTheme {
   static ThemeData get dark => _theme(Brightness.dark);
 
   static Color canvas(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
+      Theme.of(context).extension<WindowsAppearanceTheme>()?.hasBackground ==
+          true
+      ? Colors.transparent
+      : Theme.of(context).brightness == Brightness.dark
       ? const Color(0xFF17171C)
       : background;
 
-  static Color surface(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.dark
-      ? const Color(0xFF25242C)
-      : card;
+  static Color surface(BuildContext context) {
+    final color = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF25242C)
+        : card;
+    return Theme.of(context)
+                .extension<WindowsAppearanceTheme>()
+                ?.hasBackground ==
+            true
+        ? color.withValues(alpha: .86)
+        : color;
+  }
 
   static Color secondaryText(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface.withValues(alpha: .58);
@@ -64,4 +74,20 @@ class VideoTheme {
       ),
     );
   }
+}
+
+/// 仅新 Windows 装配提供该扩展；原 light/dark 及缺省颜色精确保持。
+class WindowsAppearanceTheme extends ThemeExtension<WindowsAppearanceTheme> {
+  const WindowsAppearanceTheme({this.hasBackground = false});
+  final bool hasBackground;
+  @override
+  WindowsAppearanceTheme copyWith({bool? hasBackground}) =>
+      WindowsAppearanceTheme(
+        hasBackground: hasBackground ?? this.hasBackground,
+      );
+  @override
+  WindowsAppearanceTheme lerp(
+    covariant WindowsAppearanceTheme? other,
+    double t,
+  ) => t < .5 ? this : other ?? this;
 }

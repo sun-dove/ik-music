@@ -20,8 +20,19 @@ add_executable(${BINARY_NAME} WIN32
 
 apply_standard_settings(${BINARY_NAME})
 if(YUEYIN_BUILD)
+  target_sources(${BINARY_NAME} PRIVATE "windows_desktop_channel.cpp")
   target_compile_definitions(${BINARY_NAME} PRIVATE "YUEYIN_BUILD")
-  target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib")
+  target_link_libraries(${BINARY_NAME} PRIVATE "shell32.lib" "gdi32.lib")
+  foreach(GATE_TARGET yueyin_desktop_gate yueyin_desktop_red_gate)
+    add_executable(${GATE_TARGET} EXCLUDE_FROM_ALL "windows_desktop_gate.cpp")
+    apply_standard_settings(${GATE_TARGET})
+    target_compile_definitions(${GATE_TARGET} PRIVATE "NOMINMAX")
+    target_link_libraries(${GATE_TARGET} PRIVATE "user32.lib" "gdi32.lib")
+    target_compile_options(${GATE_TARGET} PRIVATE /utf-8)
+    set_target_properties(${GATE_TARGET} PROPERTIES
+      RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}/desktop-gate")
+  endforeach()
+  target_compile_definitions(yueyin_desktop_red_gate PRIVATE "LEYIN_DESKTOP_BASELINE")
 endif()
 
 target_compile_definitions(${BINARY_NAME} PRIVATE "FLUTTER_VERSION=\"${FLUTTER_VERSION}\"")

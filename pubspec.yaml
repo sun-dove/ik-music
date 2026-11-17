@@ -125,6 +125,10 @@ flutter_native_splash:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/yueyin/note-ribbons.png
+    - assets/platform-icons/qq-music.jpg
+    - assets/platform-icons/netease-music.jpg
+    - assets/platform-icons/kugou-music.jpg
     - assets/lx-runtime/forge-1.3.1.min.js
     - assets/lx-runtime/pako-2.1.0.min.js
     - assets/lx-runtime/forge-LICENSE
