@@ -187,7 +187,7 @@ void main() {
     );
     final sdk = p.dirname(p.dirname(flutterPackage.path));
     final file = await File(
-      p.join(sdk, 'bin/cache/artifacts/material_fonts/roboto-regular.ttf'),
+      p.join(sdk, 'packages/flutter_tools/static/Ahem.ttf'),
     ).copy(p.join(root.path, 'user-font.ttf'));
     final draft = await appearance.prepareFont(file);
     expect(preferences.value.font, isNull);
