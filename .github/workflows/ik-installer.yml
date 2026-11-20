@@ -24,7 +24,7 @@ jobs:
           $redOutput | Write-Output
           if ($redExit -ne 1 -or -not ($redOutput -match 'IK_INSTALLER_RED_CONFIRMED')) { throw 'Installer baseline gate was not confirmed.' }
           ./scripts/ik_installer_isolated_gate.ps1 -GateDirectory $greenDirectory
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: ik-installer-evidence
