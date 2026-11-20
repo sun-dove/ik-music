@@ -27,6 +27,8 @@ void Check(bool passed, const char* name) {
 void ActivateForGate(IkDesktopHost& host) {
 #ifndef IK_DESKTOP_BASELINE
   host.Initialize();
+#else
+  (void)host;
 #endif
 }
 }  // namespace
