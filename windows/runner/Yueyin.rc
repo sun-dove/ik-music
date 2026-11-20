@@ -1,10 +1,11 @@
 #pragma code_page(65001)
 #include "resource.h"
 #include "winres.h"
+#include "ik_version.h"
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 IDI_APP_ICON ICON "resources\\yueyin_icon.ico"
-#define VERSION_AS_NUMBER 0,5,1,9
-#define VERSION_AS_STRING "0.5.1"
+#define VERSION_AS_NUMBER IK_VERSION_NUMBER
+#define VERSION_AS_STRING IK_VERSION_STRING
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION VERSION_AS_NUMBER
  PRODUCTVERSION VERSION_AS_NUMBER
@@ -19,10 +20,10 @@ BEGIN
     BLOCK "040904e4"
     BEGIN
       VALUE "CompanyName", "sun-dove" "\0"
-      VALUE "FileDescription", "DJ Music" "\0"
+      VALUE "FileDescription", IK_APP_NAME "\0"
       VALUE "FileVersion", VERSION_AS_STRING "\0"
       VALUE "InternalName", "yueyin_music" "\0"
-      VALUE "LegalCopyright", "DJ Music contributors; Mconnect and third-party notices retained." "\0"
+      VALUE "LegalCopyright", "ik contributors; Mconnect and third-party notices retained." "\0"
       VALUE "OriginalFilename", "yueyin_music.exe" "\0"
       VALUE "ProductName", "YueyinMusic" "\0"
       VALUE "ProductVersion", VERSION_AS_STRING "\0"

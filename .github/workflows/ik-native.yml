@@ -1,0 +1,32 @@
+name: ik Windows 原生验收
+on:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-2022
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: 提前编译并验证 ik 原生桌面门
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          Import-Module "$vs/Common7/Tools/Microsoft.VisualStudio.DevShell.dll"
+          Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
+          $gate = Join-Path $env:RUNNER_TEMP 'ik-native-gate'
+          New-Item -ItemType Directory -Path $gate -Force | Out-Null
+          Push-Location $gate
+          try {
+            $source = "$env:GITHUB_WORKSPACE/windows/runner"
+            cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /DNOMINMAX /DUNICODE /D_UNICODE /I"$source" "$source/ik_desktop_host.cpp" "$source/ik_desktop_gate.cpp" /Fe:ik_desktop_gate.exe /link user32.lib shell32.lib advapi32.lib windowsapp.lib runtimeobject.lib shcore.lib
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            ./ik_desktop_gate.exe
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            cl.exe /nologo /std:c++17 /EHsc /utf-8 /W4 /WX /DNOMINMAX /DUNICODE /D_UNICODE /DIK_DESKTOP_BASELINE /I"$source" "$source/ik_desktop_host.cpp" "$source/ik_desktop_gate.cpp" /Fe:ik_desktop_red_gate.exe /link user32.lib shell32.lib advapi32.lib windowsapp.lib runtimeobject.lib shcore.lib
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            ./ik_desktop_red_gate.exe
+            if ($LASTEXITCODE -ne 1) { throw '原生红门未按预期失败' }
+            exit 0
+          } finally { Pop-Location }

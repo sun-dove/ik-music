@@ -192,7 +192,7 @@ bool FloatingLyricsWindow::EnsureWindow() {
 
   RegisterFloatingLyricsWindowClass();
 #ifdef YUEYIN_BUILD
-  const wchar_t* title = L"DJ Music Floating Lyrics";
+  const wchar_t* title = L"ik Floating Lyrics";
 #else
   const wchar_t* title = L"Mconnect Floating Lyrics";
 #endif

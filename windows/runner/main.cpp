@@ -3,6 +3,7 @@
 #include <windows.h>
 #ifdef YUEYIN_BUILD
 #include <shobjidl.h>
+#include "ik_desktop_host.h"
 #endif
 
 #include "flutter_window.h"
@@ -15,6 +16,20 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   if (!::AttachConsole(ATTACH_PARENT_PROCESS) && ::IsDebuggerPresent()) {
     CreateAndAttachConsole();
   }
+
+#ifdef YUEYIN_BUILD
+  IkSingleInstance instance_guard;
+  if (!instance_guard.valid()) {
+    MessageBoxW(nullptr, L"暂时无法创建 ik 的实例锁，请稍后重试。", L"ik", MB_OK | MB_ICONERROR);
+    return EXIT_FAILURE;
+  }
+  if (!instance_guard.primary()) {
+    if (!instance_guard.WakeExisting()) {
+      MessageBoxW(nullptr, L"ik 正在启动或退出，请稍后再打开。", L"ik", MB_OK | MB_ICONINFORMATION);
+    }
+    return EXIT_SUCCESS;
+  }
+#endif
 
   // Initialize COM, so that it is available for use in the library and/or
   // plugins.
@@ -34,7 +49,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1200, 800);
 #ifdef YUEYIN_BUILD
-  const wchar_t* title = L"DJ Music";
+  const wchar_t* title = L"ik";
 #else
   const wchar_t* title = L"Mconnect";
 #endif
