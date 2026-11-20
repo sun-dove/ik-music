@@ -23,7 +23,9 @@
 | 用户覆盖升级 0.5.0 | Android versionCode > 8 且签名相同；Windows AppId/AppUserModelID/CompanyName/ProductName/EXE/路径回归 | 安装器只删除目标确属本程序的旧品牌快捷方式；未知目标保留 |
 | GitHub 用户定位项目 | README 链接继续有效；GitHub 仓库地址的调整不由客户端标签触发 | README 的项目归属可写 Dingjian，发行客户端始终显示 DJ Music |
 
-本票据的正式确定性门为 `test/windows_music_brand_test.dart`，覆盖文案、Windows 安装身份、Android 包/版本/资源与 Mconnect 保持。门先在 0.5.0 基线上预期失败，再逐个实现到绿。本地 analyze 和完整 test 已通过（1894 项通过、18 项因 Windows 原生环境跳过），Android 三 ABI release 包已构建并核验 applicationId、版本和签名一致。Windows x64 原生构建、安装器、覆盖升级及设备实测仍待 `release/dj-music-0.5.1` Windows runner 验收。
+本票据的正式确定性门为 `test/windows_music_brand_test.dart`，覆盖文案、Windows 安装身份、Android 包/版本/资源与 Mconnect 保持。门先在 0.5.0 基线上预期失败，再逐个实现到绿。本地 analyze 和完整 test 已通过（1894 项通过、18 项显式跳过），Android 三 ABI release 包已构建并核验 applicationId、版本和旧证书一致。18 项跳过包含 10 项网易云真实网络探针、1 项既有设置用例和 7 项需显式启用的 Windows 原生宿主门，不能统称为非 Windows 环境导致。
+
+2026-11-20，候选提交 `5ce545b06f4315ff8b55ba5a7643c1710e82c8aa` 的 [Windows 构建 44665051893](https://github.com/sun-dove/yueyin-music/actions/runs/44665051893) 成功：静态分析 0 issue、完整回归 1894 通过/18 跳过、7 项实际宿主门另行启用并全部通过、C++ 窗口/字体红→绿门、主程序、ZIP 和 Inno Setup 安装器均通过。本机从 0.5.0 覆盖升级后，启动前 5 个数据文件逐字节保持；桌面/开始菜单、窗口和应用内品牌、字体预览及正常退出已实际验收。Android 物理设备和 Windows 系统缩放矩阵仍未实测。详见[0.5.1 候选验收记录](交付文档/DJ-Music-051候选验收记录.md)。本分支尚未合入 main 或发布 Release。
 
 ## 受影响调用方与回滚
 

@@ -1,10 +1,10 @@
 # Changelog
 
-## 2026-11-20 - DJ Music 品牌与图标更新（0.5.1 开发中）
+## 2026-11-20 - DJ Music 品牌与图标更新（0.5.1 候选，未发布）
 
 GitHub 项目归属使用顶尖（Dingjian），Windows、Android 和应用内品牌统一使用 DJ Music。Windows「我的」页与宽屏导航接入新图标；Android 同步桌面启动图标、round/adaptive/monochrome 图层及 API 31+ 明暗启动画面，并保留旧小组件与通知 channel ID。安装器只清理确认属于本应用的旧名称快捷方式，保留当前 DJ Music 快捷方式。README 与 Windows 使用说明开始同步新品牌。
 
-版本与产物：候选版本为 0.5.1/build 9，仍在验收，尚未发布。Android applicationId、稳定签名、Windows AppId/AppUserModelID、EXE 与数据目录保持，原 Mconnect 默认入口和 0.5.0 GitHub Release 历史下载不变。Flutter 静态分析通过；全量测试 1894 项通过、18 项因 Windows 原生环境跳过；Android 三 ABI release 签名构建通过。Windows x64 runner、安装器、覆盖升级和设备实测仍待专用 Windows runner 验收。
+版本与产物：候选版本为 0.5.1/build 9，尚未发布。Android applicationId、稳定签名、Windows AppId/AppUserModelID、EXE 与数据目录保持，原 Mconnect 默认入口和 0.5.0 GitHub Release 历史下载不变。Windows 构建 44665051893 已通过静态分析、1894 项回归、7 项单独启用的真实宿主门、C++ 窗口/字体红→绿门，并生成安装器与 ZIP。完整回归的 18 项跳过为 10 项真实网络探针、1 项既有设置用例和上述 7 项原生门，不全部归因于运行平台。Android 三 ABI release 包使用旧证书，版本码为 1009/2009/4009。本机 0.5.0→0.5.1 覆盖升级的 5 个数据文件在首次启动前 SHA-256 完全一致；快捷方式、新品牌/图标、版本、字体预览与保留的退出偏好已实际核对。Android 真机覆盖安装和系统缩放矩阵仍未实测；五包散列及详细边界见[候选验收记录](docs/交付文档/DJ-Music-051候选验收记录.md)。
 
 ## 2026-11-17 - 乐音音乐独立入口 0.5.0
 

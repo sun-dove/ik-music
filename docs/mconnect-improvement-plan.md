@@ -3661,6 +3661,10 @@ Windows宿主使用已有.NET编译器与签名校验后的固定WebView2 SDK；
 
 按用户确认将产品显示名统一为DJ Music，Dingjian继续仅作GitHub项目归属名；Android applicationId/稳定签名、Windows AppId/AppUserModelID/EXE/CompanyName/ProductName/安装与数据目录、Mconnect默认路径和0.5.0发行记录保持。用户图标完整归档并逐字节核对Windows ICO与Android五档普通/round PNG。Android独立资源覆盖adaptive/monochrome、明暗启动背景、通知单色图和小组件品牌，Mconnect共享drawable保持旧值。
 
-正式品牌确定性门和Windows界面定向门全绿；flutter analyze无问题；完整flutter test为1894通过、18项Windows原生宿主相关测试因非Windows环境跳过；三ABI稳定签名release APK已构建，包标签/applicationId/版本名/签名及资源表通过检查。APK与 SHA-256留在本地build目录，尚未发布。18项skip不是Windows原生门通过；原生宿主、desktop CMake红/绿门、ZIP、Inno Setup、安装覆盖与GUI实测须在Windows runner另行验收。
+正式品牌确定性门和Windows界面定向门全绿；flutter analyze无问题；完整flutter test为1894通过、18项显式跳过；三ABI稳定签名release APK已构建，包标签/applicationId/版本名/签名及资源表通过检查。18项skip实际为10项网易云真实网络探针、1项既有设置用例、7项需显式启用的Windows原生宿主门，原先全部归因于非Windows环境的说明不准确，现已更正。
 
 发现远端main仍在0.5.0提交，故更新Windows workflow仅允许release/dj-music-0.5.1候选分支额外触发；不触碰main、不发布Release。推送后先查CI job和artifact；若失败先按日志修复并更新候选提交，再以同一分支复跑，最终仅将已实际生成的Windows产物及哈希计为交付。字号10/11px作为0.6体验门复核，不以品牌版本改动伪装修复；0.6功能改版仍需完成设计审阅后另开场景与红门。
+
+候选提交5ce545b的Windows run44665051893已成功：1894通过/18跳过，7项真实宿主门另行全部通过；C++原生门停用关闭处理器时实际失败、启用后通过，主程序、ZIP和Inno安装器生成成功。下载artifact的SHA-256与GitHub一致；主EXE内嵌9档图标、随包ICO和Flutter PNG与用户源一致，3份WebView2 DLL微软签名有效。安装到原D:/Applications/YueyinMusic目录后，50个发行文件与ZIP逐字节相同；首次启动前5个数据文件SHA-256保持，旧快捷方式按目标核对后迁移为DJ Music。实际1186×793窗口显示标题、侧栏、「我的」、0.5.1版本及Microsoft YaHei UI字体预览；旧队列和关闭时退出偏好恢复，Alt+F4结束应用且无宿主残留。GUI退出后player_memory.hive正常追加了运行状态，未将运行后的5文件宣称为字节不变。正式结果、五包散列及未测范围记录于《DJ-Music-051候选验收记录》。
+
+本轮验收临时目录work/dj051-20261120的精确范围清理命令被自动审批拒绝，返回blocked by policy；下载包、解压副本、日志和升级前散列仍保留在该目录，不进入Git。没有重试绕过；正式五包、校验文件和中文说明保留于outputs/DJ-Music-0.5.1。
