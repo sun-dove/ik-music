@@ -1,0 +1,39 @@
+name: IK Music 安装器独立验收
+on:
+  workflow_dispatch:
+  push:
+    branches: [diagnostic/ik-installer]
+permissions:
+  contents: read
+jobs:
+  installer:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: 真实 Inno 隔离红绿门
+        shell: powershell
+        run: |
+          $redDirectory = Join-Path $env:RUNNER_TEMP 'ik-inno-red'
+          $greenDirectory = Join-Path $env:RUNNER_TEMP 'ik-inno-green'
+          $shell = (Get-Process -Id $PID).Path
+          $ErrorActionPreference = 'Continue'
+          $redOutput = @(& $shell -NoLogo -NoProfile -File ./scripts/ik_installer_isolated_gate.ps1 -GateDirectory $redDirectory -Baseline 2>&1)
+          $redExit = $LASTEXITCODE
+          $ErrorActionPreference = 'Stop'
+          $redOutput | Write-Output
+          if ($redExit -ne 1 -or -not ($redOutput -match 'IK_INSTALLER_RED_CONFIRMED')) { throw '真实隔离安装红门未确认。' }
+          ./scripts/ik_installer_isolated_gate.ps1 -GateDirectory $greenDirectory
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ik-installer-evidence
+          path: |
+            ${{ runner.temp }}/ik-inno-red/*.json
+            ${{ runner.temp }}/ik-inno-red/*.lnk
+            ${{ runner.temp }}/ik-inno-red/*.log
+            ${{ runner.temp }}/ik-inno-green/*.json
+            ${{ runner.temp }}/ik-inno-green/*.lnk
+            ${{ runner.temp }}/ik-inno-green/*.log
+          if-no-files-found: warn
+          retention-days: 14

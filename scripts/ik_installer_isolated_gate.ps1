@@ -47,6 +47,12 @@ function Assert-GateInstalled([string]$Expected) {
     if (-not (Test-Path -LiteralPath $linkPath)) { throw '隔离开始菜单入口缺失。' }
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($linkPath)
+    $shortcutState = [ordered]@{ expected=$Expected; link=$linkPath; target=$shortcut.TargetPath; working=$shortcut.WorkingDirectory; icon=$shortcut.IconLocation; length=(Get-Item -LiteralPath $linkPath).Length }
+    $shortcutState | ConvertTo-Json | Write-Output
+    $diagnosticName = 'shortcut-' + [Guid]::NewGuid().ToString('N')
+    Copy-Item -LiteralPath $linkPath -Destination (Join-Path $GateDirectory ($diagnosticName + '.lnk'))
+    [IO.File]::WriteAllText((Join-Path $GateDirectory ($diagnosticName + '.json')), ($shortcutState | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    if (-not $shortcut.TargetPath -or -not $shortcut.WorkingDirectory) { throw '隔离快捷方式目标或工作目录为空；原始LNK和实际字段已保留在本门目录。' }
     # ShellLink会展开TargetPath中的8.3短目录；CI的TEMP本身可能仍是RUNNER~1。
     $iconParts = [regex]::Match($shortcut.IconLocation, '^(.*),\s*0$')
     if (-not $iconParts.Success -or
