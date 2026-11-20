@@ -12,7 +12,7 @@
 - 当前分支 `feature/ik-complete`，最终产品实现提交为 `98bc9498ae5c1e6c605be7312a7c07b619dacf5a`，测试与构建兼容修正已推至 `02492b55f9639d4af1d307a52815fa75aff333b1`。后续文档收口不改变产品源码。没有reset/clean，已有改动全部保留。
 - 当前安装`D:/Applications/ik-music`：IK Music 0.6.0/build11。2026-11-20 22:27已执行带保护性快照的正式迁移，68个安装文件与清单一致，启动前14个数据文件完全保持；旧程序卸载后remainingFiles为0，桌面/开始菜单均为IK Music新图标与新路径。实际GUI及正常退出重启已验收，关闭偏好恢复最小化并继续播放、歌词off、音量100%，应用留在外观页。
 - 当前聊天输出 `C:/Users/Sun/Documents/Codex/2026-11-17/c-users-sun-documents-codex-2026/outputs/ik-0.6.0` 中五包均为旧build 10候选，不是本次新UI/3D/自动源/目录版本。
-- **[IK Music 0.6.0已公开发布](https://github.com/sun-dove/ik-music/releases/tag/ik-v0.6.0)**：发行452717332，2026-11-20 22:56北京时间公开，tag对应已验证构建提交02492b55；五应用包、manifest、完整音频源码、最新版使用说明与SHA256SUMS共9项全部核对远端字节/hash一致。PR #5正同步最终文档与合并；后续不要重复开发、出包或本机迁移。
+- **[IK Music 0.6.0已公开发布](https://github.com/sun-dove/ik-music/releases/tag/ik-v0.6.0)**：发行452717332，2026-11-20 22:56北京时间公开，tag对应已验证构建提交02492b55；五应用包、manifest、完整音频源码、最新版使用说明与SHA256SUMS共9项全部核对远端字节/hash一致。PR #5已合并到main，合并提交6592d79243e77b4b6b8941ea22c061f094583424，默认分支首页已实读确认IK Music及0.6.0下载链接；后续不要重复开发、出包或本机迁移。
 
 ## 已做完，不重复
 
