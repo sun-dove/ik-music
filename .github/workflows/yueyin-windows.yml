@@ -61,13 +61,13 @@ jobs:
           git archive HEAD LICENSE NOTICE.md native/ik_spatial | tar -xf - -C "$RUNNER_TEMP/ik-audio-source"
           cp -r "$RUNNER_TEMP/ik-spatial-build/licenses" "$RUNNER_TEMP/ik-audio-source/licenses"
           tar -czf "$RUNNER_TEMP/ik-audio-release/ik-audio-sources.tar.gz" -C "$RUNNER_TEMP/ik-audio-source" .
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ik-spatial-windows
           path: ${{ runner.temp }}/ik-spatial/
           if-no-files-found: error
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ik-audio-sources
           path: ${{ runner.temp }}/ik-audio-release/ik-audio-sources.tar.gz
@@ -113,7 +113,7 @@ jobs:
           $dll = "$env:RUNNER_TEMP/ik-spatial/spatial/libmpv-2.dll"
           $hash = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
           ./scripts/build_video_windows.ps1 -FlutterSdk $env:FLUTTER_ROOT -DependencyDirectory "$env:RUNNER_TEMP/yueyin-native" -Compact -SpatialAudioDll $dll -SpatialAudioSha256 $hash -SpatialAudioLicenses "$env:RUNNER_TEMP/ik-spatial/licenses"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ik-windows-x64
           path: build/yueyin-release/*
