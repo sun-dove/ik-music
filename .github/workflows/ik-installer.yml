@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: 真实 Inno 隔离红绿门
         shell: powershell
         run: |
