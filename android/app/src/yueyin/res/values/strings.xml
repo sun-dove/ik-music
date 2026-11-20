@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="mconnect_widget_description">ik playback controls</string>
-    <string name="mconnect_widget_idle">ik</string>
+    <string name="mconnect_widget_description">IK Music playback controls</string>
+    <string name="mconnect_widget_idle">IK Music</string>
 </resources>

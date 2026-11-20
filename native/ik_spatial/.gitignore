@@ -1,0 +1,3 @@
+/windows/*.dll
+/gate-output/
+__pycache__/

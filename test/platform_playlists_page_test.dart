@@ -160,14 +160,14 @@ void main() {
     expect(channel.subjects.single, '我的最爱（${IkStrings.playlistJson}）');
   });
 
-  testWidgets('ik 分享来源为 ik，继续使用兼容的歌单链接', (tester) async {
+  testWidgets('IK Music 分享来源使用新品牌，继续使用兼容的歌单链接', (tester) async {
     await pumpPage(tester, ik: true);
     await openExportSheet(tester);
 
     await tester.tap(find.text('分享链接'));
     await tester.pumpAndSettle();
 
-    expect(channel.texts.single, contains('来自 ik'));
+    expect(channel.texts.single, contains('来自 IK Music'));
     expect(channel.texts.single, isNot(contains('Mconnect')));
     expect(channel.texts.single, contains(_link));
   });

@@ -3,7 +3,12 @@
     [string]$AndroidSdk,
     [string]$Jdk = 'D:/Applications/Java/jdk-17',
     [string]$SigningProperties,
-    [string]$ToolchainsRoot
+    [string]$ToolchainsRoot,
+    [string]$BuildDirectory,
+    [switch]$Compact,
+    [switch]$EnableSpatialAudio,
+    [string]$Python = 'python',
+    [string]$SqliteBinaryDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,14 +59,42 @@ if ($proxy -and -not $proxy.IsBypassed($distributionUri)) {
 }
 [IO.File]::WriteAllLines($gradlePropertiesPath, $gradleProperties, [Text.Encoding]::ASCII)
 
-Push-Location $projectRoot
+$buildRoot = $projectRoot
+if ($Compact -or $EnableSpatialAudio) {
+    $prepareArguments = @{ FlutterSdk=$FlutterSdk; Platform='android'; FullDependencies=(-not $Compact); EnableSpatialAudio=$EnableSpatialAudio; Python=$Python }
+    if ($BuildDirectory) { $prepareArguments.OutputDirectory=$BuildDirectory }
+    $buildRoot = & (Join-Path $PSScriptRoot 'prepare_ik_build.ps1') @prepareArguments
+    if ($Compact) { & (Join-Path $PSScriptRoot 'verify_ik_build_profile.ps1') -BuildDirectory $buildRoot }
+} elseif ($BuildDirectory) { throw '-BuildDirectory 仅用于 -Compact 或 -EnableSpatialAudio 隔离构建。' }
+if ($SqliteBinaryDirectory) {
+    if (-not ($Compact -or $EnableSpatialAudio)) { throw 'SQLite离线配置只能用于隔离构建副本。' }
+    & (Join-Path $PSScriptRoot 'prepare_ik_sqlite_offline.ps1') -BuildDirectory $buildRoot -BinaryDirectory $SqliteBinaryDirectory
+}
+Push-Location $buildRoot
 try {
     $dart = Join-Path $FlutterSdk 'bin/cache/dart-sdk/bin/dart.exe'
     $toolPackages = Join-Path $FlutterSdk 'packages/flutter_tools/.dart_tool/package_config.json'
-    & $dart "--packages=$toolPackages" (Join-Path $PSScriptRoot 'generate_android_plugins.dart') $projectRoot
+    & $dart "--packages=$toolPackages" (Join-Path $PSScriptRoot 'generate_android_plugins.dart') $buildRoot
     if ($LASTEXITCODE -ne 0) { throw 'Android 插件注册器生成失败' }
+    if ($Compact) {
+        & (Join-Path $FlutterSdk 'bin/flutter.bat') test --no-pub -j 1 test/video_qq_qr_status_test.dart test/video_qq_qr_fetch_test.dart test/video_auth_state_test.dart test/kugou_login_page_test.dart test/platform_playlists_page_test.dart
+        if ($LASTEXITCODE -ne 0) { throw '精简构建登录/二维码显示门失败。' }
+    }
     & (Join-Path $FlutterSdk 'bin/flutter.bat') build apk --release --split-per-abi --no-pub --target lib/main_video.dart --build-name $version.version --build-number $version.build
-    if ($LASTEXITCODE -ne 0) { throw "ik APK 构建失败，退出码 $LASTEXITCODE" }
+    if ($LASTEXITCODE -ne 0) { throw "IK Music APK 构建失败，退出码 $LASTEXITCODE" }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $release = Join-Path $projectRoot 'build/yueyin-release'
+    New-Item -ItemType Directory -Path $release -Force | Out-Null
+    foreach ($abi in @('arm64-v8a','armeabi-v7a','x86_64')) {
+        $apk = Join-Path $buildRoot "build/app/outputs/flutter-apk/app-$abi-release.apk"
+        if (-not (Test-Path -LiteralPath $apk)) { throw "缺少ABI分包：$abi" }
+        $zip = [IO.Compression.ZipFile]::OpenRead($apk)
+        try {
+            if ($Compact -and @($zip.Entries | Where-Object { $_.FullName -match 'libbarhopper|barcode_ui|mobile_scanner' }).Count) { throw "精简APK仍含扫码原生依赖：$abi" }
+        } finally { $zip.Dispose() }
+        Copy-Item -LiteralPath $apk -Destination (Join-Path $release "ik-$($version.version)-$abi.apk") -Force
+    }
+    Get-ChildItem -LiteralPath $release -Filter "ik-$($version.version)-*.apk" -File | Get-FileHash -Algorithm SHA256 | Select-Object Hash,Path
 } finally {
     Pop-Location
 }

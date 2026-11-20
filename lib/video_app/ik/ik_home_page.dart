@@ -7,6 +7,7 @@ import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/discovery/presentation/providers/recommendations_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../l10n/ik_strings.dart';
+import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
 import '../../models/song.dart';
 import '../ui/catalog_pages.dart';
@@ -26,11 +27,13 @@ class IkHomePage extends ConsumerStatefulWidget {
     required this.onPlayer,
     required this.onPlay,
     required this.onMore,
+    this.workspace = false,
   });
   final ValueChanged<String> onNavigate;
   final VoidCallback onPlayer;
   final void Function(Song, List<Song>) onPlay;
   final ValueChanged<Song> onMore;
+  final bool workspace;
   @override
   ConsumerState<IkHomePage> createState() => _IkHomePageState();
 }
@@ -74,12 +77,53 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    IkStrings.home,
+                    widget.workspace
+                        ? IkWorkspaceStrings.discoveryTitle
+                        : IkStrings.home,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   const Text(IkStrings.discoveryHint),
                   const SizedBox(height: 20),
+                  if (widget.workspace) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(26),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        gradient: LinearGradient(
+                          colors: [
+                            Theme.of(context).colorScheme.primary
+                                .withValues(alpha: .12),
+                            Theme.of(context).colorScheme.primary
+                                .withValues(alpha: .22),
+                          ],
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            IkWorkspaceStrings.discoveryFeature,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(IkWorkspaceStrings.discoveryFeatureHint),
+                          const SizedBox(height: 18),
+                          FilledButton.icon(
+                            onPressed: () => widget.onNavigate('/new-songs'),
+                            icon: const Icon(
+                              Icons.play_arrow_rounded,
+                              size: 18,
+                            ),
+                            label: const Text(IkWorkspaceStrings.explore),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                  ],
                   if (player.currentSong case final song?)
                     Card(
                       child: ListTile(
@@ -176,6 +220,9 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                       recommendations.sourceForPlatform(platform)?.label ??
                           IkStrings.recommendations,
                     ),
+                    if (widget.workspace &&
+                        recommendations.songsForPlatform(platform).length > 6)
+                      Text(IkWorkspaceStrings.previewTracks(6)),
                     if (recommendations.sourceForPlatform(platform)?.note
                         case final String note)
                       Text(note),

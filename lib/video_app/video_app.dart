@@ -19,6 +19,16 @@ import 'ik/ik_shell.dart';
 import 'ik/ik_router.dart';
 import 'ik/ik_runtime.dart';
 import 'ik/ik_theme.dart';
+import 'ik/ik_workspace.dart';
+import 'ik/ik_settings_workspace.dart';
+import 'ik/ik_playback_bar.dart';
+import 'ik/ik_recent_page.dart';
+import 'ik/ik_library_workspace.dart';
+import 'ik/ik_search_workspace.dart';
+import 'ik/ik_workspace_theme.dart';
+import 'ik/ik_lyrics_action.dart';
+import '../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
+import 'built_in/catalog_panel.dart';
 
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/providers/auth_provider.dart';
@@ -80,6 +90,7 @@ class VideoMusicApp extends StatefulWidget {
     this.windowsAppearance,
     this.unifiedPreferences,
     this.redesign = false,
+    this.workspace = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -92,6 +103,7 @@ class VideoMusicApp extends StatefulWidget {
   final WindowsAppearance? windowsAppearance;
   final WindowsMusicPreferences? unifiedPreferences;
   final bool redesign;
+  final bool workspace;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
@@ -101,6 +113,14 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
   late final _router = createIkRouter(
     home: (_) => _home(),
     player: (_) => _homeKey.currentState?._playerPage() ?? const IkRouteError(),
+    settings: widget.workspace
+        ? (_, section) => Scaffold(
+            appBar: AppBar(leading: const BackButton()),
+            body:
+                _homeKey.currentState?._workspaceSettings(section) ??
+                const IkRouteError(),
+          )
+        : null,
     detailShell: (context, page) => Scaffold(
       body: Column(
         children: [
@@ -109,6 +129,12 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
             padding: const EdgeInsets.all(8),
             child: Consumer(
               builder: (context, ref, _) {
+                if (widget.workspace) {
+                  return IkPlaybackBar(
+                    onOpen: () => context.push('/player'),
+                    onAudio: () => context.push('/settings/audio'),
+                  );
+                }
                 final player = ref.watch(playerProvider);
                 return VideoMiniPlayer(
                   song: player.currentSong,
@@ -146,10 +172,10 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
         debugShowCheckedModeBanner: false,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: const [Locale('zh')],
-        theme: IkTheme.from(
+        theme: (widget.workspace ? IkWorkspaceTheme.from : IkTheme.from)(
           widget.windowsAppearance?.theme(Brightness.light) ?? VideoTheme.light,
         ),
-        darkTheme: IkTheme.from(
+        darkTheme: (widget.workspace ? IkWorkspaceTheme.from : IkTheme.from)(
           widget.windowsAppearance?.theme(Brightness.dark) ?? VideoTheme.dark,
         ),
         themeMode: switch (widget.preferences.theme) {
@@ -194,6 +220,7 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
   Widget _home() => _VideoHome(
     key: _homeKey,
     redesign: widget.redesign,
+    workspace: widget.workspace,
     preferences: widget.preferences,
     customSourceCredentials:
         widget.customSourceCredentials ??
@@ -225,6 +252,7 @@ class _VideoHome extends ConsumerStatefulWidget {
     this.windowsAppearance,
     this.unifiedPreferences,
     this.redesign = false,
+    this.workspace = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore customSourceCredentials;
@@ -238,6 +266,7 @@ class _VideoHome extends ConsumerStatefulWidget {
   final WindowsAppearance? windowsAppearance;
   final WindowsMusicPreferences? unifiedPreferences;
   final bool redesign;
+  final bool workspace;
   @override
   ConsumerState<_VideoHome> createState() => _VideoHomeState();
 }
@@ -300,6 +329,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   var _localReady = false;
   var _committedQuery = '';
   var _hotTerms = <String>[];
+  var _settingsSection = 'audio';
+  Offset? _workspacePointer;
   final _totals = <PlatformType, int?>{};
 
   @override
@@ -307,11 +338,30 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     if (widget.redesign) {
+      widget.windowsAppearance?.addListener(_appearanceChanged);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_initialize());
       });
     } else {
       unawaited(_initialize());
+    }
+  }
+
+  void _appearanceChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.redesign != widget.redesign ||
+        oldWidget.windowsAppearance != widget.windowsAppearance) {
+      if (oldWidget.redesign) {
+        oldWidget.windowsAppearance?.removeListener(_appearanceChanged);
+      }
+      if (widget.redesign) {
+        widget.windowsAppearance?.addListener(_appearanceChanged);
+      }
     }
   }
 
@@ -354,7 +404,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   @override
   void dispose() {
-    if (widget.redesign) _ikSearch.dispose();
+    if (widget.redesign) {
+      widget.windowsAppearance?.removeListener(_appearanceChanged);
+      _ikSearch.dispose();
+    }
     _query.invalidate();
     WidgetsBinding.instance.removeObserver(this);
     _search.dispose();
@@ -688,6 +741,22 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       if (widget.windowsAppearance != null || widget.redesign) {
         final document = lyrics.asData?.value;
         return WindowsPlayerPage(
+          playbackBar: widget.workspace
+              ? IkPlaybackBar(
+                  onOpen: null,
+                  onAudio: () => context.push('/settings/audio'),
+                )
+              : null,
+          onDesktopLyrics:
+              widget.workspace &&
+                  ref.watch(ikLyricsCapabilityProvider).supported &&
+                  !ref.watch(ikLyricsActionProvider)
+              ? () => ref
+                    .read(ikLyricsActionProvider.notifier)
+                    .setEnabled(!ref.read(floatingLyricsProvider).enabled)
+              : null,
+          desktopLyricsEnabled:
+              widget.workspace && ref.watch(floatingLyricsProvider).enabled,
           song: song,
           position: player.position,
           duration: player.duration,
@@ -742,7 +811,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           onSeek: notifier.seek,
           onQueue: _queue,
           onMode: _mode,
-          onQuality: () => _quality(song.platform, false),
+          onQuality: widget.workspace
+              ? () => context.push('/settings/audio')
+              : () => _quality(song.platform, false),
         );
       }
       return VideoPlayerPage(
@@ -850,6 +921,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   }
 
   void _queue() {
+    if (widget.workspace) {
+      showIkQueue(context);
+      return;
+    }
     if (widget.redesign && MediaQuery.sizeOf(context).width >= 840) {
       context.push('/queue');
       return;
@@ -1127,6 +1202,22 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     );
   }
 
+  Widget _workspaceSettings([String? section]) => IkSettingsWorkspace(
+    preferences: widget.preferences,
+    unified: _unifiedPreferences,
+    appearance: widget.windowsAppearance,
+    initialSection: section ?? _settingsSection,
+    onThemeChanged: widget.onThemeChanged,
+    onAccount: _account,
+    onSync: _sync,
+    onSources: _customSource,
+    onDirectory: widget.windowsAppearance == null
+        ? _directory
+        : _windowsDirectory,
+    onDownloads: _downloads,
+    onCache: () => context.push('/offline-cache'),
+  );
+
   Future<void> _quality(PlatformType platform, bool download) async {
     if (platform == PlatformType.local) return;
     if (_unifiedPreferences != null) {
@@ -1254,56 +1345,60 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   Future<void> _ikSongMore(Song song) async {
     final local = ref.read(likesProvider).songs.contains(song);
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheet) => SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                title: Text(song.name),
-                subtitle: Text(song.artistNames),
+    final action = widget.workspace
+        ? await _workspaceSongMenu(song, local)
+        : await showModalBottomSheet<String>(
+            context: context,
+            showDragHandle: true,
+            builder: (sheet) => SafeArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: Text(song.name),
+                      subtitle: Text(song.artistNames),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.favorite_outline),
+                      title: Text(
+                        local ? IkStrings.removeLocal : IkStrings.saveLocal,
+                      ),
+                      onTap: () => Navigator.pop(sheet, 'local'),
+                    ),
+                    if (song.platform != PlatformType.local)
+                      ListTile(
+                        leading: const Icon(Icons.cloud_outlined),
+                        title: const Text(VideoStrings.toggleLike),
+                        onTap: () => Navigator.pop(sheet, 'like'),
+                      ),
+                    ListTile(
+                      leading: const Icon(Icons.album_outlined),
+                      title: const Text(IkStrings.album),
+                      enabled:
+                          (song.albumId ?? song.album?.id ?? '').isNotEmpty,
+                      onTap: () => Navigator.pop(sheet, 'album'),
+                    ),
+                    for (final artist in song.artists.where(
+                      (value) => value.id.isNotEmpty,
+                    ))
+                      ListTile(
+                        leading: const Icon(Icons.person_outline),
+                        title: Text('${IkStrings.artist} · ${artist.name}'),
+                        onTap: () =>
+                            Navigator.pop(sheet, 'artist:${artist.id}'),
+                      ),
+                    if (song.platform != PlatformType.local)
+                      ListTile(
+                        leading: const Icon(Icons.download_outlined),
+                        title: const Text(VideoStrings.downloadSong),
+                        onTap: () => Navigator.pop(sheet, 'download'),
+                      ),
+                  ],
+                ),
               ),
-              ListTile(
-                leading: const Icon(Icons.favorite_outline),
-                title: Text(
-                  local ? IkStrings.removeLocal : IkStrings.saveLocal,
-                ),
-                onTap: () => Navigator.pop(sheet, 'local'),
-              ),
-              if (song.platform != PlatformType.local)
-                ListTile(
-                  leading: const Icon(Icons.cloud_outlined),
-                  title: const Text(VideoStrings.toggleLike),
-                  onTap: () => Navigator.pop(sheet, 'like'),
-                ),
-              ListTile(
-                leading: const Icon(Icons.album_outlined),
-                title: const Text(IkStrings.album),
-                enabled: (song.albumId ?? song.album?.id ?? '').isNotEmpty,
-                onTap: () => Navigator.pop(sheet, 'album'),
-              ),
-              for (final artist in song.artists.where(
-                (value) => value.id.isNotEmpty,
-              ))
-                ListTile(
-                  leading: const Icon(Icons.person_outline),
-                  title: Text('${IkStrings.artist} · ${artist.name}'),
-                  onTap: () => Navigator.pop(sheet, 'artist:${artist.id}'),
-                ),
-              if (song.platform != PlatformType.local)
-                ListTile(
-                  leading: const Icon(Icons.download_outlined),
-                  title: const Text(VideoStrings.downloadSong),
-                  onTap: () => Navigator.pop(sheet, 'download'),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
+            ),
+          );
     if (!mounted || action == null) return;
     if (action == 'local') {
       await ref.read(likesProvider.notifier).toggleLike(song);
@@ -1330,6 +1425,72 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         ).toString(),
       );
     }
+  }
+
+  Future<String?> _workspaceSongMenu(Song song, bool local) {
+    final size = MediaQuery.sizeOf(context);
+    final point = _workspacePointer ?? Offset(size.width / 2, size.height / 2);
+    PopupMenuItem<String> item(
+      String value,
+      String label,
+      IconData icon, {
+      bool enabled = true,
+    }) => PopupMenuItem(
+      value: value,
+      enabled: enabled,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: Center(child: Icon(icon, size: 18)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+    return showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        point.dx,
+        point.dy,
+        size.width - point.dx,
+        size.height - point.dy,
+      ),
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      items: [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        const PopupMenuDivider(),
+        item(
+          'local',
+          local ? IkStrings.removeLocal : IkStrings.saveLocal,
+          Icons.favorite_border,
+        ),
+        if (song.platform != PlatformType.local)
+          item('like', VideoStrings.toggleLike, Icons.cloud_outlined),
+        item(
+          'album',
+          IkStrings.album,
+          Icons.album_outlined,
+          enabled: (song.albumId ?? song.album?.id ?? '').isNotEmpty,
+        ),
+        for (final artist in song.artists.where((value) => value.id.isNotEmpty))
+          item(
+            'artist:${artist.id}',
+            '${IkStrings.artist} · ${artist.name}',
+            Icons.person_outline,
+          ),
+        if (song.platform != PlatformType.local)
+          item('download', VideoStrings.downloadSong, Icons.download_outlined),
+      ],
+    );
   }
 
   void _downloads() => Navigator.of(context).push(
@@ -1822,32 +1983,34 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
           builder: (_) => widget.expandedPlatforms
-              ? SourceManagerPage(
-                  initial: settings.value,
-                  warning: settings.loadError,
-                  runtimeId: '${Theme.of(context).platform.name}-lx3',
-                  initialChecks: SourceCheckStore(widget.preferences.box)
-                      .load(),
-                  onChecksChanged: SourceCheckStore(widget.preferences.box)
-                      .save,
-                  onImport: (link, token) => LxSourceImporterV3(
-                    dio: dio,
-                    engine: engine,
-                  ).importLink(link, cancelToken: token),
-                  onInspect: (config, token) async {
-                    await engine.inspect(config.script, cancelToken: token);
-                  },
-                  onSave: (value) async {
-                    await settings.save(value);
-                    widget.onCustomSourceChanged?.call();
-                    if (mounted) {
-                      setState(() {});
-                    }
-                  },
-                  onHttp: () {
-                    Navigator.pop(context);
-                    unawaited(_httpCustomSource());
-                  },
+              ? IkSourceEditingScope(
+                  child: SourceManagerPage(
+                    initial: settings.value,
+                    warning: settings.loadError,
+                    runtimeId: '${Theme.of(context).platform.name}-lx3',
+                    initialChecks: SourceCheckStore(widget.preferences.box)
+                        .load(),
+                    onChecksChanged: SourceCheckStore(widget.preferences.box)
+                        .save,
+                    onImport: (link, token) => LxSourceImporterV3(
+                      dio: dio,
+                      engine: engine,
+                    ).importLink(link, cancelToken: token),
+                    onInspect: (config, token) async {
+                      await engine.inspect(config.script, cancelToken: token);
+                    },
+                    onSave: (value) async {
+                      await settings.save(value);
+                      widget.onCustomSourceChanged?.call();
+                      if (mounted) {
+                        setState(() {});
+                      }
+                    },
+                    onHttp: () {
+                      Navigator.pop(context);
+                      unawaited(_httpCustomSource());
+                    },
+                  ),
                 )
               : SourceCollectionPage(
                   initial: settings.value,
@@ -2026,16 +2189,25 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
     if (widget.redesign) {
       final localLikes = ref.watch(likesProvider);
-      return IkShell(
-        index: _index,
-        onSelect: (index) => setState(() => _index = index),
-        pages: [
-          IkHomePage(
-            onNavigate: (path) => context.push(path),
-            onPlayer: _openPlayer,
+      final pages = <Widget>[
+        IkHomePage(
+          workspace: widget.workspace,
+          onNavigate: (path) => context.push(path),
+          onPlayer: _openPlayer,
+          onPlay: _play,
+          onMore: _ikSongMore,
+        ),
+        if (widget.workspace)
+          IkSearchWorkspace(
+            search: _ikSearch,
             onPlay: _play,
+            onLike: _toggleLike,
             onMore: _ikSongMore,
-          ),
+            onAccount: _account,
+            likedKeys: liked,
+            currentSong: player.currentSong,
+          )
+        else
           IkSearchPage(
             search: _ikSearch,
             onPlay: _play,
@@ -2045,6 +2217,31 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             likedKeys: liked,
             currentSong: player.currentSong,
           ),
+        if (widget.workspace)
+          IkLibraryWorkspace(
+            libraries: _libraries,
+            syncing: _syncing,
+            loggedIn: {
+              for (final platform in _platforms)
+                if (auth.isLoggedIn(platform)) platform,
+            },
+            onSync: _sync,
+            onPlay: _play,
+            onMore: _ikSongMore,
+            onNavigate: (path) => context.push(path),
+            onDownloads: _downloads,
+            onAccounts: () => setState(() {
+              _settingsSection = 'accounts';
+              _index = 4;
+            }),
+            localLikes: localLikes.songs,
+            localLoading: localLikes.isLoading,
+            localError: localLikes.error,
+            onRetryLocal: () =>
+                unawaited(ref.read(likesProvider.notifier).loadAllLikes()),
+            currentSong: player.currentSong,
+          )
+        else
           IkLibraryPage(
             libraries: _libraries,
             syncing: _syncing,
@@ -2066,8 +2263,38 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                 unawaited(ref.read(likesProvider.notifier).loadAllLikes()),
             currentSong: player.currentSong,
           ),
-          _settingsPage(),
-        ],
+        if (widget.workspace)
+          IkRecentPage(
+            onNavigate: (path) => context.push(path),
+            onMore: _ikSongMore,
+          ),
+        widget.workspace ? _workspaceSettings() : _settingsPage(),
+      ];
+      if (widget.workspace) {
+        return Listener(
+          onPointerDown: (event) => _workspacePointer = event.position,
+          child: IkDesktopWorkspace(
+            index: _index,
+            onSelect: (index) => setState(() => _index = index),
+            onAccount: () => setState(() {
+              _settingsSection = 'accounts';
+              _index = 4;
+            }),
+            pages: pages,
+            playbackBar: IkPlaybackBar(
+              onOpen: _openPlayer,
+              onAudio: () => setState(() {
+                _settingsSection = 'audio';
+                _index = 4;
+              }),
+            ),
+          ),
+        );
+      }
+      return IkShell(
+        index: _index,
+        onSelect: (index) => setState(() => _index = index),
+        pages: pages,
         queue: const IkQueuePanel(),
         miniPlayer: VideoMiniPlayer(
           song: player.currentSong,

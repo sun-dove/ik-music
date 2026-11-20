@@ -9,6 +9,7 @@ import '../../features/player/presentation/providers/player_provider.dart';
 import '../../core/platform/platform_utils.dart';
 import '../../features/player/data/media_kit_windows_audio_controller.dart';
 import '../../features/player/data/playback_notification_service.dart';
+import '../../features/player/data/spatial_audio_capability.dart';
 import '../../models/audio_quality.dart';
 import '../../models/platform_type.dart';
 import '../../models/song.dart';
@@ -16,6 +17,7 @@ import '../../platform/base/music_platform.dart';
 import '../custom_source/custom_source_playback.dart';
 import '../playback/video_platforms.dart';
 import '../playback/video_player_notifier.dart';
+import '../ik/ik_user_gain.dart';
 import 'source_collection.dart';
 import 'source_coordinator.dart';
 
@@ -105,10 +107,36 @@ class _SourceAudio
         PlayerAudioController,
         PlaybackSpeedCapable,
         SkipSilenceCapable,
-        VerifiedEqualizerCapable {
-  _SourceAudio(this.delegate, this.router);
+        VerifiedEqualizerCapable,
+        SpatialAudioCapable {
+  _SourceAudio(this.delegate, this.router, [IkUserGainController? userGain])
+    : _gain = userGain?.attach(
+        delegate.setVolume,
+        initialVolume: delegate.volume,
+      );
   final PlayerAudioController delegate;
   final PreparedSourceRouter router;
+  final IkGainBinding? _gain;
+  int _gainPlayGeneration = 0;
+  @override
+  Future<bool> supportsSpatialAudio() => delegate is SpatialAudioCapable
+      ? (delegate as SpatialAudioCapable).supportsSpatialAudio()
+      : Future.value(false);
+  @override
+  Future<void> applySpatialAudio(SpatialSettings settings, int requestId) {
+    if (delegate is! SpatialAudioCapable) throw UnsupportedError('spatial');
+    return (delegate as SpatialAudioCapable).applySpatialAudio(
+      settings,
+      requestId,
+    );
+  }
+
+  @override
+  Future<SpatialProcessingReport> readSpatialAudio() {
+    if (delegate is! SpatialAudioCapable) throw UnsupportedError('spatial');
+    return (delegate as SpatialAudioCapable).readSpatialAudio();
+  }
+
   CancelToken? _loaded;
   bool get _current =>
       !router.guarded ||
@@ -128,7 +156,7 @@ class _SourceAudio
   @override
   Duration get position => delegate.position;
   @override
-  double get volume => delegate.volume;
+  double get volume => _gain?.volume ?? delegate.volume;
   @override
   Stream<Duration> get positionStream => _events(delegate.positionStream);
   @override
@@ -138,6 +166,10 @@ class _SourceAudio
       _events(delegate.playerStateStream);
   @override
   Future<void> setUrl(String url) async {
+    if (_gain != null) {
+      _gainPlayGeneration++;
+      await _gain.preparePlayback();
+    }
     if (!router.guarded) {
       _loaded = null;
       await delegate.setUrl(url);
@@ -180,13 +212,32 @@ class _SourceAudio
         (_loaded != router.mediaToken || _loaded?.isCancelled != false)) {
       return Future.value();
     }
-    return delegate.play();
+    final gain = _gain;
+    if (gain == null) return delegate.play();
+    final generation = _gainPlayGeneration;
+    final token = router.mediaToken;
+    return gain.preparePlayback().then<void>((_) async {
+      if (generation != _gainPlayGeneration ||
+          token != router.mediaToken ||
+          !_current) {
+        return;
+      }
+      await delegate.play();
+    });
   }
 
   @override
-  Future<void> stop() => delegate.stop();
+  Future<void> stop() {
+    if (_gain != null) _gainPlayGeneration++;
+    return delegate.stop();
+  }
+
   @override
-  Future<void> pause() => delegate.pause();
+  Future<void> pause() {
+    if (_gain != null) _gainPlayGeneration++;
+    return delegate.pause();
+  }
+
   @override
   Future<void> seek(Duration value) async {
     try {
@@ -198,7 +249,8 @@ class _SourceAudio
   }
 
   @override
-  Future<void> setVolume(double value) => delegate.setVolume(value);
+  Future<void> setVolume(double value) =>
+      _gain?.setLogicalVolume(value) ?? delegate.setVolume(value);
   @override
   Future<void> applyEqualizer({
     required bool enabled,
@@ -238,7 +290,11 @@ class _SourceAudio
   }
 
   @override
-  Future<void> dispose() => delegate.dispose();
+  Future<void> dispose() {
+    if (_gain != null) _gainPlayGeneration++;
+    _gain?.close();
+    return delegate.dispose();
+  }
 }
 
 /// 多源解析在旧播放器单次取流计时器外；每次只装载已准备好的候选。
@@ -251,6 +307,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     CustomSourcePlaybackFallback? legacyFallback,
     PlayerAudioController? audioController,
     PlayerAudioController Function()? audioControllerFactory,
+    IkUserGainController? userGain,
     super.playbackMemoryStore,
     super.notificationController,
     super.keepAliveController,
@@ -265,10 +322,11 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
          requestedQuality: router.quality,
          audioController: audioController == null
              ? null
-             : _SourceAudio(audioController, router),
+             : _SourceAudio(audioController, router, userGain),
          audioControllerFactory: () => _SourceAudio(
            (audioControllerFactory ?? _defaultSourceAudio)(),
            router,
+           userGain,
          ),
          customSourceFallback: legacyFallback,
        ) {

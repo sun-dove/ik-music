@@ -225,7 +225,7 @@ void IkDesktopHost::AddTrayIcon() {
   data.uCallbackMessage = kTrayMessage;
   data.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APP_ICON));
   if (!data.hIcon) data.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
-  wcscpy_s(data.szTip, L"ik");
+  wcscpy_s(data.szTip, L"IK Music");
   tray_available_ = Shell_NotifyIconW(NIM_ADD, &data) != FALSE;
   if (tray_available_) {
     data.uVersion = NOTIFYICON_VERSION_4;
@@ -238,7 +238,7 @@ void IkDesktopHost::UpdateTrayIcon() {
   if (!tray_available_) return;
   auto data = TrayData(window_);
   data.uFlags = NIF_TIP;
-  const std::wstring tooltip = title_.empty() ? L"ik" : L"ik · " + title_;
+  const std::wstring tooltip = title_.empty() ? L"IK Music" : L"IK Music · " + title_;
   wcsncpy_s(data.szTip, tooltip.c_str(), _TRUNCATE);
   if (!Shell_NotifyIconW(NIM_MODIFY, &data)) tray_available_ = false;
 }
@@ -246,7 +246,7 @@ void IkDesktopHost::UpdateTrayIcon() {
 void IkDesktopHost::ShowTrayMenu() {
   HMENU menu = CreatePopupMenu();
   if (!menu) return;
-  AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(Command::kShow), L"显示 ik");
+  AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(Command::kShow), L"显示 IK Music");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
   const UINT flags = MF_STRING | (enabled_ ? MF_ENABLED : MF_GRAYED);
   AppendMenuW(menu, flags, static_cast<UINT_PTR>(Command::kToggle),
@@ -254,7 +254,7 @@ void IkDesktopHost::ShowTrayMenu() {
   AppendMenuW(menu, flags, static_cast<UINT_PTR>(Command::kPrevious), L"上一首");
   AppendMenuW(menu, flags, static_cast<UINT_PTR>(Command::kNext), L"下一首");
   AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-  AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(Command::kExit), L"退出 ik");
+  AppendMenuW(menu, MF_STRING, static_cast<UINT_PTR>(Command::kExit), L"退出 IK Music");
   POINT point{};
   GetCursorPos(&point);
   SetForegroundWindow(window_);

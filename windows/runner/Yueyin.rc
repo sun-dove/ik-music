@@ -23,7 +23,7 @@ BEGIN
       VALUE "FileDescription", IK_APP_NAME "\0"
       VALUE "FileVersion", VERSION_AS_STRING "\0"
       VALUE "InternalName", "yueyin_music" "\0"
-      VALUE "LegalCopyright", "ik contributors; Mconnect and third-party notices retained." "\0"
+      VALUE "LegalCopyright", "IK Music contributors; Mconnect and third-party notices retained." "\0"
       VALUE "OriginalFilename", "yueyin_music.exe" "\0"
       VALUE "ProductName", "YueyinMusic" "\0"
       VALUE "ProductVersion", VERSION_AS_STRING "\0"

@@ -3,10 +3,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/app_database.dart';
+import '../../../../core/database/song_record_mapping.dart';
 import '../../../../models/song.dart';
 import '../../../../models/platform_type.dart';
 import '../../../../models/artist.dart';
 import '../../../../models/album.dart';
+import 'library_metadata_provider.dart';
 
 class LikesState {
   final List<Song> songs;
@@ -46,11 +48,16 @@ class LikesState {
 class LikesNotifier extends StateNotifier<LikesState> {
   final LikesDao _likesDao;
   final SongsDao _songsDao;
+  final bool _preserveMetadata;
   bool _isToggling = false;
   int _loadGeneration = 0;
   bool _allEntries = false;
 
-  LikesNotifier(this._likesDao, this._songsDao) : super(const LikesState()) {
+  LikesNotifier(
+    this._likesDao,
+    this._songsDao, {
+    this._preserveMetadata = false,
+  }) : super(const LikesState()) {
     loadLikes();
   }
 
@@ -129,6 +136,7 @@ class LikesNotifier extends StateNotifier<LikesState> {
   }
 
   Song _recordToSong(SongRecord record) {
+    if (_preserveMetadata) return songFromSongRecord(record);
     final platformType = PlatformType.values.firstWhere(
       (p) => p.name == record.platform,
       orElse: () => PlatformType.netease,
@@ -153,6 +161,7 @@ class LikesNotifier extends StateNotifier<LikesState> {
   }
 
   SongsCompanion _songToCompanion(Song song) {
+    if (_preserveMetadata) return songsCompanionFromSong(song);
     return SongsCompanion.insert(
       id: song.id,
       platform: song.platform.name,
@@ -168,5 +177,9 @@ class LikesNotifier extends StateNotifier<LikesState> {
 
 final likesProvider = StateNotifierProvider<LikesNotifier, LikesState>((ref) {
   final db = database;
-  return LikesNotifier(db.likesDao, db.songsDao);
+  return LikesNotifier(
+    db.likesDao,
+    db.songsDao,
+    preserveMetadata: ref.read(libraryMetadataProvider),
+  );
 });

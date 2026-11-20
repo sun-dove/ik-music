@@ -29,6 +29,7 @@ GoRouter createIkRouter({
   required WidgetBuilder home,
   required WidgetBuilder player,
   Widget Function(BuildContext, Widget)? detailShell,
+  Widget Function(BuildContext, String)? settings,
 }) {
   Widget detail(BuildContext context, Widget page) =>
       detailShell?.call(context, page) ?? page;
@@ -85,7 +86,10 @@ GoRouter createIkRouter({
       ),
       page('/downloads', (_) => const DownloadPage()),
       page('/offline-cache', (_) => const OfflineCachePage()),
-      page('/listening-stats', (_) => const ListeningStatsPage()),
+      page(
+        '/listening-stats',
+        (_) => const ListeningStatsPage(showAvailableSongs: true),
+      ),
       page(
         '/smart-playlists',
         (_) => const SmartPlaylistsPage(safeDelete: true),
@@ -98,8 +102,27 @@ GoRouter createIkRouter({
         ),
       ),
       page('/backup', (_) => const IkBackupPage()),
-      page('/settings/audio', (_) => const IkAudioPage()),
-      page('/settings/floating-lyrics', (_) => const IkFloatingLyricsPage()),
+      page(
+        '/settings/audio',
+        (context) => settings?.call(context, 'audio') ?? const IkAudioPage(),
+      ),
+      page(
+        '/settings/floating-lyrics',
+        (context) =>
+            settings?.call(context, 'lyrics') ?? const IkFloatingLyricsPage(),
+      ),
+      if (settings != null) ...[
+        page('/settings', (context) => settings(context, 'audio')),
+        for (final section in [
+          'appearance',
+          'lyrics',
+          'sources',
+          'downloads',
+          'accounts',
+          'backup',
+        ])
+          page('/settings/$section', (context) => settings(context, section)),
+      ],
       GoRoute(
         path: '/login/:platform',
         builder: (context, state) {

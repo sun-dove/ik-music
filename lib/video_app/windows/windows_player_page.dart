@@ -54,6 +54,9 @@ class WindowsPlayerPage extends StatefulWidget {
     this.onQuality,
     this.sourceStatus,
     this.sourceDetails,
+    this.playbackBar,
+    this.onDesktopLyrics,
+    this.desktopLyricsEnabled = false,
   });
   final Song song;
   final Duration position, duration;
@@ -66,6 +69,9 @@ class WindowsPlayerPage extends StatefulWidget {
   final VoidCallback? onQuality, onLyricsRetry;
   final Widget? sourceStatus;
   final WindowsSourceDetails? sourceDetails;
+  final Widget? playbackBar;
+  final VoidCallback? onDesktopLyrics;
+  final bool desktopLyricsEnabled;
   @override
   State<WindowsPlayerPage> createState() => _WindowsPlayerPageState();
 }
@@ -197,13 +203,27 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
         child: Column(
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => Navigator.maybePop(context),
-                icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                label: const Text(WindowsMusicStrings.back),
-              ),
+            Row(
+              children: [
+                TextButton.icon(
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  label: const Text(WindowsMusicStrings.back),
+                ),
+                const Spacer(),
+                if (widget.onDesktopLyrics != null)
+                  TextButton.icon(
+                    onPressed: widget.onDesktopLyrics,
+                    icon: Icon(
+                      Icons.subtitles_outlined,
+                      size: 20,
+                      color: widget.desktopLyricsEnabled
+                          ? Theme.of(context).colorScheme.primary
+                          : null,
+                    ),
+                    label: const Text(IkStrings.floating),
+                  ),
+              ],
             ),
             if (widget.sourceStatus != null &&
                 Theme.of(context).extension<IkThemeColors>() == null)
@@ -301,95 +321,100 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                   ],
                 ),
               ),
-            SliderTheme(
-              data: SliderTheme.of(context).copyWith(trackHeight: 3),
-              child: Slider(
-                value: widget.position.inMilliseconds.toDouble().clamp(
-                  0,
-                  math.max(1, widget.duration.inMilliseconds).toDouble(),
-                ),
-                max: math.max(1, widget.duration.inMilliseconds).toDouble(),
-                onChanged: widget.isLoading || widget.duration <= Duration.zero
-                    ? null
-                    : (value) =>
-                          widget.onSeek(Duration(milliseconds: value.round())),
-              ),
-            ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  videoTime(widget.position),
-                  style: TextStyle(
-                    fontSize:
-                        Theme.of(context).extension<IkThemeColors>() == null
-                        ? 11
-                        : 12,
+            if (widget.playbackBar == null) ...[
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(trackHeight: 3),
+                child: Slider(
+                  value: widget.position.inMilliseconds.toDouble().clamp(
+                    0,
+                    math.max(1, widget.duration.inMilliseconds).toDouble(),
                   ),
-                ),
-                Text(
-                  videoTime(widget.duration),
-                  style: TextStyle(
-                    fontSize:
-                        Theme.of(context).extension<IkThemeColors>() == null
-                        ? 11
-                        : 12,
-                  ),
-                ),
-              ],
-            ),
-            Wrap(
-              alignment: WrapAlignment.center,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              children: [
-                IconButton(
-                  tooltip: widget.modeLabel,
-                  onPressed: widget.onMode,
-                  icon: Icon(
-                    widget.modeLabel == VideoStrings.shuffle
-                        ? Icons.shuffle_rounded
-                        : widget.modeLabel == VideoStrings.repeatOne
-                        ? Icons.repeat_one_rounded
-                        : Icons.repeat_rounded,
-                  ),
-                ),
-                IconButton(
-                  tooltip: VideoStrings.previousSong,
-                  onPressed: widget.onPrevious,
-                  icon: const Icon(Icons.skip_previous_rounded, size: 30),
-                ),
-                IconButton.filled(
-                  tooltip: widget.isPlaying && !widget.isLoading
-                      ? VideoStrings.pause
-                      : VideoStrings.play,
-                  onPressed: widget.isLoading ? null : widget.onToggle,
-                  style: IconButton.styleFrom(fixedSize: const Size(54, 54)),
-                  icon: widget.isLoading
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Icon(
-                          widget.isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                          size: 32,
+                  max: math.max(1, widget.duration.inMilliseconds).toDouble(),
+                  onChanged:
+                      widget.isLoading || widget.duration <= Duration.zero
+                      ? null
+                      : (value) => widget.onSeek(
+                          Duration(milliseconds: value.round()),
                         ),
                 ),
-                IconButton(
-                  tooltip: VideoStrings.nextSong,
-                  onPressed: widget.onNext,
-                  icon: const Icon(Icons.skip_next_rounded, size: 30),
-                ),
-                IconButton(
-                  tooltip: VideoStrings.playQueue,
-                  onPressed: widget.onQueue,
-                  icon: const Icon(Icons.queue_music_rounded),
-                ),
-              ],
-            ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    videoTime(widget.position),
+                    style: TextStyle(
+                      fontSize:
+                          Theme.of(context).extension<IkThemeColors>() == null
+                          ? 11
+                          : 12,
+                    ),
+                  ),
+                  Text(
+                    videoTime(widget.duration),
+                    style: TextStyle(
+                      fontSize:
+                          Theme.of(context).extension<IkThemeColors>() == null
+                          ? 11
+                          : 12,
+                    ),
+                  ),
+                ],
+              ),
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                children: [
+                  IconButton(
+                    tooltip: widget.modeLabel,
+                    onPressed: widget.onMode,
+                    icon: Icon(
+                      widget.modeLabel == VideoStrings.shuffle
+                          ? Icons.shuffle_rounded
+                          : widget.modeLabel == VideoStrings.repeatOne
+                          ? Icons.repeat_one_rounded
+                          : Icons.repeat_rounded,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: VideoStrings.previousSong,
+                    onPressed: widget.onPrevious,
+                    icon: const Icon(Icons.skip_previous_rounded, size: 30),
+                  ),
+                  IconButton.filled(
+                    tooltip: widget.isPlaying && !widget.isLoading
+                        ? VideoStrings.pause
+                        : VideoStrings.play,
+                    onPressed: widget.isLoading ? null : widget.onToggle,
+                    style: IconButton.styleFrom(fixedSize: const Size(54, 54)),
+                    icon: widget.isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            widget.isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 32,
+                          ),
+                  ),
+                  IconButton(
+                    tooltip: VideoStrings.nextSong,
+                    onPressed: widget.onNext,
+                    icon: const Icon(Icons.skip_next_rounded, size: 30),
+                  ),
+                  IconButton(
+                    tooltip: VideoStrings.playQueue,
+                    onPressed: widget.onQueue,
+                    icon: const Icon(Icons.queue_music_rounded),
+                  ),
+                ],
+              ),
+            ] else
+              widget.playbackBar!,
           ],
         ),
       ),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:math';
 
@@ -8,6 +9,7 @@ import 'package:media_kit/media_kit.dart' as media_kit;
 
 import '../../../core/diagnostics/diagnostics_service.dart';
 import 'player_audio_controller.dart';
+import 'spatial_audio_capability.dart';
 
 abstract class MediaKitWindowsBackend {
   bool get playing;
@@ -35,11 +37,17 @@ abstract class VerifiedAudioFilterBackend {
   Future<void> setAudioFilterVerified(String filter);
 }
 
+abstract interface class SpatialFilterBackend {
+  bool get supportsSpatialFilter;
+  Future<SpatialProcessingReport> readSpatialFilter();
+}
+
 class MediaKitWindowsAudioController
     implements
         PlayerAudioController,
         PlaybackSpeedCapable,
-        VerifiedEqualizerCapable {
+        VerifiedEqualizerCapable,
+        SpatialAudioCapable {
   static const _frequencies = [60, 230, 910, 3600, 14000];
 
   final MediaKitWindowsBackend Function() _backendFactory;
@@ -56,6 +64,10 @@ class MediaKitWindowsAudioController
   double _playbackSpeed = 1.0;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  SpatialSettings _spatial = const SpatialSettings();
+  int _spatialRequest = 0;
+  bool _spatialAttached = false;
+  String _equalizer = '';
 
   MediaKitWindowsAudioController({
     MediaKitWindowsBackend Function()? backendFactory,
@@ -145,6 +157,10 @@ class MediaKitWindowsAudioController
     required List<double> bandGains,
   }) {
     final backend = _ensureBackend();
+    _equalizer = _equalizerFilter(enabled: enabled, bandGains: bandGains);
+    if (_spatialAttached) {
+      return backend.setAudioFilter(_combinedFilter());
+    }
     return backend.setAudioFilter(
       _equalizerFilter(enabled: enabled, bandGains: bandGains),
     );
@@ -156,12 +172,73 @@ class MediaKitWindowsAudioController
     required List<double> bandGains,
   }) {
     final backend = _ensureBackend();
+    _equalizer = _equalizerFilter(enabled: enabled, bandGains: bandGains);
+    if (_spatialAttached) {
+      return (backend as VerifiedAudioFilterBackend).setAudioFilterVerified(
+        _combinedFilter(),
+      );
+    }
     if (backend is! VerifiedAudioFilterBackend) {
       throw UnsupportedError('equalizer');
     }
     return (backend as VerifiedAudioFilterBackend).setAudioFilterVerified(
       _equalizerFilter(enabled: enabled, bandGains: bandGains),
     );
+  }
+
+  @override
+  Future<bool> supportsSpatialAudio() async {
+    final backend = _ensureBackend();
+    return backend is SpatialFilterBackend &&
+        (backend as SpatialFilterBackend).supportsSpatialFilter;
+  }
+
+  @override
+  Future<void> applySpatialAudio(
+    SpatialSettings settings,
+    int requestId,
+  ) async {
+    final backend = _ensureBackend();
+    if (!await supportsSpatialAudio() ||
+        backend is! VerifiedAudioFilterBackend) {
+      throw UnsupportedError('spatial');
+    }
+    final previous = _spatial;
+    final oldRequest = _spatialRequest;
+    final wasAttached = _spatialAttached;
+    _spatial = settings;
+    _spatialRequest = requestId;
+    _spatialAttached = true;
+    try {
+      await (backend as VerifiedAudioFilterBackend).setAudioFilterVerified(
+        _combinedFilter(),
+      );
+    } catch (_) {
+      _spatial = previous;
+      _spatialRequest = oldRequest;
+      _spatialAttached = wasAttached;
+      await backend.setAudioFilter(
+        wasAttached ? _combinedFilter() : _equalizer,
+      );
+      rethrow;
+    }
+  }
+
+  @override
+  Future<SpatialProcessingReport> readSpatialAudio() async {
+    final backend = _ensureBackend();
+    if (backend is! SpatialFilterBackend) throw UnsupportedError('spatial');
+    return (backend as SpatialFilterBackend).readSpatialFilter();
+  }
+
+  String _combinedFilter() {
+    final eq = _equalizer.isEmpty
+        ? ''
+        : '${_equalizer.substring(7, _equalizer.length - 1)},';
+    return '@ikspatial:lavfi=[${eq}ikhrtf='
+        'enabled=${_spatial.enabled ? 1 : 0}:'
+        'strength=${_spatial.strength}:azimuth=${_spatial.azimuth}:'
+        'elevation=${_spatial.elevation}:request=$_spatialRequest]';
   }
 
   @override
@@ -327,8 +404,43 @@ class MediaKitWindowsAudioController
 }
 
 class RealMediaKitWindowsBackend
-    implements MediaKitWindowsBackend, VerifiedAudioFilterBackend {
+    implements
+        MediaKitWindowsBackend,
+        VerifiedAudioFilterBackend,
+        SpatialFilterBackend {
   final media_kit.Player _player;
+  StreamSubscription<media_kit.PlayerLog>? _filterLogSubscription;
+  String? _filterFailure;
+  bool _spatialFilterEnabled = false;
+  int _spatialNativeRequest = -1;
+
+  @override
+  bool get supportsSpatialFilter {
+    try {
+      return DynamicLibrary.open('libmpv-2.dll')
+              .lookupFunction<Int32 Function(), int Function()>(
+                'ik_spatial_abi_version',
+              )() ==
+          1;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  @override
+  Future<SpatialProcessingReport> readSpatialFilter() async {
+    final platform = _player.platform;
+    if (platform is! media_kit.NativePlayer) throw UnsupportedError('spatial');
+    final frames = DynamicLibrary.open('libmpv-2.dll')
+        .lookupFunction<Int64 Function(Int64), int Function(int)>(
+          'ik_spatial_processed_frames',
+        )(_spatialNativeRequest);
+    return SpatialProcessingReport(
+      requestId: _spatialNativeRequest,
+      processedFrames: frames,
+      error: _filterFailure,
+    );
+  }
 
   RealMediaKitWindowsBackend._(this._player);
 
@@ -370,6 +482,7 @@ class RealMediaKitWindowsBackend
     if (path != null && !File(path).existsSync()) {
       throw StateError('Local music file not found: $path');
     }
+    _filterFailure = null;
     await _player.open(media_kit.Media(url), play: false);
   }
 
@@ -416,6 +529,24 @@ class RealMediaKitWindowsBackend
     if (platform is! media_kit.NativePlayer) {
       throw UnsupportedError('equalizer');
     }
+    _spatialFilterEnabled = filter.contains('@ikspatial:');
+    _spatialNativeRequest =
+        int.tryParse(
+          RegExp(r'request=(\d+)').firstMatch(filter)?.group(1) ?? '',
+        ) ??
+        -1;
+    _filterFailure = null;
+    if (_spatialFilterEnabled) {
+      _filterLogSubscription ??= _player.stream.log.listen((log) {
+        final text = log.text.toLowerCase();
+        if (_spatialFilterEnabled &&
+            (text.contains('failed to configure the filter') ||
+                text.contains('no such filter') ||
+                text.contains('disabling filter'))) {
+          _filterFailure = 'graph_rejected';
+        }
+      });
+    }
     await platform.setProperty('af', filter);
   }
 
@@ -423,7 +554,10 @@ class RealMediaKitWindowsBackend
   Future<void> setSpeed(double speed) => _player.setRate(speed);
 
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    await _filterLogSubscription?.cancel();
+    await _player.dispose();
+  }
 }
 
 String? _localFilePathFromUrl(String url) {

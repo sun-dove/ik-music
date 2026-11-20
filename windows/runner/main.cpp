@@ -20,12 +20,12 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 #ifdef YUEYIN_BUILD
   IkSingleInstance instance_guard;
   if (!instance_guard.valid()) {
-    MessageBoxW(nullptr, L"暂时无法创建 ik 的实例锁，请稍后重试。", L"ik", MB_OK | MB_ICONERROR);
+    MessageBoxW(nullptr, L"暂时无法创建 IK Music 的实例锁，请稍后重试。", L"IK Music", MB_OK | MB_ICONERROR);
     return EXIT_FAILURE;
   }
   if (!instance_guard.primary()) {
     if (!instance_guard.WakeExisting()) {
-      MessageBoxW(nullptr, L"ik 正在启动或退出，请稍后再打开。", L"ik", MB_OK | MB_ICONINFORMATION);
+      MessageBoxW(nullptr, L"IK Music 正在启动或退出，请稍后再打开。", L"IK Music", MB_OK | MB_ICONINFORMATION);
     }
     return EXIT_SUCCESS;
   }
@@ -49,7 +49,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(1200, 800);
 #ifdef YUEYIN_BUILD
-  const wchar_t* title = L"ik";
+  const wchar_t* title = L"IK Music";
 #else
   const wchar_t* title = L"Mconnect";
 #endif

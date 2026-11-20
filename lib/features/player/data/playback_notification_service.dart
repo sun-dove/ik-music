@@ -10,7 +10,9 @@ import '../../../core/diagnostics/diagnostics_service.dart';
 import '../../../core/platform/platform_utils.dart';
 import '../../../models/song.dart';
 import 'audio_focus_diagnostics.dart';
+import 'android_spatial_audio.dart';
 import 'player_audio_controller.dart';
+import 'spatial_audio_capability.dart';
 
 typedef PlaybackCommand = Future<void> Function();
 typedef PlaybackSeekCommand = Future<void> Function(Duration position);
@@ -90,7 +92,8 @@ class AudioServicePlayerController
         PlayerAudioController,
         PlaybackSpeedCapable,
         SkipSilenceCapable,
-        VerifiedEqualizerCapable {
+        VerifiedEqualizerCapable,
+        SpatialAudioCapable {
   AudioServicePlayerController._({
     MconnectAudioHandler? handler,
     PlayerAudioController Function()? audioControllerFactory,
@@ -106,6 +109,16 @@ class AudioServicePlayerController
   PlayerAudioController? _audioController;
   AudioFocusDiagnosticsObserver? _focusObserver;
   bool _initialized = false;
+  final _spatial = AndroidSpatialAudio();
+
+  @override
+  Future<bool> supportsSpatialAudio() => _spatial.supportsSpatialAudio();
+  @override
+  Future<void> applySpatialAudio(SpatialSettings settings, int requestId) =>
+      _spatial.applySpatialAudio(settings, requestId);
+  @override
+  Future<SpatialProcessingReport> readSpatialAudio() =>
+      _spatial.readSpatialAudio();
 
   PlayerAudioController _ensureAudioController() {
     final existing = _audioController;
@@ -121,7 +134,7 @@ class AudioServicePlayerController
       _initialize(channelName: 'Mconnect playback', diagnostics: diagnostics);
 
   Future<void> initializeVideoMusic({DiagnosticsService? diagnostics}) =>
-      _initialize(channelName: 'ik playback', diagnostics: diagnostics);
+      _initialize(channelName: 'IK Music playback', diagnostics: diagnostics);
 
   Future<void> _initialize({
     required String channelName,

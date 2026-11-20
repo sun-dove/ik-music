@@ -6,13 +6,17 @@ import '../../../../core/widgets/async_state_view.dart';
 import '../providers/listening_stats_provider.dart';
 
 class ListeningStatsPage extends ConsumerWidget {
-  const ListeningStatsPage({super.key});
+  const ListeningStatsPage({super.key, this.showAvailableSongs = false});
+  final bool showAvailableSongs;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(listeningStatsProvider);
     final notifier = ref.read(listeningStatsProvider.notifier);
     final report = ref.watch(listeningStatsReportProvider);
+    final visibleSongs = showAvailableSongs
+        ? state.topSongs
+        : state.topSongs.take(50);
 
     return Scaffold(
       appBar: AppBar(
@@ -67,7 +71,7 @@ class ListeningStatsPage extends ConsumerWidget {
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ),
-                  for (final entry in state.topSongs.take(50))
+                  for (final entry in visibleSongs)
                     ListTile(
                       leading: CircleAvatar(
                         child: Text(entry.playCount.toString()),

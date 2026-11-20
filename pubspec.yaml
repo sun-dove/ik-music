@@ -125,6 +125,7 @@ flutter_native_splash:
 flutter:
   uses-material-design: true
   assets:
+    - assets/source-catalog/pdone-v1.json
     - assets/branding/dj-music/source/windows/yangyin-256.png
     - assets/branding/yueyin/note-ribbons.png
     - assets/platform-icons/qq-music.jpg

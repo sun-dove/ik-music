@@ -6,6 +6,13 @@ part of '../presentation/providers/player_provider.dart';
 /// 不是独立模块：淡入淡出直接读写 facade 的音量与 generation 字段。
 
 extension PlayerFadeAndVolumeOps on PlayerNotifier {
+  SpatialAudioCapable? get spatialAudioCapability {
+    final controller = _ensureAudioController();
+    return controller is SpatialAudioCapable
+        ? controller as SpatialAudioCapable
+        : null;
+  }
+
   void setFadeOptions({required bool enabled, required Duration duration}) {
     _fadeEnabled = enabled;
     _fadeGeneration++;

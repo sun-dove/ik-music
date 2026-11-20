@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22)
+project(ik_spatial C)
+add_library(ik_spatial SHARED ik_spatial_jni.c ik_spatial.c)
+target_compile_options(ik_spatial PRIVATE -O3 -Wall -Wextra -Werror)
+target_link_libraries(ik_spatial PRIVATE m)

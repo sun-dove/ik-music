@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -53,15 +55,22 @@ import 'package:mconnect/video_app/ik/ik_audio_page.dart';
 import 'package:mconnect/video_app/ik/ik_catalog_pages.dart';
 import 'package:mconnect/video_app/ik/ik_home_page.dart';
 import 'package:mconnect/video_app/ik/ik_shell.dart';
+import 'package:mconnect/video_app/ik/ik_workspace.dart';
+import 'package:mconnect/video_app/ik/ik_settings_workspace.dart';
+import 'package:mconnect/video_app/ik/ik_playback_bar.dart';
+import 'package:mconnect/video_app/ik/ik_controls.dart';
+import 'package:mconnect/video_app/ik/ik_search_workspace.dart';
 import 'package:mconnect/video_app/multi_source/multi_source_player.dart';
 import 'package:mconnect/video_app/playback/video_platforms.dart';
 import 'package:mconnect/video_app/playback/video_stream_state.dart';
 import 'package:mconnect/video_app/ui/video_shell.dart';
 import 'package:mconnect/video_app/video_app.dart';
 import 'package:mconnect/video_app/video_preferences.dart';
+import 'package:mconnect/video_app/windows/windows_appearance.dart';
 import 'package:mconnect/video_app/windows/windows_my_page.dart';
 import 'package:mconnect/video_app/windows/windows_music_preferences.dart';
 import 'package:mconnect/video_app/windows/windows_player_page.dart';
+import 'package:mconnect/video_app/windows/windows_window_controller.dart';
 
 import 'support/content_page_fakes.dart';
 
@@ -75,6 +84,17 @@ void main() {
   late Zone ioZone;
 
   setUpAll(() async {
+    // 本机审阅截图加载实际字体，不复制字体进发行包。
+    final captureFont = Platform.environment['IK_CAPTURE_UI_FONT'];
+    if (captureFont != null) {
+      final data = ByteData.sublistView(await File(captureFont).readAsBytes());
+      for (final family in ['sans-serif', 'Roboto', 'Microsoft YaHei UI']) {
+        await (FontLoader(family)..addFont(Future.value(data))).load();
+      }
+      await (FontLoader(
+        'MaterialIcons',
+      )..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'))).load();
+    }
     ioZone = Zone.current;
     scratch = await Directory.systemTemp.createTemp('ik-app-integration-');
     Hive.init(scratch.path);
@@ -115,9 +135,18 @@ void main() {
     if (await scratch.exists()) await scratch.delete(recursive: true);
   });
 
-  Future<_Harness> mount(WidgetTester tester, {double width = 1200}) async {
+  Future<_Harness> mount(
+    WidgetTester tester, {
+    double width = 1200,
+    bool desktopAppearance = false,
+    bool workspace = false,
+    double textScale = 1,
+    PlayerAudioController? audioController,
+  }) async {
     tester.view.physicalSize = Size(width, 900);
     tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = textScale;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final catalog = _Catalog();
@@ -132,8 +161,24 @@ void main() {
         await settings.flush();
       }),
     )..load();
+    final window = desktopAppearance ? _Window() : null;
+    final appearance = window == null
+        ? null
+        : WindowsAppearance(
+            preferences: unified,
+            directory: Directory('${scratch.path}/appearance'),
+            window: window,
+          );
+    if (appearance != null) {
+      await tester.runAsync(() async {
+        await unified.update(
+          unified.value.copyWith(closeAction: WindowsCloseAction.exit),
+        );
+        await appearance.initialize();
+      });
+    }
     final player = PlayerNotifier(
-      audioController: IdleAudioController(),
+      audioController: audioController ?? IdleAudioController(),
       audioControllerFactory: IdleAudioController.new,
       keepAliveController: const NoopPlaybackKeepAliveController(),
       notificationController: const NoopPlaybackNotificationController(),
@@ -158,10 +203,18 @@ void main() {
         ),
       ],
     );
-    final harness = _Harness(container, auth, catalog, unified);
+    final harness = _Harness(
+      container,
+      auth,
+      catalog,
+      unified,
+      appearance: appearance,
+      window: window,
+    );
     addTearDown(() async {
       await tester.pumpWidget(const SizedBox.shrink());
       container.dispose();
+      appearance?.dispose();
       unified.dispose();
       await tester.pump();
       await tester.runAsync(() async {
@@ -171,12 +224,17 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: VideoMusicApp(
-          redesign: true,
-          expandedPlatforms: true,
-          preferences: preferences,
-          unifiedPreferences: unified,
-          catalog: catalog,
+        child: RepaintBoundary(
+          key: const ValueKey('ik-ui-capture'),
+          child: VideoMusicApp(
+            redesign: true,
+            workspace: workspace,
+            expandedPlatforms: true,
+            preferences: preferences,
+            unifiedPreferences: unified,
+            windowsAppearance: appearance,
+            catalog: catalog,
+          ),
         ),
       ),
     );
@@ -267,6 +325,56 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('U01/U03/U06 新工作区实际装配、七区、音质持久化与按需队列', (tester) async {
+    final harness = await mount(tester, workspace: true);
+    expect(find.byType(IkDesktopWorkspace), findsOneWidget);
+    expect(find.byType(IkPlaybackBar), findsOneWidget);
+    expect(find.text(IkStrings.nextUp), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+    await drain(tester);
+    for (final section in [
+      'audio',
+      'appearance',
+      'lyrics',
+      'sources',
+      'downloads',
+      'accounts',
+      'backup',
+    ]) {
+      await tester.tap(find.byKey(ValueKey('ik-settings-$section')));
+      await drain(tester);
+      expect(tester.takeException(), isNull, reason: section);
+    }
+    await tester.tap(find.byKey(const ValueKey('ik-settings-audio')));
+    await drain(tester);
+    final select = find
+        .descendant(
+          of: find.byType(IkSettingsWorkspace),
+          matching: find.byType(IkSelect<String>),
+        )
+        .first;
+    await tester.ensureVisible(select);
+    await tester.tap(select);
+    await drain(tester);
+    await tester.tap(
+      find.text(WindowsMusicPreferences.qualityName(AudioLevel.lossless)).last,
+    );
+    await drain(tester);
+    expect(harness.unified.quality(PlatformType.qq), AudioLevel.lossless);
+    final reloaded = WindowsMusicPreferences(VideoPreferences(settings))
+      ..load();
+    expect(reloaded.quality(PlatformType.kugou), AudioLevel.lossless);
+    reloaded.dispose();
+    await tester.tap(find.byKey(const ValueKey('ik-bar-queue')));
+    await drain(tester);
+    expect(find.text(IkStrings.nextUp), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await drain(tester);
+    expect(find.text(IkStrings.nextUp), findsNothing);
+    expect(tester.takeException(), isNull);
+    await captureIkUi(tester, 'settings');
+  });
+
   testWidgets('K02/K04 曲库真实入口可打开歌单、本地音乐、历史与下载管理', (tester) async {
     await mount(tester);
     await selectTab(tester, IkStrings.library);
@@ -300,6 +408,57 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('U02/U05 新搜索下拉、锚定歌曲菜单、详情和完整播放器共用底栏', (tester) async {
+    final app = await mount(tester, workspace: true);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-1')));
+    await drain(tester);
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(IkSearchWorkspace),
+        matching: find.byType(TextField),
+      ),
+      '验收搜索',
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.search);
+    await drain(tester);
+    final tile = find.ancestor(
+      of: find.text('搜索歌曲qq'),
+      matching: find.byType(IkSongTile),
+    );
+    await tester.tap(
+      find.descendant(of: tile, matching: find.byTooltip(IkStrings.more)),
+    );
+    await drain(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(PopupMenuItem<String>), findsWidgets);
+    await tester.tap(find.text(IkStrings.album));
+    await drain(tester);
+    expect(find.byType(AlbumPage), findsOneWidget);
+    expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip('播放与音效').hitTestable());
+    await drain(tester);
+    expect(find.byType(IkSettingsWorkspace).hitTestable(), findsOneWidget);
+    expect(find.byType(BackButton).hitTestable(), findsOneWidget);
+    await back(tester);
+    expect(find.byType(AlbumPage).hitTestable(), findsOneWidget);
+    await back(tester);
+    await tester.tap(find.text('搜索歌曲qq').first);
+    await drain(tester);
+    expect(app.container.read(playerProvider).currentSong?.name, '搜索歌曲qq');
+    expect(find.byType(WindowsPlayerPage), findsOneWidget);
+    expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+    expect(
+      tester
+          .widget<WindowsPlayerPage>(find.byType(WindowsPlayerPage))
+          .onDesktopLyrics,
+      isNull,
+    );
+    await captureIkUi(tester, 'player');
+    await back(tester);
+    expect(find.byType(IkSearchWorkspace).hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('K01/K06 非桌面统一下载音质应用全部来源，隐藏无能力的背景字体', (tester) async {
     final app = await mount(tester);
     await selectTab(tester, VideoStrings.my);
@@ -330,6 +489,139 @@ void main() {
       expect(reloaded.quality(platform, download: true), AudioLevel.lossless);
     }
     reloaded.dispose();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('K08 当前我的页更改关闭动作立即更新标签，不依赖离开路由', (tester) async {
+    final app = await mount(tester, desktopAppearance: true);
+    await selectTab(tester, VideoStrings.my);
+    expect(
+      tester.widget<WindowsMyPage>(find.byType(WindowsMyPage)).closeAction,
+      WindowsCloseAction.exit,
+    );
+    await tapText(
+      tester,
+      find.byType(WindowsMyPage),
+      WindowsMusicStrings.closeWindow,
+    );
+    await tester.tap(find.text(WindowsMusicStrings.minimize).last);
+    await drain(tester);
+
+    expect(app.window!.action, WindowsCloseAction.minimize);
+    expect(app.unified.closeAction, WindowsCloseAction.minimize);
+    expect(find.text(WindowsMusicStrings.applied), findsOneWidget);
+    expect(
+      tester.widget<WindowsMyPage>(find.byType(WindowsMyPage)).closeAction,
+      WindowsCloseAction.minimize,
+    );
+    expect(
+      find.text(
+        '${WindowsMusicStrings.minimize}\n${WindowsMusicStrings.minimizeHint}',
+      ),
+      findsOneWidget,
+    );
+    await tester.runAsync(
+      () => app.appearance!.setCloseAction(WindowsCloseAction.exit),
+    );
+    await drain(tester);
+    expect(
+      tester.widget<WindowsMyPage>(find.byType(WindowsMyPage)).closeAction,
+      WindowsCloseAction.exit,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('K08 当前我的页字体变更与失效回退立即更新显示名和错误', (tester) async {
+    final app = await mount(tester, desktopAppearance: true);
+    final appearance = app.appearance!;
+    await selectTab(tester, VideoStrings.my);
+    await tester.runAsync(() => appearance.selectSystemFont('Noto Sans SC'));
+    await drain(tester);
+    expect(
+      tester.widget<WindowsMyPage>(find.byType(WindowsMyPage)).fontLabel,
+      'Noto Sans SC',
+    );
+
+    app.window!.fonts = ['Microsoft YaHei UI'];
+    await appearance.refreshFonts();
+    await drain(tester);
+    var page = tester.widget<WindowsMyPage>(find.byType(WindowsMyPage));
+    expect(page.fontLabel, WindowsMusicStrings.defaultFont);
+    expect(
+      page.errors,
+      contains(WindowsMusicStrings.failure(DesktopFailure.fileMissing)),
+    );
+    await tapText(tester, find.byType(WindowsMyPage), WindowsMusicStrings.font);
+    expect(
+      find.text(WindowsMusicStrings.failure(DesktopFailure.fileMissing)),
+      findsWidgets,
+    );
+    await tester.tap(find.text(WindowsMusicStrings.cancel));
+    await drain(tester);
+
+    await tester.runAsync(appearance.resetFont);
+    await drain(tester);
+    page = tester.widget<WindowsMyPage>(find.byType(WindowsMyPage));
+    expect(page.fontLabel, WindowsMusicStrings.defaultFont);
+    expect(page.errors, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('K08 当前我的页背景和原生控制错误恢复实时呈现', (tester) async {
+    final app = await mount(tester, desktopAppearance: true);
+    final appearance = app.appearance!;
+    await selectTab(tester, VideoStrings.my);
+    await tester.runAsync(() async {
+      final draft = await appearance.prepareBackground(
+        File('assets/platform-icons/qq-music.jpg'),
+      );
+      await appearance.applyBackground(draft);
+      await precacheImage(
+        FileImage(appearance.backgroundFile!),
+        tester.element(find.byType(WindowsBackground)),
+      );
+    });
+    await drain(tester);
+    expect(
+      tester.widget<WindowsMyPage>(find.byType(WindowsMyPage)).backgroundLabel,
+      WindowsMusicStrings.savedBackground,
+    );
+    await tester.runAsync(appearance.resetBackground);
+    await drain(tester);
+    expect(
+      tester.widget<WindowsMyPage>(find.byType(WindowsMyPage)).backgroundLabel,
+      WindowsMusicStrings.defaultBackground,
+    );
+
+    app.window!.available = false;
+    await expectLater(
+      appearance.setCloseAction(WindowsCloseAction.minimize),
+      throwsA(isA<DesktopConfigurationException>()),
+    );
+    await drain(tester);
+    var page = tester.widget<WindowsMyPage>(find.byType(WindowsMyPage));
+    expect(page.nativeAvailable, isFalse);
+    expect(
+      page.errors,
+      contains(WindowsMusicStrings.failure(DesktopFailure.nativeUnavailable)),
+    );
+    final closeTile = find.ancestor(
+      of: find.text(WindowsMusicStrings.closeWindow),
+      matching: find.byType(ListTile),
+    );
+    await tapText(
+      tester,
+      find.byType(WindowsMyPage),
+      WindowsMusicStrings.closeWindow,
+    );
+    expect(tester.widget<ListTile>(closeTile).onTap, isNull);
+    expect(find.byType(BottomSheet), findsNothing);
+    app.window!.available = true;
+    await tester.runAsync(appearance.initialize);
+    await drain(tester);
+    page = tester.widget<WindowsMyPage>(find.byType(WindowsMyPage));
+    expect(page.nativeAvailable, isTrue);
+    expect(page.errors, isEmpty);
     expect(tester.takeException(), isNull);
   });
 
@@ -541,6 +833,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final width in [320.0, 390.0, 720.0, 900.0, 1200.0, 1440.0]) {
+    testWidgets('U11 工作区五页与播放栏真实装配 ${width.toInt()} / 150%', (tester) async {
+      final app = await mount(
+        tester,
+        workspace: true,
+        width: width,
+        textScale: 1.5,
+      );
+      for (var index = 0; index < 5; index++) {
+        await tester.tap(find.byKey(ValueKey('ik-workspace-nav-$index')));
+        await drain(tester);
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'page=$index,width=$width',
+        );
+        if (width == 1200) await captureIkUi(tester, 'page-$index');
+      }
+      await app.container
+          .read(playerProvider.notifier)
+          .playSong(_song(PlatformType.qq));
+      await drain(tester);
+      final router = GoRouter.of(
+        tester.element(find.byType(IkDesktopWorkspace)),
+      );
+      unawaited(router.push<void>('/player'));
+      await drain(tester);
+      expect(find.byType(WindowsPlayerPage), findsOneWidget);
+      final page = tester.widget<WindowsPlayerPage>(
+        find.byType(WindowsPlayerPage),
+      );
+      expect(page.onDesktopLyrics, isNull, reason: 'Linux 原生歌词不可用');
+      expect(tester.takeException(), isNull, reason: 'player width=$width');
+      if (width == 320) await captureIkUi(tester, 'player-narrow');
+    });
+  }
+
+  testWidgets('U05 切歌装载中禁止拖动进度，装载完成后恢复', (tester) async {
+    final audio = _LoadingAudio();
+    final app = await mount(tester, workspace: true, audioController: audio);
+    addTearDown(() {
+      if (!audio.ready.isCompleted) audio.ready.complete();
+    });
+    final play = app.container
+        .read(playerProvider.notifier)
+        .playSong(_song(PlatformType.qq));
+    await drain(tester);
+    expect(app.container.read(playerProvider).isTransitioning, isTrue);
+    final seek = find.byKey(const ValueKey('ik-bar-seek'));
+    expect(tester.widget<Slider>(seek).onChanged, isNull);
+    audio.ready.complete();
+    await play;
+    await drain(tester);
+    expect(app.container.read(playerProvider).isTransitioning, isFalse);
+    expect(tester.widget<Slider>(seek).onChanged, isNotNull);
+    await tester.pump(const Duration(seconds: 3));
+    await drain(tester);
+  });
+
   testWidgets('K08 320宽度实际应用四导航和工具页不溢出', (tester) async {
     await mount(tester, width: 320);
     for (final label in IkShell.labels) {
@@ -564,6 +915,26 @@ Future<void> drain(WidgetTester tester) async {
   }
   await tester.pump(const Duration(milliseconds: 400));
   await tester.pump();
+}
+
+Future<void> captureIkUi(WidgetTester tester, String name) async {
+  final directory = Platform.environment['IK_CAPTURE_UI_DIR'];
+  if (directory == null) return;
+  final boundary = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(const ValueKey('ik-ui-capture')),
+  );
+  await tester.runAsync(() async {
+    final image = await boundary.toImage(pixelRatio: 1);
+    try {
+      final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+      final folder = Directory(directory);
+      await folder.create(recursive: true);
+      await File('${folder.path}/ik-flutter-$name.png')
+          .writeAsBytes(bytes!.buffer.asUint8List());
+    } finally {
+      image.dispose();
+    }
+  });
 }
 
 Song _song(PlatformType platform, {String? name}) => Song(
@@ -686,9 +1057,43 @@ class _Auth extends AuthNotifier {
 }
 
 class _Harness {
-  const _Harness(this.container, this.auth, this.catalog, this.unified);
+  const _Harness(
+    this.container,
+    this.auth,
+    this.catalog,
+    this.unified, {
+    this.appearance,
+    this.window,
+  });
   final ProviderContainer container;
   final _Auth auth;
   final _Catalog catalog;
   final WindowsMusicPreferences unified;
+  final WindowsAppearance? appearance;
+  final _Window? window;
+}
+
+class _Window extends WindowsWindowController {
+  WindowsCloseAction action = WindowsCloseAction.minimize;
+  bool available = true;
+  List<String> fonts = ['Microsoft YaHei UI', 'Noto Sans SC'];
+
+  @override
+  Future<void> setCloseAction(WindowsCloseAction value) async {
+    if (!available) {
+      throw const DesktopConfigurationException(
+        DesktopFailure.nativeUnavailable,
+      );
+    }
+    action = value;
+  }
+
+  @override
+  Future<List<String>> listFonts() async => fonts;
+}
+
+class _LoadingAudio extends IdleAudioController {
+  final ready = Completer<void>();
+  @override
+  Future<void> setUrl(String url) => ready.future;
 }

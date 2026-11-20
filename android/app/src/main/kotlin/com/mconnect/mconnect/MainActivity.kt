@@ -65,11 +65,11 @@ class MainActivity : AudioServiceActivity() {
             val channel = notificationManager.getNotificationChannel(channelId)
                 ?: android.app.NotificationChannel(
                     channelId,
-                    "ik playback",
+                    "IK Music playback",
                     NotificationManager.IMPORTANCE_LOW,
                 )
-            if (channel.name.toString() != "ik playback") {
-                channel.name = "ik playback"
+            if (channel.name.toString() != "IK Music playback") {
+                channel.name = "IK Music playback"
                 notificationManager.createNotificationChannel(channel)
             }
         }

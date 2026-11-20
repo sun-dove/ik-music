@@ -6,12 +6,12 @@ import 'package:mconnect/l10n/expanded_strings.dart';
 import 'package:mconnect/l10n/windows_music_strings.dart';
 
 void main() {
-  test('品牌：ik在独立入口文案与Windows预览中统一', () {
-    expect(VideoStrings.appName, 'ik');
-    expect(ExpandedStrings.appName, 'ik');
-    expect(VideoStrings.appVersion, 'ik · 0.6.0');
-    expect(WindowsMusicStrings.brandShortName, 'ik');
-    expect(WindowsMusicStrings.fontSample, contains('ik'));
+  test('品牌：IK Music在独立入口文案与Windows预览中统一', () {
+    expect(VideoStrings.appName, 'IK Music');
+    expect(ExpandedStrings.appName, 'IK Music');
+    expect(VideoStrings.appVersion, 'IK Music · 0.6.0');
+    expect(WindowsMusicStrings.brandShortName, 'IK Music');
+    expect(WindowsMusicStrings.fontSample, contains('IK Music'));
   });
 
   test('品牌：Windows主题字体与品牌标识接线正确，保留字号复核项', () {
@@ -57,16 +57,18 @@ void main() {
     final installer = File('installer/yueyin.iss').readAsStringSync();
     expect(installer, contains('#include "ik_version.iss"'));
     final version = File('installer/ik_version.iss').readAsStringSync();
-    expect(version, contains('MyAppName "ik"'));
+    expect(version, contains('MyAppName "IK Music"'));
     expect(version, contains('MyAppVersion "0.6.0"'));
     expect(installer, contains('MZ Music.lnk'));
     expect(installer, contains('DJ Music.lnk'));
-    expect(installer, isNot(contains("'{autodesktop}\\ik.lnk'")));
-    expect(installer, isNot(contains("'{userprograms}\\ik")));
+    expect(installer, contains("'{autodesktop}\\ik.lnk'"));
+    expect(installer, contains("'{userprograms}\\ik"));
     expect(installer, contains('乐音音乐.lnk'));
     expect(installer, contains('悦音音乐.lnk'));
     expect(installer, contains('54A778C9-2261-4E1F-BA89-EE68844DA7AA'));
-    expect(installer, contains(r'Programs\YueyinMusic'));
+    expect(installer, contains(r'Programs\ik-music'));
+    expect(installer, contains('UsePreviousAppDir=yes'));
+    expect(installer, contains('PrepareToInstall'));
     expect(installer, contains('UsePreviousGroup=no'));
     expect(
       installer,
@@ -75,14 +77,14 @@ void main() {
       ),
     );
     final main = File('windows/runner/main.cpp').readAsStringSync();
-    expect(main, contains('L"ik"'));
+    expect(main, contains('L"IK Music"'));
     expect(main, contains('sun-dove.YueyinMusic'));
     final closeDialog = File('windows/runner/win32_window.cpp')
         .readAsStringSync();
-    expect(closeDialog, contains('ik'));
+    expect(closeDialog, contains('关闭 IK Music'));
     final floating = File('windows/runner/floating_lyrics_window.cpp')
         .readAsStringSync();
-    expect(floating, contains('L"ik Floating Lyrics"'));
+    expect(floating, contains('L"IK Music Floating Lyrics"'));
     final android = File('android/app/build.gradle.kts').readAsStringSync();
     expect(android, contains('"app.videomusic.player"'));
     expect(
@@ -116,8 +118,8 @@ void main() {
     );
     final widgetStrings = File('android/app/src/yueyin/res/values/strings.xml')
         .readAsStringSync();
-    expect(widgetStrings, contains('ik playback controls'));
-    expect(widgetStrings, contains('mconnect_widget_idle">ik<'));
+    expect(widgetStrings, contains('IK Music playback controls'));
+    expect(widgetStrings, contains('mconnect_widget_idle">IK Music<'));
     final notification = File(
       'lib/features/player/data/playback_notification_service.dart',
     ).readAsStringSync();
@@ -131,7 +133,7 @@ void main() {
         "_playbackNotificationChannelId = 'com.mconnect.mconnect.audio'",
       ),
     );
-    expect(notification, contains("channelName: 'ik playback'"));
+    expect(notification, contains("channelName: 'IK Music playback'"));
     expect(notification, contains("channelName: 'Mconnect playback'"));
     expect(notification, contains('initializeVideoMusic'));
     final initializer = File(
@@ -141,7 +143,7 @@ void main() {
     final mainActivity = File(
       'android/app/src/main/kotlin/com/mconnect/mconnect/MainActivity.kt',
     ).readAsStringSync();
-    expect(mainActivity, contains('ik playback'));
+    expect(mainActivity, contains('IK Music playback'));
     expect(mainActivity, contains('NotificationManager'));
     expect(mainActivity, contains('com.mconnect.mconnect.audio'));
     expect(
@@ -179,7 +181,7 @@ void main() {
     final resource = File('windows/runner/Yueyin.rc').readAsStringSync();
     expect(resource, contains('VERSION_AS_NUMBER IK_VERSION_NUMBER'));
     final version = File('windows/runner/ik_version.h').readAsStringSync();
-    expect(version, contains('IK_VERSION_NUMBER 0,6,0,10'));
+    expect(version, contains('IK_VERSION_NUMBER 0,6,0,11'));
     expect(version, contains('IK_VERSION_STRING "0.6.0"'));
     // path_provider_windows 从 CompanyName/ProductName 推导账号和数据库目录。
     expect(resource, contains('"CompanyName", "sun-dove"'));
