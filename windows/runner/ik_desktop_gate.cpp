@@ -101,13 +101,13 @@ int main() {
 
       for (const UINT dpi : {96u, 120u, 144u}) {
         const RECT work{0, 0, 1920, 1080};
-        const RECT small{10, 10, 40, 40};
-        const auto rect = IkDesktopHost::ClampBounds(small, work, dpi);
+        const RECT small_bounds{10, 10, 40, 40};
+        const auto rect = IkDesktopHost::ClampBounds(small_bounds, work, dpi);
         Check(rect.right - rect.left == MulDiv(900, static_cast<int>(dpi), 96) &&
                   rect.bottom - rect.top == MulDiv(600, static_cast<int>(dpi), 96),
               "K07 minimum dimensions scale with DPI");
         const RECT narrow_work{-800, 10, 0, 510};
-        const auto clipped = IkDesktopHost::ClampBounds(small, narrow_work, dpi);
+        const auto clipped = IkDesktopHost::ClampBounds(small_bounds, narrow_work, dpi);
         Check(clipped.left == -800 && clipped.top == 10 &&
                   clipped.right == 0 && clipped.bottom == 510,
               "K07 minimum never exceeds available work area");
