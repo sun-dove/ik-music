@@ -22,7 +22,7 @@ jobs:
           $redExit = $LASTEXITCODE
           $ErrorActionPreference = 'Stop'
           $redOutput | Write-Output
-          if ($redExit -ne 1 -or -not ($redOutput -match 'IK_INSTALLER_RED_CONFIRMED')) { throw '真实隔离安装红门未确认。' }
+          if ($redExit -ne 1 -or -not ($redOutput -match 'IK_INSTALLER_RED_CONFIRMED')) { throw 'Installer baseline gate was not confirmed.' }
           ./scripts/ik_installer_isolated_gate.ps1 -GateDirectory $greenDirectory
       - uses: actions/upload-artifact@v4
         if: always()
