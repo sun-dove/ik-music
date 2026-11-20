@@ -1,5 +1,11 @@
 # IK Music 安装迁移与品牌实施记录
 
+## 最终发行门修正：Windows 临时目录长短路径
+
+2026-11-20，Windows构建44738226054已完成主程序、原生红绿门、16份许可及12项PCM门，隔离Inno首次安装后的快捷方式断言失败。CI临时目录使用`C:\Users\RUNNER~1\AppData\Local\Temp`，Inno与ShellLink返回`runneradmin`长路径。根在本机真实WScript.Shell复现：同一个EXE以8.3短路径赋值后，TargetPath读回长路径，而工作目录、图标仍可保留短路径；原字符串比较因此误报。
+
+本次是正式验收脚本的简单缺陷修复，仅影响`scripts/ik_installer_isolated_gate.ps1`中的`Assert-GateInstalled`，调用方仍为同脚本的旧安装、普通升级、新安装和再次升级四处，以及`build_video_windows.ps1`的隔离门执行。先用现有正式快捷方式与等价8.3预期目录复现红态，再把实际存在的文件/目录解析为完整路径比较；目标仍必须严格是预期安装目录中的`yueyin_music.exe`、`ik.ico`与索引0。失败信息补充实际三字段，不放宽任何安装目录、登记或文件检查。回滚为还原此验收函数；产品、迁移事务、旧公开接口和APK字节不变。真实Inno门仍须在新CI运行通过后才允许本机迁移。
+
 日期：2026-11-20。用户已确认继续改版、打包、发布和安装迁移，旧文件清理稍后进行。本文接续已确认的《IK-Music-安装迁移与包体方案》。本轮不对用户当前安装执行卸载或迁移。
 
 ## 兼容变更票据
@@ -95,3 +101,35 @@ Android 早期冻结副本三 ABI 正式 release 构建已退出 0。副本包�
 只读故障注入发现：旧卸载与登记解除已经成功，但随后的阶段 JSON 写入失败时，原事务把整个 UninstallOld 动作放在 try 之外，导致直接退出而不恢复旧程序。先新增正式门，模拟卸载完成后日志写入失败；旧实现真实红，事件只有 Snapshot/UninstallOld，缺少 RestoreOld。新增可选 `OldInstallationRemoved` 回调，实际流程在已核验卸载成功、登记解除之后先设置内存状态，再写记录；异常按真实状态决定是否回滚。此前动作接口默认不变，卸载前失败仍只阻断。修正后 PowerShell 5/7 绿门通过，用户现装未参与故障注入。
 
 Windows HRTF 包增加必须显式提供的 `-SpatialAudioLicenses`：`copy_ik_audio_licenses.ps1` 要求同次构建的16份非空文件，覆盖 mpv、FFmpeg、FreeType、FriBidi、HarfBuzz、libass、GCC/MinGW、KEMAR和源码构建说明，并校验KEMAR官方原文哈希。全部文件复制到 `third-party-audio-licenses/` 后再次逐文件核验，再写“对应源码下载说明.md”，明确同次发行附件名 `ik-audio-sources.tar.gz` 和仓库发行页面。只提供KEMAR目录时实际红；使用原生代理生成的真实16文件目录时实际绿。Windows CI 必须上传并在正式 Release 同时附加对应源码归档，不能只依赖14天有效的artifact。未提供SpatialAudioDll的原构建行为保持。
+
+## 最终 build 11 Android 成品
+
+2026-11-20 在应用UI、用户音量和原生音效共同冻结后，新建会话 `work/ik-final-build11-20261120`，从源重新复制并完整构建三ABI；没有沿用上述早期候选包。构建前后332个Dart产品文件、Android原生文件与版本清单逐字节比对一致。隔离副本登录/二维码/分享39门全部通过；Gradle release耗时541.3秒，完整构建脚本退出0。产品共享依赖文件未改动。
+
+| ABI | 最终字节 | SHA-256 |
+| --- | ---: | --- |
+| arm64-v8a | 29,975,059 | 46A41A9D0A98E39133B241383F729989133B0D850BF766060B38A4D980B11D26 |
+| armeabi-v7a | 27,938,441 | 8FD819909B6A66BAE54CFF6BFFCB380C1B599D9B93BC88AA58AFD745AB3F7EB3 |
+| x86_64 | 31,559,268 | 84EF750C4BB0D1197E86506274EC3231F2AB2BD95430045C1F451136DF022211 |
+
+逐包验证签名通过，与既有稳定证书一致；包名仍为 `app.videomusic.player`，名称 `IK Music`，versionName `0.6.0`，版本码2011/1011/4011。三包分别仅含目标ABI，`zipalign -c -P 16 4`全部通过；无扫码插件、barhopper或旧note-ribbons。`NOTICES.Z`解压为1,498,873字节，逐字比对原just_audio完整许可证和KEMAR完整原文均存在；HRTF库为305,640/302,340/306,328字节。正式构建输出位于项目 `build/yueyin-release`，协调任务另复制到会话正式 `outputs/IK-Music-0.6.0-build11`。
+
+在本轮专用API30 x86_64 AVD `ik_spatial_api30` 保存 `ik-before-final-smoke` 快照后覆盖安装最终签名包，系统安装成功并确认版本4011/0.6.0。实际冷启动成功，发现、音乐库和账号设置导航正常；底栏静音按钮能切为静音图标与0滑杆，再次点击恢复。启动器显示新青蓝音符图标和IK Music名称。检查期间没有FATAL EXCEPTION、未处理异常或ANR，进程持续存活。所有操作仅发生在无用户真实数据的验收AVD。
+
+此API30默认镜像的headless GPU/SwiftShader仅提供OpenGL ES 2能力，Impeller渐变shader出现uniform上限错误，截图主体可见但渐变效果不得记为通过；本轮不为模拟器限制改动产品渲染配置。Android真实PCM处理门另有独立记录，不能用导航冒烟代替音效门。Windows最终安装器仍须等待CI实际生成与隔离安装验收，现装目录和回滚安装器保持未动。
+
+## 最终现包的内置音源入口实测
+
+同一最终签名包在专用API30 AVD中通过顶部设置进入“音源”，未粘贴链接，未点击手动检查或重试，也未替换专用门。设备页面自动出现固定20项目录；“自动准备内置音源”开关处于开启，页面汇总明确显示“本机已准备 0 / 20 项”。连续滚动抓取6页UI语义及截图，按固定目录名称逐项对照，20/20条均观察到，没有漏项或抽样；这是目录与状态展示覆盖，不是20项本机可用结论。
+
+| 实际设备状态 | 数量 | 说明 |
+| --- | ---: | --- |
+| 本机已准备 | 0 | 当前模拟器没有任何目录项可记为初始化成功 |
+| 准备失败 | 15 | 非常道展开明确显示“脚本音源需要Android 8.0以上及支持隔离运行的Android System WebView”；未逐项展开另外14项，不能推断全是相同原因 |
+| 等待联网 / 校验 | 1 | 常青展开显示“网络不可达，已保存的音源仍保留” |
+| 暂不支持 | 3 | 小草、聚合、六音 |
+| 使用范围受限 | 1 | 星海 |
+
+Android系统查询确认该专用AVD当前WebView为 `com.android.webview 83.0.4103.120`。具体获取与受限初始化错误已经由自动链产生并在页面可展开查看，证明自动处理运行过；当前设备的网络与旧WebView限制仍使可用数为0。不能据此宣称Android20项全部就绪，也不能把目录可见当成歌曲可播放。
+
+逐项机器证据在会话 `work/ik-final-catalog-device-status.json`，包含20个名称、实际状态、所在截图页与空的遗漏列表。UI语义原文和图像为 `ik-final-catalog-page-01` 至 `06` 的 `.xml/.png`；汇总 `ik-final-catalog-summary.png`、初始化失败详情 `ik-final-catalog-first-status.png`、网络详情 `ik-final-catalog-changqing.png`。检查没有修改产品源码、重建APK、安装WebView或写入用户真实环境。

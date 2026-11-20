@@ -47,7 +47,14 @@ function Assert-GateInstalled([string]$Expected) {
     if (-not (Test-Path -LiteralPath $linkPath)) { throw '隔离开始菜单入口缺失。' }
     $shell = New-Object -ComObject WScript.Shell
     $shortcut = $shell.CreateShortcut($linkPath)
-    if ($shortcut.TargetPath -ne (Join-Path $Expected 'yueyin_music.exe') -or $shortcut.WorkingDirectory -ne $Expected -or $shortcut.IconLocation -ne ((Join-Path $Expected 'ik.ico') + ',0')) { throw '快捷方式目标、图标或工作目录错误。' }
+    # ShellLink会展开TargetPath中的8.3短目录；CI的TEMP本身可能仍是RUNNER~1。
+    $iconParts = [regex]::Match($shortcut.IconLocation, '^(.*),\s*0$')
+    if (-not $iconParts.Success -or
+        (Get-Item -LiteralPath $shortcut.TargetPath).FullName -ne (Get-Item -LiteralPath (Join-Path $Expected 'yueyin_music.exe')).FullName -or
+        (Get-Item -LiteralPath $shortcut.WorkingDirectory).FullName -ne (Get-Item -LiteralPath $Expected).FullName -or
+        (Get-Item -LiteralPath $iconParts.Groups[1].Value).FullName -ne (Get-Item -LiteralPath (Join-Path $Expected 'ik.ico')).FullName) {
+        throw "快捷方式目标、图标或工作目录错误：预期=$Expected；目标=$($shortcut.TargetPath)；工作目录=$($shortcut.WorkingDirectory)；图标=$($shortcut.IconLocation)"
+    }
 }
 function Invoke-GateUninstall {
     $installedDirectory = Read-GateDirectory
