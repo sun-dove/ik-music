@@ -3,6 +3,41 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mconnect/video_app/ui/video_shell.dart';
 
 void main() {
+  testWidgets('独立版宽屏导航显示 DJ Music 和新图标', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: VideoShell(
+          index: 0,
+          onSelect: (_) {},
+          expandedPlatforms: true,
+          platformIcons: true,
+          pages: const [
+            Text('搜索'),
+            Text('QQ'),
+            Text('网易'),
+            Text('酷狗'),
+            Text('我的'),
+          ],
+          miniPlayer: const SizedBox.shrink(),
+        ),
+      ),
+    );
+    expect(find.text('DJ Music'), findsOneWidget);
+    expect(
+      find.image(
+        const AssetImage(
+          'assets/branding/dj-music/source/windows/yangyin-256.png',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   for (final width in [320.0, 900.0, 1200.0]) {
     testWidgets('酷狗入口与播放器在${width.toInt()}宽度可见且可操作', (tester) async {
       tester.view.physicalSize = Size(width, 800);

@@ -1,13 +1,13 @@
 ; 悦音独立安装器；原Mconnect安装器与AppId保留。
-#define MyAppName "乐音音乐"
-#define MyAppVersion "0.5.0"
+#define MyAppName "DJ Music"
+#define MyAppVersion "0.5.1"
 #define MyAppExeName "yueyin_music.exe"
 #define MyAppSourceDir "..\build\windows\x64\runner\Release"
 [Setup]
 AppId={{54A778C9-2261-4E1F-BA89-EE68844DA7AA}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
-AppPublisher=乐音音乐贡献者
+AppPublisher=DJ Music Contributors
 AppPublisherURL=https://github.com/sun-dove/yueyin-music
 DefaultDirName={localappdata}\Programs\YueyinMusic
 DefaultGroupName={#MyAppName}
@@ -17,7 +17,7 @@ PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir=..\build\yueyin-release
-OutputBaseFilename=YueyinMusic-Setup-{#MyAppVersion}-x64
+OutputBaseFilename=DJ-Music-Setup-{#MyAppVersion}-x64
 SetupIconFile=..\windows\runner\resources\yueyin_icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=..\LICENSE
@@ -64,8 +64,17 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 begin
   if CurStep = ssPostInstall then begin
+    RemovePreviousBrandShortcut(ExpandConstant('{autodesktop}\乐音音乐.lnk'));
     RemovePreviousBrandShortcut(ExpandConstant('{autodesktop}\悦音音乐.lnk'));
+    RemovePreviousBrandShortcut(ExpandConstant('{autodesktop}\Meizuo Music.lnk'));
+    RemovePreviousBrandShortcut(ExpandConstant('{autodesktop}\MZ Music.lnk'));
+    RemovePreviousBrandShortcut(ExpandConstant('{userprograms}\乐音音乐\乐音音乐.lnk'));
     RemovePreviousBrandShortcut(ExpandConstant('{userprograms}\悦音音乐\悦音音乐.lnk'));
+    RemovePreviousBrandShortcut(ExpandConstant('{userprograms}\Meizuo Music\Meizuo Music.lnk'));
+    RemovePreviousBrandShortcut(ExpandConstant('{userprograms}\MZ Music\MZ Music.lnk'));
+    RemoveDir(ExpandConstant('{userprograms}\乐音音乐'));
     RemoveDir(ExpandConstant('{userprograms}\悦音音乐'));
+    RemoveDir(ExpandConstant('{userprograms}\Meizuo Music'));
+    RemoveDir(ExpandConstant('{userprograms}\MZ Music'));
   end;
 end;

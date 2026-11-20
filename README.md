@@ -1,10 +1,10 @@
-# 乐音音乐
+# DJ Music
 
-一款支持 QQ 音乐、网易云与酷狗音乐接入的播放器，提供账号收藏、多音源管理和灵活的播放设置。
+顶尖（Dingjian）是 GitHub 项目的归属名称；面向用户的产品在 Windows、Android 和应用内统一叫 **DJ Music**。DJ Music 支持 QQ 音乐、网易云与酷狗音乐接入，提供账号收藏、多音源管理和灵活的播放设置。
 
-乐读 **yuè**，原名悦音音乐。当前独立入口版本：**0.5.0**，提供 Android 分包、Windows x64 安装器和完整免安装包。下载见[0.5.0 发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.5.0)，实际验证范围见[验收记录](docs/交付文档/乐音音乐050验收记录.md)。覆盖升级沿用原包名、签名、安装身份与数据目录。
+当前公开发行版仍为 **0.5.0**。下一兼容版 **0.5.1 / build 9** 正在准备，采用 DJ Music 名称和新版图标；它尚未发布。历史 0.5.0 的下载、验收和发行标签继续保留：[0.5.0 发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.5.0)、[0.5.0 验收记录](docs/交付文档/乐音音乐050验收记录.md)。更新版沿用原包名、签名、安装身份与数据目录。
 
-<img src="assets/branding/yueyin/note-ribbons.png" width="100" alt="乐音音乐黑白音符飘带图标">
+<img src="assets/branding/dj-music/source/windows/yangyin-256.png" width="100" alt="DJ Music 渐变音符图标">
 
 ## 功能
 
@@ -32,7 +32,7 @@
 | [Windows x64 安装器](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-Setup-0.5.0-x64.exe) | Windows 10/11，可选择安装目录 |
 | [Windows x64 免安装 ZIP](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-windows-x64.zip) | 完整解压后运行 yueyin_music.exe |
 
-文件校验值见发行页的 [SHA256SUMS](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/SHA256SUMS)。Windows 完整包包含 EXE、DLL、data 与运行时许可，详见[Windows 说明](docs/交付文档/乐音音乐050Windows说明.md)。iOS 本轮没有构建或交付安装包。
+文件校验值见发行页的 [SHA256SUMS](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/SHA256SUMS)。Windows 完整包包含 EXE、DLL、data 与运行时许可，详见[Windows 说明](docs/交付文档/乐音音乐050Windows说明.md)。iOS 和 Linux 图标资源为平台适配源文件，本仓库没有对应的发行构建和安装包。
 
 ## 使用音源
 

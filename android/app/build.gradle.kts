@@ -32,11 +32,16 @@ android {
 
     defaultConfig {
         applicationId = if (videoAppBuild) "app.videomusic.player" else "com.mconnect.mconnect"
-        manifestPlaceholders["appLabel"] = if (videoAppBuild) "乐音音乐" else "Mconnect"
+        manifestPlaceholders["appLabel"] = if (videoAppBuild) "DJ Music" else "Mconnect"
+        manifestPlaceholders["roundIcon"] = if (videoAppBuild) {
+            "@mipmap/ic_launcher_round"
+        } else {
+            "@mipmap/ic_launcher"
+        }
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = if (videoAppBuild) 8 else flutter.versionCode
-        versionName = if (videoAppBuild) "0.5.0" else flutter.versionName
+        versionCode = if (videoAppBuild) 9 else flutter.versionCode
+        versionName = if (videoAppBuild) "0.5.1" else flutter.versionName
     }
 
     if (videoAppBuild) {

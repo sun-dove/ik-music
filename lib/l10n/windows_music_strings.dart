@@ -1,8 +1,9 @@
 import '../video_app/windows/windows_music_preferences.dart';
 import '../models/audio_quality.dart';
 
-/// 乐音 Windows 新界面的中文资源。
+/// DJ Music Windows 界面的中文资源。
 abstract final class WindowsMusicStrings {
+  static const brandShortName = 'DJ Music';
   static const playQuality = '播放音质';
   static const downloadQuality = '下载音质';
   static const keepLegacyQuality = '沿用原设置';
@@ -18,7 +19,7 @@ abstract final class WindowsMusicStrings {
   static const defaultFont = '默认字体';
   static const yaHeiAlias = '微软雅黑';
   static const fontPreview = '字体预览';
-  static const fontSample = '乐音音乐 · 让声音流动\n在旋律里，遇见此刻。Aa 0123456789';
+  static const fontSample = 'DJ Music · 让声音流动\n在旋律里，遇见此刻。Aa 0123456789';
   static const importFont = '导入 TTF / OTF 字体';
   static const refreshFonts = '刷新本机字体';
   static const fontHint = '可选择本机字体，或导入有使用权的字体文件';
@@ -35,7 +36,7 @@ abstract final class WindowsMusicStrings {
   static const returnToLyrics = '回到当前歌词';
   static const plainLyrics = '纯文本歌词';
   static const back = '返回';
-  static const brandPronunciation = '乐读 yuè';
+  static const brandPronunciation = 'DJ Music';
   static const savedBackground = '已保存的背景';
   static const importedFont = '导入字体';
   static const retryChangedQuality = '已按当前下载音质重新提交';

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=漾音
+Name[en]=Yangyin
+Comment=音乐播放器
+Exec=yangyin %U
+Icon=yangyin
+Categories=AudioVideo;Audio;Music;Player;
+Terminal=false

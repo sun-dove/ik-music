@@ -117,6 +117,22 @@ Future<void> mount(
 }
 
 void main() {
+  testWidgets('Windows「我的」页显示 DJ Music 与新图标', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await mount(tester, settingsPage());
+    expect(find.text('DJ Music'), findsOneWidget);
+    expect(
+      find.image(
+        const AssetImage(
+          'assets/branding/dj-music/source/windows/yangyin-256.png',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('W01/W03：桌面只有播放和下载两项，分别可点', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);

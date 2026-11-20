@@ -77,7 +77,9 @@ Future<void> main() async {
       ? DiagnosticsService.instance
       : DiagnosticsService(directoryProvider: () async => windowsStorage);
   await diagnostics.initialize();
-  await BackgroundAudioInitializer.initialize(diagnostics: diagnostics);
+  await BackgroundAudioInitializer.initializeVideoMusic(
+    diagnostics: diagnostics,
+  );
   final preferences = VideoPreferences(settings);
   await preferences.loadCustomSource();
   await preferences.loadLxSource();

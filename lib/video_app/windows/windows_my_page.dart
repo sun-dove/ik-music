@@ -45,7 +45,7 @@ class WindowsMyPage extends StatelessWidget {
           Row(
             children: [
               Image.asset(
-                'assets/branding/yueyin/note-ribbons.png',
+                'assets/branding/dj-music/source/windows/yangyin-256.png',
                 width: 44,
                 height: 44,
               ),

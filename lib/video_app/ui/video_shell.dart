@@ -76,7 +76,7 @@ class VideoShell extends StatelessWidget {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Image.asset(
-                                      'assets/branding/yueyin/note-ribbons.png',
+                                      'assets/branding/dj-music/source/windows/yangyin-256.png',
                                       width: 28,
                                       height: 28,
                                     ),

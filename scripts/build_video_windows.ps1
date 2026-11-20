@@ -15,7 +15,7 @@ try {
     $flutter = Join-Path $FlutterSdk 'bin/flutter.bat'
     & $flutter test --no-pub -j 1 test/video_windows_sandbox_test.dart test/windows_music_native_test.dart
     if ($LASTEXITCODE -ne 0) { throw 'Windows音源原生门未通过，停止打包。' }
-    & $flutter build windows --release --no-pub --target lib/main_video.dart --build-name 0.5.0 --build-number 8
+    & $flutter build windows --release --no-pub --target lib/main_video.dart --build-name 0.5.1 --build-number 9
     if ($LASTEXITCODE -ne 0) { throw '乐音Windows主程序构建失败。' }
     $cmake = (Get-Command cmake -ErrorAction Stop).Source
     & $cmake --build (Join-Path $projectRoot 'build/windows/x64') --config Release --target yueyin_desktop_red_gate yueyin_desktop_gate
@@ -35,17 +35,18 @@ try {
     foreach ($required in @('yueyin_music.exe', 'flutter_windows.dll', 'data/flutter_assets/AssetManifest.bin')) {
         if (-not (Test-Path -LiteralPath (Join-Path $bundle $required))) { throw "Windows产物缺少 $required" }
     }
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'windows/runner/resources/yueyin_icon.ico') -Destination (Join-Path $bundle 'yueyin_icon.ico') -Force
     $hostDestination = Join-Path $bundle 'data/lx-host'
     New-Item -ItemType Directory -Path $hostDestination -Force | Out-Null
     Get-ChildItem -LiteralPath $hostOutput -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $hostDestination -Force }
     foreach ($license in @('LICENSE', 'NOTICE.md')) {
         if (Test-Path -LiteralPath (Join-Path $projectRoot $license)) { Copy-Item -LiteralPath (Join-Path $projectRoot $license) -Destination $bundle -Force }
     }
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/交付文档/乐音音乐050Windows说明.md') -Destination $bundle -Force
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/交付文档/DJ Music 051 Windows 使用与构建.md') -Destination (Join-Path $bundle 'DJ Music 051 Windows 使用与构建.md') -Force
     Copy-Item -LiteralPath (Join-Path $projectRoot 'design/platform-icons-010/来源说明.md') -Destination (Join-Path $bundle '平台图标来源说明.md') -Force
     $release = Join-Path $projectRoot 'build/yueyin-release'
     New-Item -ItemType Directory -Path $release -Force | Out-Null
-    Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath (Join-Path $release 'YueyinMusic-0.5.0-windows-x64.zip') -Force
+    Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath (Join-Path $release 'DJ-Music-0.5.1-windows-x64.zip') -Force
     if (Test-Path -LiteralPath $InnoCompiler) {
         & $InnoCompiler (Join-Path $projectRoot 'installer/yueyin.iss')
         if ($LASTEXITCODE -ne 0) { throw '乐音Windows安装器编译失败。' }

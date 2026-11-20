@@ -17,6 +17,7 @@ typedef PlaybackSeekCommand = Future<void> Function(Duration position);
 
 const playbackNotificationLikeAction = 'like_current_song';
 const playbackNotificationLyricsAction = 'toggle_floating_lyrics';
+const _playbackNotificationChannelId = 'com.mconnect.mconnect.audio';
 
 class PlaybackNotificationActions {
   final PlaybackCommand play;
@@ -115,7 +116,16 @@ class AudioServicePlayerController
   }
 
   @override
-  Future<void> initialize({DiagnosticsService? diagnostics}) async {
+  Future<void> initialize({DiagnosticsService? diagnostics}) =>
+      _initialize(channelName: 'Mconnect playback', diagnostics: diagnostics);
+
+  Future<void> initializeVideoMusic({DiagnosticsService? diagnostics}) =>
+      _initialize(channelName: 'DJ Music playback', diagnostics: diagnostics);
+
+  Future<void> _initialize({
+    required String channelName,
+    DiagnosticsService? diagnostics,
+  }) async {
     if (!PlatformUtils.isAndroid || _initialized) return;
     try {
       final session = await AudioSession.instance;
@@ -126,9 +136,9 @@ class AudioServicePlayerController
       )..start();
       await AudioService.init(
         builder: () => _handler,
-        config: const AudioServiceConfig(
-          androidNotificationChannelId: 'com.mconnect.mconnect.audio',
-          androidNotificationChannelName: 'Mconnect playback',
+        config: AudioServiceConfig(
+          androidNotificationChannelId: _playbackNotificationChannelId,
+          androidNotificationChannelName: channelName,
           // 状态栏图标必须是纯白单色 drawable：带背景的自适应 launcher 图标会被
           // Android 5.0+ 的系统整块涂灰（通知栏里的灰方块就是这个原因）。
           // 【需真机验收】

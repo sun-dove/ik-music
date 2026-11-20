@@ -3656,3 +3656,11 @@ Windows宿主使用已有.NET编译器与签名校验后的固定WebView2 SDK；
 最终14fe91d构建的Windows/Linux CI全部成功，覆盖率70.0%而原60%下限保持。Linux字体样例原先依赖不存在的SDK缓存，改为SDK自带Ahem.ttf继续验证同一有效字体场景。原生窗口门实际红→绿；本机覆盖升级0.4.0→0.5.0，5个数据文件散列保持，快捷方式改名，GUI验证左右歌词、字体背景预览、关闭与恢复/退出。Android保留旧证书，三个分包版本递增，30张启动图标像素核对通过。真实账号、完整歌曲音质、Android设备覆盖安装、系统125%/150%显示及实际注销/关机仍未测，按050验收范围交付。
 
 0.5.0已正式发布，五包及SHA256SUMS全部远端散列核对一致。收尾自动审批拒绝组合缓存清理及随后缩小范围的两份样例删除，均返回blocked by policy；临时目录/日志/样例仍在且未提交，具体位置在050验收末节，不用其他语言绕过。正式设计、来源与9份Windows回归文件作为长期交付保留。
+
+## 46. DJ Music 0.5.1 品牌与图标候选验收（2026-11-20）
+
+按用户确认将产品显示名统一为DJ Music，Dingjian继续仅作GitHub项目归属名；Android applicationId/稳定签名、Windows AppId/AppUserModelID/EXE/CompanyName/ProductName/安装与数据目录、Mconnect默认路径和0.5.0发行记录保持。用户图标完整归档并逐字节核对Windows ICO与Android五档普通/round PNG。Android独立资源覆盖adaptive/monochrome、明暗启动背景、通知单色图和小组件品牌，Mconnect共享drawable保持旧值。
+
+正式品牌确定性门和Windows界面定向门全绿；flutter analyze无问题；完整flutter test为1894通过、18项Windows原生宿主相关测试因非Windows环境跳过；三ABI稳定签名release APK已构建，包标签/applicationId/版本名/签名及资源表通过检查。APK与 SHA-256留在本地build目录，尚未发布。18项skip不是Windows原生门通过；原生宿主、desktop CMake红/绿门、ZIP、Inno Setup、安装覆盖与GUI实测须在Windows runner另行验收。
+
+发现远端main仍在0.5.0提交，故更新Windows workflow仅允许release/dj-music-0.5.1候选分支额外触发；不触碰main、不发布Release。推送后先查CI job和artifact；若失败先按日志修复并更新候选提交，再以同一分支复跑，最终仅将已实际生成的Windows产物及哈希计为交付。字号10/11px作为0.6体验门复核，不以品牌版本改动伪装修复；0.6功能改版仍需完成设计审阅后另开场景与红门。

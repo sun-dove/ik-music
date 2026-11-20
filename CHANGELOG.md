@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-20 - DJ Music 品牌与图标更新（0.5.1 开发中）
+
+GitHub 项目归属使用顶尖（Dingjian），Windows、Android 和应用内品牌统一使用 DJ Music。Windows「我的」页与宽屏导航接入新图标；Android 同步桌面启动图标、round/adaptive/monochrome 图层及 API 31+ 明暗启动画面，并保留旧小组件与通知 channel ID。安装器只清理确认属于本应用的旧名称快捷方式，保留当前 DJ Music 快捷方式。README 与 Windows 使用说明开始同步新品牌。
+
+版本与产物：候选版本为 0.5.1/build 9，仍在验收，尚未发布。Android applicationId、稳定签名、Windows AppId/AppUserModelID、EXE 与数据目录保持，原 Mconnect 默认入口和 0.5.0 GitHub Release 历史下载不变。Flutter 静态分析通过；全量测试 1894 项通过、18 项因 Windows 原生环境跳过；Android 三 ABI release 签名构建通过。Windows x64 runner、安装器、覆盖升级和设备实测仍待专用 Windows runner 验收。
+
 ## 2026-11-17 - 乐音音乐独立入口 0.5.0
 
 名称改为“乐音音乐”（乐读yuè），图标换成用户提供的黑白音符飘带。Windows设置合并为播放/下载两项音质，增加背景预览保存、实际本机字体与TTF/OTF导入，三平台使用官方图标。宽屏播放页直接显示左右布局和完整歌词，手动浏览后可恢复跟随。
