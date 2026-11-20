@@ -18,6 +18,21 @@ class MyPlaylistsRepository {
 
   const MyPlaylistsRepository({this.storageDirectory});
 
+  /// 备份合并的恢复点保留原始 id、顺序与时间戳。
+  Future<String?> captureStorageSnapshot() async {
+    final file = await _file();
+    return await file.exists() ? file.readAsString() : null;
+  }
+
+  Future<void> restoreStorageSnapshot(String? snapshot) async {
+    final file = await _file();
+    if (snapshot == null) {
+      if (await file.exists()) await file.delete();
+    } else {
+      await file.writeAsString(snapshot, flush: true);
+    }
+  }
+
   Future<List<Playlist>> getPlaylists() async {
     final state = await _readState();
     final playlists = state.playlists.values.toList()

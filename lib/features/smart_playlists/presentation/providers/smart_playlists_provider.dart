@@ -160,6 +160,12 @@ class SmartPlaylistsNotifier extends StateNotifier<SmartPlaylistsState> {
     }
   }
 
+  /// 独立入口使用：规则保存失败时不继续删除持久化生成结果。
+  Future<void> deleteRuleSafely(String id) async {
+    if (state.isSaving) return;
+    await _persist(state.rules.where((rule) => rule.id != id).toList());
+  }
+
   /// Persists a generated result so it can be reopened/played after a restart.
   ///
   /// Returns the saved record, or null when the snapshot repository is not

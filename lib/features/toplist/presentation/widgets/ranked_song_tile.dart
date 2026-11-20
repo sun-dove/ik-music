@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../../../video_app/ui/video_theme.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/share/song_actions.dart';
@@ -140,7 +143,7 @@ class RankMovementBadge extends StatelessWidget {
       return Text(
         value,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: VideoTheme.readableSize(context, 11),
           color: Theme.of(context).colorScheme.outline,
         ),
       );
@@ -165,7 +168,13 @@ class RankMovementBadge extends StatelessWidget {
           color: color,
           size: 20,
         ),
-        Text('${change.abs()}', style: TextStyle(fontSize: 11, color: color)),
+        Text(
+          '${change.abs()}',
+          style: TextStyle(
+            fontSize: VideoTheme.readableSize(context, 11),
+            color: color,
+          ),
+        ),
       ],
     );
   }
@@ -193,7 +202,7 @@ class _Badge extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 10,
+          fontSize: VideoTheme.readableSize(context, 10),
           color: color,
           fontWeight: FontWeight.w600,
         ),

@@ -70,6 +70,7 @@ class RecommendationsNotifier extends StateNotifier<RecommendationsState> {
   final List<PlatformType> Function() _supportedTypes;
   final MusicPlatform Function(PlatformType) _platformResolver;
   final Duration _operationTimeout;
+  int _latestGeneration = 0;
 
   RecommendationsNotifier({
     List<PlatformType>? supportedTypes,
@@ -80,8 +81,44 @@ class RecommendationsNotifier extends StateNotifier<RecommendationsState> {
        _platformResolver = platformResolver ?? PlatformRegistry.get,
        super(const RecommendationsState());
 
-  Future<void> loadRecommendations() async {
+  Future<void> loadRecommendations() => _loadRecommendations();
+
+  /// 独立改版的账号切换入口：先清旧内容，只接纳当前请求。
+  Future<void> loadLatestRecommendations() =>
+      _loadRecommendations(generation: ++_latestGeneration);
+
+  /// 新入口的局部重试保留其它来源；整次刷新或账号变化会作废此响应。
+  Future<void> retryLatestPlatform(PlatformType platform) async {
+    if (state.isLoading) return;
+    final generation = ++_latestGeneration;
+    state = state.copyWith(isLoading: true, error: () => null);
+    final result = await _loadPlatformRecommendations(platform);
+    if (!mounted || generation != _latestGeneration) return;
+    _acceptLatestResult(result);
+    state = state.copyWith(isLoading: false);
+  }
+
+  void _acceptLatestResult(_RecommendationLoadResult item) {
+    final songs = {...state.songsByPlatform};
+    final errors = {...state.errorsByPlatform}..remove(item.platform);
+    final sources = {...state.sourceByPlatform}..remove(item.platform);
+    if (item.songs.isNotEmpty || item.loggedIn) {
+      songs[item.platform] = item.songs;
+    } else {
+      songs.remove(item.platform);
+    }
+    if (item.error != null) errors[item.platform] = item.error!;
+    if (item.source != null) sources[item.platform] = item.source!;
     state = state.copyWith(
+      songsByPlatform: songs,
+      errorsByPlatform: errors,
+      sourceByPlatform: sources,
+    );
+  }
+
+  Future<void> _loadRecommendations({int? generation}) async {
+    state = state.copyWith(
+      songsByPlatform: generation == null ? null : const {},
       isLoading: true,
       error: () => null,
       errorsByPlatform: const {},
@@ -104,9 +141,17 @@ class RecommendationsNotifier extends StateNotifier<RecommendationsState> {
     }
 
     final loaded = await Future.wait(
-      supported.map(_loadPlatformRecommendations),
+      supported.map((platform) async {
+        final result = await _loadPlatformRecommendations(platform);
+        if (generation != null && mounted && generation == _latestGeneration) {
+          _acceptLatestResult(result);
+        }
+        return result;
+      }),
     );
-    if (!mounted) return;
+    if (!mounted || (generation != null && generation != _latestGeneration)) {
+      return;
+    }
 
     final results = <PlatformType, List<Song>>{};
     final errors = <PlatformType, String>{};

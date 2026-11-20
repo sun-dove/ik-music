@@ -13,7 +13,8 @@ import '../providers/smart_playlists_provider.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 
 class SmartPlaylistsPage extends ConsumerWidget {
-  const SmartPlaylistsPage({super.key});
+  const SmartPlaylistsPage({super.key, this.safeDelete = false});
+  final bool safeDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -36,15 +37,16 @@ class SmartPlaylistsPage extends ConsumerWidget {
           ),
         ],
       ),
-      body: _SmartPlaylistsBody(state: state),
+      body: _SmartPlaylistsBody(state: state, safeDelete: safeDelete),
     );
   }
 }
 
 class _SmartPlaylistsBody extends ConsumerWidget {
   final SmartPlaylistsState state;
+  final bool safeDelete;
 
-  const _SmartPlaylistsBody({required this.state});
+  const _SmartPlaylistsBody({required this.state, required this.safeDelete});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -149,8 +151,11 @@ class _SmartPlaylistsBody extends ConsumerWidget {
                 }
                 break;
               case 'delete':
+                final notifier = ref.read(smartPlaylistsProvider.notifier);
                 unawaited(
-                  ref.read(smartPlaylistsProvider.notifier).deleteRule(rule.id),
+                  safeDelete
+                      ? notifier.deleteRuleSafely(rule.id)
+                      : notifier.deleteRule(rule.id),
                 );
                 break;
             }

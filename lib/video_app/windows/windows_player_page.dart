@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
+import '../../l10n/ik_strings.dart';
 import '../../l10n/video_strings.dart';
 import '../../l10n/windows_music_strings.dart';
 import '../../lyrics/models/lyrics_line.dart';
@@ -14,6 +16,17 @@ import '../ui/player_page.dart';
 import '../ui/video_shell.dart';
 import '../ui/video_theme.dart';
 import 'windows_platform_icon.dart';
+
+class WindowsSourceDetails {
+  const WindowsSourceDetails({
+    this.sourceName,
+    this.format,
+    this.bitrate,
+    this.note,
+  });
+  final String? sourceName, format, note;
+  final int? bitrate;
+}
 
 class WindowsPlayerPage extends StatefulWidget {
   const WindowsPlayerPage({
@@ -40,6 +53,7 @@ class WindowsPlayerPage extends StatefulWidget {
     this.modeLabel = VideoStrings.sequential,
     this.onQuality,
     this.sourceStatus,
+    this.sourceDetails,
   });
   final Song song;
   final Duration position, duration;
@@ -51,6 +65,7 @@ class WindowsPlayerPage extends StatefulWidget {
   final ValueChanged<Duration> onSeek;
   final VoidCallback? onQuality, onLyricsRetry;
   final Widget? sourceStatus;
+  final WindowsSourceDetails? sourceDetails;
   @override
   State<WindowsPlayerPage> createState() => _WindowsPlayerPageState();
 }
@@ -164,7 +179,18 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
+  Widget build(BuildContext context) {
+    if (Theme.of(context).extension<IkThemeColors>() == null) {
+      return _page(context);
+    }
+    final cover = widget.song.coverUrl;
+    return IkCoverTheme(
+      cover: cover == null || cover.isEmpty ? null : NetworkImage(cover),
+      child: Builder(builder: _page),
+    );
+  }
+
+  Widget _page(BuildContext context) => Scaffold(
     backgroundColor: VideoTheme.canvas(context),
     body: SafeArea(
       child: Padding(
@@ -179,7 +205,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                 label: const Text(WindowsMusicStrings.back),
               ),
             ),
-            if (widget.sourceStatus != null)
+            if (widget.sourceStatus != null &&
+                Theme.of(context).extension<IkThemeColors>() == null)
               ConstrainedBox(
                 constraints: BoxConstraints(
                   maxHeight: math.min(
@@ -248,26 +275,32 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                   ),
                 ),
               ),
-            TextButton(
-              onPressed: widget.song.platform == PlatformType.local
-                  ? null
-                  : widget.onQuality,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  WindowsPlatformIcon(platform: widget.song.platform, size: 18),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      '${videoPlatformLabel(widget.song.platform)} · ${widget.qualityLabel ?? VideoStrings.qualityUnknown}${widget.isPreview ? VideoStrings.previewSuffix : ''}',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 12),
+            if (Theme.of(context).extension<IkThemeColors>() != null)
+              _sourceCard(context)
+            else
+              TextButton(
+                onPressed: widget.song.platform == PlatformType.local
+                    ? null
+                    : widget.onQuality,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    WindowsPlatformIcon(
+                      platform: widget.song.platform,
+                      size: 18,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        '${videoPlatformLabel(widget.song.platform)} · ${widget.qualityLabel ?? VideoStrings.qualityUnknown}${widget.isPreview ? VideoStrings.previewSuffix : ''}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
             SliderTheme(
               data: SliderTheme.of(context).copyWith(trackHeight: 3),
               child: Slider(
@@ -287,11 +320,21 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
               children: [
                 Text(
                   videoTime(widget.position),
-                  style: const TextStyle(fontSize: 11),
+                  style: TextStyle(
+                    fontSize:
+                        Theme.of(context).extension<IkThemeColors>() == null
+                        ? 11
+                        : 12,
+                  ),
                 ),
                 Text(
                   videoTime(widget.duration),
-                  style: const TextStyle(fontSize: 11),
+                  style: TextStyle(
+                    fontSize:
+                        Theme.of(context).extension<IkThemeColors>() == null
+                        ? 11
+                        : 12,
+                  ),
                 ),
               ],
             ),
@@ -351,6 +394,108 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
         ),
       ),
     ),
+  );
+
+  Widget _sourceCard(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Material(
+      color: VideoTheme.surface(context),
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        key: const ValueKey('ik-source-card'),
+        onTap: () => _showSourceDetails(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              WindowsPlatformIcon(platform: widget.song.platform, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      IkStrings.sourceDetails,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${widget.sourceDetails == null ? videoPlatformLabel(widget.song.platform) : widget.sourceDetails!.sourceName ?? IkStrings.sourceUnknown} · ${widget.qualityLabel ?? VideoStrings.qualityUnknown}${widget.isPreview ? VideoStrings.previewSuffix : ''}',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: VideoTheme.secondaryText(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, size: 20),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Future<void> _showSourceDetails(BuildContext context) => showDialog<void>(
+    context: context,
+    builder: (dialog) {
+      final details = widget.sourceDetails;
+      return AlertDialog(
+        title: const Text(IkStrings.sourceDetails),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${videoPlatformLabel(widget.song.platform)} · ${widget.qualityLabel ?? VideoStrings.qualityUnknown}',
+              ),
+              if (details != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  '${IkStrings.sourceName}：${details.sourceName ?? IkStrings.sourceUnknown}',
+                ),
+                Text(
+                  '${IkStrings.sourceFormat}：${details.format?.toUpperCase() ?? IkStrings.sourceUnknown}',
+                ),
+                Text(
+                  '${IkStrings.sourceBitrate}：${details.bitrate != null && details.bitrate! > 0 ? '${(details.bitrate! / 1000).round()} kbps' : IkStrings.sourceUnknown}',
+                ),
+                if (details.note case final note?) ...[
+                  const SizedBox(height: 12),
+                  Text(note),
+                ],
+              ],
+              if (widget.sourceStatus != null) ...[
+                const SizedBox(height: 16),
+                widget.sourceStatus!,
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          if (widget.song.platform != PlatformType.local &&
+              widget.onQuality != null)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialog);
+                widget.onQuality!();
+              },
+              child: const Text(IkStrings.changeQuality),
+            ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog),
+            child: const Text(IkStrings.close),
+          ),
+        ],
+      );
+    },
   );
 
   Widget _cover(BuildContext context, double size) => SingleChildScrollView(
@@ -489,7 +634,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                           ? FontWeight.w600
                                           : FontWeight.w400,
                                       color: i == _active
-                                          ? VideoTheme.primary
+                                          ? VideoTheme.accent(context)
                                           : Theme.of(context)
                                                 .colorScheme
                                                 .onSurface
@@ -532,6 +677,77 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// 从已缓存封面取色，仅用于新版播放器；失败时保留基础主题。
+class IkCoverTheme extends StatefulWidget {
+  const IkCoverTheme({super.key, required this.cover, required this.child});
+  final ImageProvider? cover;
+  final Widget child;
+
+  @override
+  State<IkCoverTheme> createState() => _IkCoverThemeState();
+}
+
+class _IkCoverThemeState extends State<IkCoverTheme> {
+  ColorScheme? _scheme;
+  Brightness? _brightness;
+  int _generation = 0;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final brightness = Theme.of(context).brightness;
+    if (_brightness != brightness) {
+      _brightness = brightness;
+      unawaited(_load());
+    }
+  }
+
+  @override
+  void didUpdateWidget(IkCoverTheme oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.cover != widget.cover) unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    final generation = ++_generation;
+    _scheme = null;
+    final cover = widget.cover;
+    if (cover == null) return;
+    ColorScheme? scheme;
+    try {
+      scheme = await ColorScheme.fromImageProvider(
+        provider: cover,
+        brightness: _brightness!,
+      );
+    } catch (_) {
+      // 封面不可读不阻断播放，也不保留上一首的颜色。
+    }
+    if (!mounted || generation != _generation) return;
+    setState(() => _scheme = scheme);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final base = Theme.of(context);
+    final scheme = _scheme;
+    final palette = base.extension<IkThemeColors>();
+    if (scheme == null || palette == null) return widget.child;
+    return Theme(
+      data: base.copyWith(
+        colorScheme: scheme,
+        extensions: [
+          ...base.extensions.values.where((value) => value is! IkThemeColors),
+          palette.copyWith(
+            background: scheme.surface,
+            surface: scheme.surfaceContainerLow,
+          ),
+        ],
+      ),
+      child: widget.child,
     );
   }
 }

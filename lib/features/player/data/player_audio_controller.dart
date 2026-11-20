@@ -53,8 +53,20 @@ abstract class SkipSilenceCapable {
   Future<void> setSkipSilence(bool enabled);
 }
 
+/// 新界面可选择等待实际后端结果；旧的音效应用契约保持不变。
+abstract class VerifiedEqualizerCapable {
+  Future<void> applyEqualizerVerified({
+    required bool enabled,
+    required List<double> bandGains,
+  });
+}
+
 class JustAudioController
-    implements PlayerAudioController, PlaybackSpeedCapable, SkipSilenceCapable {
+    implements
+        PlayerAudioController,
+        PlaybackSpeedCapable,
+        SkipSilenceCapable,
+        VerifiedEqualizerCapable {
   static const double _maxAndroidLoudnessCompensationDb = 6.0;
 
   final AudioPlayer _player;
@@ -191,6 +203,38 @@ class JustAudioController
   @override
   Future<void> setSkipSilence(bool enabled) =>
       _player.setSkipSilenceEnabled(enabled);
+
+  @override
+  Future<void> applyEqualizerVerified({
+    required bool enabled,
+    required List<double> bandGains,
+  }) async {
+    final equalizer = _equalizer;
+    if (equalizer == null) throw UnsupportedError('equalizer');
+    final generation = ++_equalizerApplyGeneration;
+    if (!enabled || _isFlatEqualizerCurve(bandGains)) {
+      await _disableAndroidLoudness(
+        setLoudnessEnabled: _loudnessEnhancer?.setEnabled,
+        setLoudnessGain: _loudnessEnhancer?.setTargetGain,
+        shouldContinue: () => generation == _equalizerApplyGeneration,
+      );
+      if (generation == _equalizerApplyGeneration) {
+        await equalizer.setEnabled(false);
+      }
+      return;
+    }
+    final parameters = _equalizerParameters ?? await equalizer.parameters;
+    _equalizerParameters = parameters;
+    if (generation != _equalizerApplyGeneration) return;
+    await _applyAndroidEqualizerParameters(
+      equalizer: equalizer,
+      loudnessEnhancer: _loudnessEnhancer,
+      parameters: parameters,
+      enabled: enabled,
+      bandGains: bandGains,
+      generation: generation,
+    );
+  }
 
   @override
   Future<void> applyEqualizer({

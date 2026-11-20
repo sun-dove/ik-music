@@ -31,8 +31,15 @@ abstract class MediaKitWindowsBackend {
   Future<void> dispose();
 }
 
+abstract class VerifiedAudioFilterBackend {
+  Future<void> setAudioFilterVerified(String filter);
+}
+
 class MediaKitWindowsAudioController
-    implements PlayerAudioController, PlaybackSpeedCapable {
+    implements
+        PlayerAudioController,
+        PlaybackSpeedCapable,
+        VerifiedEqualizerCapable {
   static const _frequencies = [60, 230, 910, 3600, 14000];
 
   final MediaKitWindowsBackend Function() _backendFactory;
@@ -139,6 +146,20 @@ class MediaKitWindowsAudioController
   }) {
     final backend = _ensureBackend();
     return backend.setAudioFilter(
+      _equalizerFilter(enabled: enabled, bandGains: bandGains),
+    );
+  }
+
+  @override
+  Future<void> applyEqualizerVerified({
+    required bool enabled,
+    required List<double> bandGains,
+  }) {
+    final backend = _ensureBackend();
+    if (backend is! VerifiedAudioFilterBackend) {
+      throw UnsupportedError('equalizer');
+    }
+    return (backend as VerifiedAudioFilterBackend).setAudioFilterVerified(
       _equalizerFilter(enabled: enabled, bandGains: bandGains),
     );
   }
@@ -305,7 +326,8 @@ class MediaKitWindowsAudioController
   }
 }
 
-class RealMediaKitWindowsBackend implements MediaKitWindowsBackend {
+class RealMediaKitWindowsBackend
+    implements MediaKitWindowsBackend, VerifiedAudioFilterBackend {
   final media_kit.Player _player;
 
   RealMediaKitWindowsBackend._(this._player);
@@ -386,6 +408,15 @@ class RealMediaKitWindowsBackend implements MediaKitWindowsBackend {
         'player_platform': platform.runtimeType.toString(),
       },
     );
+  }
+
+  @override
+  Future<void> setAudioFilterVerified(String filter) async {
+    final platform = _player.platform;
+    if (platform is! media_kit.NativePlayer) {
+      throw UnsupportedError('equalizer');
+    }
+    await platform.setProperty('af', filter);
   }
 
   @override

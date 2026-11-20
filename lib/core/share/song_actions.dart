@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/download/presentation/providers/download_provider.dart';
+import '../../features/download/presentation/providers/download_quality_provider.dart';
 import '../../features/library/presentation/providers/likes_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../features/player/presentation/widgets/playlist_picker_sheet.dart';
@@ -83,6 +84,11 @@ SongActionDeps liveSongActionDeps(WidgetRef ref, {BuildContext? context}) {
     },
     download: (song) async {
       final notifier = ref.read(downloadProvider.notifier);
+      final selected = ref.read(downloadQualityProvider)?.call(song.platform);
+      if (selected != null) {
+        await notifier.startDownload(song, selected);
+        return selected;
+      }
       // Pick the best quality the account is entitled to instead of silently
       // downloading 128k: the menu has no room for the quality picker the
       // download button shows.

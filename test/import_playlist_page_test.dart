@@ -9,6 +9,7 @@ import 'package:mconnect/core/transfer/transfer_runner.dart';
 import 'package:mconnect/features/library/data/my_playlists_repository.dart';
 import 'package:mconnect/features/library/presentation/pages/import_playlist_page.dart';
 import 'package:mconnect/features/library/presentation/providers/my_playlists_provider.dart';
+import 'package:mconnect/l10n/ik_strings.dart';
 import 'package:mconnect/models/artist.dart';
 import 'package:mconnect/models/platform_type.dart';
 import 'package:mconnect/models/playlist.dart';
@@ -72,18 +73,27 @@ void main() {
     expect(report.missing.single.reason, '未找到可播放版本');
   });
 
-  Future<void> pumpPage(WidgetTester tester) async {
+  Future<void> pumpPage(WidgetTester tester, {bool ik = false}) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           myPlaylistsProvider.overrideWith(
-            (ref) => MyPlaylistsNotifier(repository: repository),
+            (ref) => MyPlaylistsNotifier(
+              repository: repository,
+              invalidShareMessage: ik ? IkStrings.invalidPlaylistLink : null,
+              importFailureLabel: ik ? IkStrings.importPlaylistFailed : null,
+            ),
           ),
           playlistSourceMatcherProvider.overrideWithValue(
             _ThreeBucketMatcher(),
           ),
         ],
-        child: const MaterialApp(home: ImportPlaylistPage()),
+        child: MaterialApp(
+          home: ImportPlaylistPage(
+            formatHint: ik ? IkStrings.importPlaylistHint : null,
+            localImportFailure: ik ? IkStrings.importPlaylistFailed : null,
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -102,6 +112,46 @@ void main() {
     Future<void> Function(WidgetTester) body,
   ) {
     testWidgets(description, body, timeout: _timeout);
+  }
+
+  widgetTest('ik 导入格式提示与有效分享链接写入失败不再显示旧品牌', (tester) async {
+    repository.shareFailure = StateError('write failed');
+    await pumpPage(tester, ik: true);
+
+    expect(find.text(IkStrings.importPlaylistHint), findsOneWidget);
+    expect(find.textContaining('Mconnect'), findsNothing);
+    await parse(
+      tester,
+      MyPlaylistsRepository.encodeShareLink(name: '兼容歌单', songsJson: []),
+    );
+    expect(find.text(IkStrings.importPlaylistFailed), findsOneWidget);
+    expect(find.textContaining('Mconnect'), findsNothing);
+  });
+
+  for (final ik in [false, true]) {
+    test('${ik ? 'ik' : '旧入口'}歌单 provider 的无效链接和导入异常使用对应文案', () async {
+      final notifier = MyPlaylistsNotifier(
+        repository: repository,
+        invalidShareMessage: ik ? IkStrings.invalidPlaylistLink : null,
+        importFailureLabel: ik ? IkStrings.importPlaylistFailed : null,
+      );
+      addTearDown(notifier.dispose);
+      await notifier.load();
+      expect(await notifier.importShareLink('invalid'), isNull);
+      expect(
+        notifier.state.error,
+        ik ? IkStrings.invalidPlaylistLink : '无法识别 Mconnect 歌单链接',
+      );
+
+      repository.shareFailure = StateError('write failed');
+      expect(await notifier.importShareLink('invalid'), isNull);
+      expect(
+        notifier.state.error,
+        '${ik ? IkStrings.importPlaylistFailed : '导入 Mconnect 歌单失败'}：'
+        'Bad state: write failed',
+      );
+      expect(notifier.state.isSaving, isFalse);
+    });
   }
 
   widgetTest('粘贴文本后三桶同屏：可入 / 待确认 / 未匹配', (tester) async {
@@ -227,11 +277,18 @@ class _ThreeBucketMatcher implements PlaylistSourceMatcher {
 }
 
 class _FakeMyPlaylistsRepository extends MyPlaylistsRepository {
+  Object? shareFailure;
   final List<({String name, List<Song> songs})> imported =
       <({String name, List<Song> songs})>[];
 
   @override
   Future<List<Playlist>> getPlaylists() async => const <Playlist>[];
+
+  @override
+  Future<Playlist?> importShareLink(String link) async {
+    if (shareFailure != null) throw shareFailure!;
+    return super.importShareLink(link);
+  }
 
   @override
   Future<Playlist> importPlaylist({

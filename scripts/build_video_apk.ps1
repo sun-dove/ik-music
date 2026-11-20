@@ -8,6 +8,8 @@
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $PSScriptRoot 'sync_ik_version.ps1') -Check
+$version = Get-Content -Raw -LiteralPath (Join-Path $projectRoot 'ik-version.json') | ConvertFrom-Json
 $taskRoot = Split-Path -Parent (Split-Path -Parent $projectRoot)
 if (-not $ToolchainsRoot) { $ToolchainsRoot = Join-Path $taskRoot 'work/toolchains' }
 if (-not $FlutterSdk) { $FlutterSdk = Join-Path $toolchainsRoot 'flutter' }
@@ -58,8 +60,8 @@ try {
     $toolPackages = Join-Path $FlutterSdk 'packages/flutter_tools/.dart_tool/package_config.json'
     & $dart "--packages=$toolPackages" (Join-Path $PSScriptRoot 'generate_android_plugins.dart') $projectRoot
     if ($LASTEXITCODE -ne 0) { throw 'Android 插件注册器生成失败' }
-    & (Join-Path $FlutterSdk 'bin/flutter.bat') build apk --release --split-per-abi --no-pub --target lib/main_video.dart --build-name 0.5.1 --build-number 9
-    if ($LASTEXITCODE -ne 0) { throw "DJ Music APK 构建失败，退出码 $LASTEXITCODE" }
+    & (Join-Path $FlutterSdk 'bin/flutter.bat') build apk --release --split-per-abi --no-pub --target lib/main_video.dart --build-name $version.version --build-number $version.build
+    if ($LASTEXITCODE -ne 0) { throw "ik APK 构建失败，退出码 $LASTEXITCODE" }
 } finally {
     Pop-Location
 }

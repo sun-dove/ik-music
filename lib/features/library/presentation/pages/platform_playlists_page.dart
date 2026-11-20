@@ -20,7 +20,8 @@ import '../providers/my_playlists_provider.dart';
 import '../providers/platform_playlists_provider.dart';
 
 class PlatformPlaylistsPage extends ConsumerStatefulWidget {
-  const PlatformPlaylistsPage({super.key});
+  const PlatformPlaylistsPage({super.key, this.jsonFormatLabel});
+  final String? jsonFormatLabel;
 
   @override
   ConsumerState<PlatformPlaylistsPage> createState() =>
@@ -306,7 +307,7 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
                 ListTile(
                   dense: true,
                   leading: Icon(_exportIcon(option)),
-                  title: Text(option.label),
+                  title: Text(_exportLabel(option)),
                   onTap: () => Navigator.pop(sheetContext, option),
                 ),
               const SizedBox(height: 8),
@@ -326,6 +327,11 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
     PlaylistExportChoice.json => Icons.data_object,
     PlaylistExportChoice.qr => Icons.qr_code_2,
   };
+
+  String _exportLabel(PlaylistExportChoice choice) =>
+      choice == PlaylistExportChoice.json
+      ? widget.jsonFormatLabel ?? choice.label
+      : choice.label;
 
   Future<void> _runExport(
     Playlist playlist,
@@ -373,7 +379,7 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
       (service) => service.sharePlaylistExport(
         name: playlist.name,
         content: content,
-        formatLabel: choice.label,
+        formatLabel: _exportLabel(choice),
       ),
     );
   }

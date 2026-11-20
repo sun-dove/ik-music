@@ -19,7 +19,8 @@ import '../providers/history_provider.dart';
 import '../providers/likes_provider.dart';
 
 class HistoryPage extends ConsumerWidget {
-  const HistoryPage({super.key});
+  const HistoryPage({super.key, this.allEntries = false});
+  final bool allEntries;
 
   Color _platformColor(PlatformType platform) =>
       PlatformAccent.neutralColorOf(platform);
@@ -80,7 +81,9 @@ class HistoryPage extends ConsumerWidget {
           ? AsyncStateView.error(
               title: l.commonLoadFailed,
               message: state.error!,
-              onRetry: () => ref.read(historyProvider.notifier).loadHistory(),
+              onRetry: allEntries
+                  ? notifier.loadAllHistory
+                  : notifier.loadHistory,
             )
           : state.entries.isEmpty
           ? AsyncStateView.empty(

@@ -25,9 +25,14 @@ class SourcePlaybackView {
     this.details = '',
     this.busy = false,
     this.canContinue = false,
+    this.sourceName,
+    this.format,
+    this.bitrate,
   });
   final String message, details;
   final bool busy, canContinue;
+  final String? sourceName, format;
+  final int? bitrate;
 }
 
 final sourcePlaybackViewProvider = StateProvider<SourcePlaybackView>(
@@ -96,7 +101,11 @@ PlayerAudioController _defaultSourceAudio() {
 
 /// 只作用于新增入口：拦截重复坏地址和取消后迟到的播放，保留底层重建能力。
 class _SourceAudio
-    implements PlayerAudioController, PlaybackSpeedCapable, SkipSilenceCapable {
+    implements
+        PlayerAudioController,
+        PlaybackSpeedCapable,
+        SkipSilenceCapable,
+        VerifiedEqualizerCapable {
   _SourceAudio(this.delegate, this.router);
   final PlayerAudioController delegate;
   final PreparedSourceRouter router;
@@ -195,6 +204,21 @@ class _SourceAudio
     required bool enabled,
     required List<double> bandGains,
   }) => delegate.applyEqualizer(enabled: enabled, bandGains: bandGains);
+  @override
+  Future<void> applyEqualizerVerified({
+    required bool enabled,
+    required List<double> bandGains,
+  }) {
+    final controller = delegate;
+    if (controller is! VerifiedEqualizerCapable) {
+      throw UnsupportedError('equalizer');
+    }
+    return (controller as VerifiedEqualizerCapable).applyEqualizerVerified(
+      enabled: enabled,
+      bandGains: bandGains,
+    );
+  }
+
   @override
   double get playbackSpeed => delegate is PlaybackSpeedCapable
       ? (delegate as PlaybackSpeedCapable).playbackSpeed
@@ -413,6 +437,9 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
         details: session.summary,
         busy: _advancing,
         canContinue: session.budgetExpired && session.canContinue,
+        sourceName: _active?.candidate.name,
+        format: _active?.format,
+        bitrate: _active?.bitrate,
       ),
     );
   }

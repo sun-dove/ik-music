@@ -132,6 +132,14 @@ class WidgetBridge {
     _container ??= container;
   }
 
+  /// 可选独立入口卸载时只释放自己的容器，不影响其他已附着入口。
+  static void detach(ProviderContainer container) {
+    if (!identical(_container, container)) return;
+    _container = null;
+    navigationHandler = null;
+    transportHandler = null;
+  }
+
   /// 处理冷启动时带的那个 URI。必须等首帧之后再做，否则 `GoRouter` 还没挂到
   /// widget 树上，`go()` 会抛 `GoError: There is nothing to pop` 之类的错。
   static Future<void> deliverInitial() async {

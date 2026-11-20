@@ -6,10 +6,12 @@ import 'package:mconnect/features/library/data/my_playlists_repository.dart';
 import 'package:mconnect/features/library/presentation/pages/platform_playlists_page.dart';
 import 'package:mconnect/features/library/presentation/providers/my_playlists_provider.dart';
 import 'package:mconnect/features/library/presentation/providers/platform_playlists_provider.dart';
+import 'package:mconnect/l10n/ik_strings.dart';
 import 'package:mconnect/models/artist.dart';
 import 'package:mconnect/models/platform_type.dart';
 import 'package:mconnect/models/playlist.dart';
 import 'package:mconnect/models/song.dart';
+import 'package:mconnect/video_app/ik/ik_share.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'support/content_page_fakes.dart';
@@ -54,7 +56,11 @@ void main() {
     channel = _RecordingChannel();
   });
 
-  Future<void> pumpPage(WidgetTester tester, {String link = _link}) async {
+  Future<void> pumpPage(
+    WidgetTester tester, {
+    String link = _link,
+    bool ik = false,
+  }) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
@@ -63,9 +69,15 @@ void main() {
               repository: _FakeMyPlaylistsRepository(link: link),
             ),
           ),
-          shareServiceProvider.overrideWithValue(ShareService(channel)),
+          shareServiceProvider.overrideWithValue(
+            ik ? IkShareService(channel) : ShareService(channel),
+          ),
         ],
-        child: const MaterialApp(home: PlatformPlaylistsPage()),
+        child: MaterialApp(
+          home: PlatformPlaylistsPage(
+            jsonFormatLabel: ik ? IkStrings.playlistJson : null,
+          ),
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -133,6 +145,31 @@ void main() {
     expect(shared, contains('"format": "mconnect.playlist"'));
     expect(shared, contains('"platform": "netease"'));
     expect(shared, contains('"id": "1"'));
+  });
+
+  testWidgets('ik JSON 菜单与分享标题使用新文案，导出格式保持兼容', (tester) async {
+    await pumpPage(tester, ik: true);
+    await openExportSheet(tester);
+
+    expect(find.text('Mconnect JSON'), findsNothing);
+    await tester.tap(find.text(IkStrings.playlistJson));
+    await tester.pumpAndSettle();
+
+    expect(channel.texts.single, contains('"format": "mconnect.playlist"'));
+    expect(channel.texts.single, contains('"platform": "netease"'));
+    expect(channel.subjects.single, '我的最爱（${IkStrings.playlistJson}）');
+  });
+
+  testWidgets('ik 分享来源为 ik，继续使用兼容的歌单链接', (tester) async {
+    await pumpPage(tester, ik: true);
+    await openExportSheet(tester);
+
+    await tester.tap(find.text('分享链接'));
+    await tester.pumpAndSettle();
+
+    expect(channel.texts.single, contains('来自 ik'));
+    expect(channel.texts.single, isNot(contains('Mconnect')));
+    expect(channel.texts.single, contains(_link));
   });
 
   testWidgets('分享链接走 ShareService.sharePlaylist（不再是死方法）', (tester) async {

@@ -495,7 +495,15 @@ class SettingsAppearancePage extends ConsumerWidget {
 }
 
 class SettingsFloatingLyricsPage extends ConsumerWidget {
-  const SettingsFloatingLyricsPage({super.key});
+  const SettingsFloatingLyricsPage({
+    super.key,
+    this.onToggle,
+    this.status,
+    this.enableKey,
+  });
+  final Future<void> Function(bool)? onToggle;
+  final Widget? status;
+  final Key? enableKey;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -508,7 +516,9 @@ class SettingsFloatingLyricsPage extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 24),
         children: [
+          ?status,
           SwitchListTile(
+            key: enableKey,
             secondary: const Icon(Icons.picture_in_picture_alt_outlined),
             title: Text(context.l10n.floatingLyricsEnable),
             subtitle: Text(
@@ -517,18 +527,21 @@ class SettingsFloatingLyricsPage extends ConsumerWidget {
                   : context.l10n.floatingLyricsPermissionSubtitle,
             ),
             value: floatingLyrics.enabled,
-            onChanged: (value) async {
-              if (value) {
-                final allowed = await FloatingLyricsService.instance
-                    .canDrawOverlays();
-                if (!allowed) {
-                  await FloatingLyricsService.instance.openOverlaySettings();
-                }
-              } else {
-                await FloatingLyricsService.instance.hide();
-              }
-              await floatingLyricsNotifier.setEnabled(value);
-            },
+            onChanged:
+                onToggle ??
+                (value) async {
+                  if (value) {
+                    final allowed = await FloatingLyricsService.instance
+                        .canDrawOverlays();
+                    if (!allowed) {
+                      await FloatingLyricsService.instance
+                          .openOverlaySettings();
+                    }
+                  } else {
+                    await FloatingLyricsService.instance.hide();
+                  }
+                  await floatingLyricsNotifier.setEnabled(value);
+                },
           ),
           SwitchListTile(
             secondary: const Icon(Icons.lock_outline),

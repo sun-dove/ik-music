@@ -1,5 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import '../../../../video_app/ui/video_theme.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,6 +18,7 @@ import '../../../../models/audio_quality.dart';
 import '../../../../models/platform_type.dart';
 import '../../../../models/song.dart';
 import '../../../download/presentation/providers/download_provider.dart';
+import '../../../download/presentation/providers/download_quality_provider.dart';
 import '../../../download/presentation/widgets/download_button.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../providers/album_provider.dart';
@@ -131,7 +135,12 @@ class _AlbumPageState extends ConsumerState<AlbumPage> {
   Future<void> _cacheAll(List<Song> songs) async {
     final report = await ref
         .read(downloadProvider.notifier)
-        .cacheSongs(songs, quality: AudioLevel.low);
+        .cacheSongs(
+          songs,
+          quality:
+              ref.read(downloadQualityProvider)?.call(widget.platform) ??
+              AudioLevel.low,
+        );
     if (!mounted) return;
     final started = report.started + report.queued;
     // Goes through the shared helper (not a bare `ScaffoldMessenger` SnackBar):
@@ -241,7 +250,10 @@ class _AlbumHeader extends StatelessWidget {
                             ),
                             child: Text(
                               chip,
-                              style: TextStyle(fontSize: 11, color: accent),
+                              style: TextStyle(
+                                fontSize: VideoTheme.readableSize(context, 11),
+                                color: accent,
+                              ),
                             ),
                           ),
                       ],
@@ -336,7 +348,10 @@ class _AlbumTrackTile extends ConsumerWidget {
           if (song.duration > Duration.zero)
             Text(
               _formatDuration(song.duration),
-              style: TextStyle(fontSize: 11, color: cs.outline),
+              style: TextStyle(
+                fontSize: VideoTheme.readableSize(context, 11),
+                color: cs.outline,
+              ),
             ),
           const SizedBox(width: 4),
           DownloadButton(song: song, size: 22),

@@ -1,10 +1,12 @@
-# DJ Music
+# ik
 
-顶尖（Dingjian）是 GitHub 项目的归属名称；面向用户的产品在 Windows、Android 和应用内统一叫 **DJ Music**。DJ Music 支持 QQ 音乐、网易云与酷狗音乐接入，提供账号收藏、多音源管理和灵活的播放设置。
+面向用户的产品在 Windows、Android 和应用内统一叫 **ik**。ik 支持 QQ 音乐、网易云与酷狗音乐接入，提供账号收藏、多音源管理和灵活的播放设置。GitHub 仓库地址与既有安装身份保持，Dingjian 是此前使用的项目归属名称。
 
 当前公开发行版仍为 **0.5.0**。下一兼容版 **0.5.1 / build 9** 的候选安装包已构建，采用 DJ Music 名称和新版图标；它尚未发布。Windows CI、安装覆盖与品牌界面已验收，Android 三 ABI 已构建并核验签名，详见[0.5.1 候选验收记录](docs/交付文档/DJ-Music-051候选验收记录.md)。历史 0.5.0 的下载、验收和发行标签继续保留：[0.5.0 发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.5.0)、[0.5.0 验收记录](docs/交付文档/乐音音乐050验收记录.md)。更新版沿用原包名、签名、安装身份与数据目录。
 
-<img src="assets/branding/dj-music/source/windows/yangyin-256.png" width="100" alt="DJ Music 渐变音符图标">
+当前开发候选为 **ik 0.6.0 / build 10**，合并四导航、内容发现、聚合搜索/曲库、个人工具与 Windows 桌面配套。版本清单为 `ik-version.json`。各项实施和实际验收范围见 [ik 完整改版实施与验收](docs/ik-完整改版实施与验收.md)。
+
+<img src="assets/branding/dj-music/source/windows/yangyin-256.png" width="100" alt="ik 渐变音符图标">
 
 ## 功能
 

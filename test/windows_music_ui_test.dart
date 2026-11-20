@@ -117,11 +117,11 @@ Future<void> mount(
 }
 
 void main() {
-  testWidgets('Windows「我的」页显示 DJ Music 与新图标', (tester) async {
+  testWidgets('Windows「我的」页显示 ik 与新图标', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await mount(tester, settingsPage());
-    expect(find.text('DJ Music'), findsOneWidget);
+    expect(find.text('ik'), findsOneWidget);
     expect(
       find.image(
         const AssetImage(

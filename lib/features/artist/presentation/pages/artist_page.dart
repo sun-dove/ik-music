@@ -1,5 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import '../../../../video_app/ui/video_theme.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -356,7 +359,10 @@ class _AlbumCard extends StatelessWidget {
             ),
             Text(
               album.releaseDate == null ? '' : '${album.releaseDate!.year}',
-              style: TextStyle(fontSize: 11, color: cs.outline),
+              style: TextStyle(
+                fontSize: VideoTheme.readableSize(context, 11),
+                color: cs.outline,
+              ),
             ),
           ],
         ),

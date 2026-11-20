@@ -16,7 +16,12 @@ import '../providers/my_playlists_provider.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 
 class ImportPlaylistPage extends ConsumerStatefulWidget {
-  const ImportPlaylistPage({super.key});
+  const ImportPlaylistPage({
+    super.key,
+    this.formatHint,
+    this.localImportFailure,
+  });
+  final String? formatHint, localImportFailure;
 
   @override
   ConsumerState<ImportPlaylistPage> createState() => _ImportPlaylistPageState();
@@ -75,7 +80,7 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
       if (localPlaylist == null) {
         if (!mounted) return;
         setState(() {
-          _error = '导入 Mconnect 歌单失败';
+          _error = widget.localImportFailure ?? '导入 Mconnect 歌单失败';
           _isParsing = false;
         });
         return;
@@ -386,8 +391,9 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
             ),
             const SizedBox(height: 4),
             Text(
-              '支持网易云、QQ音乐、酷狗音乐的分享链接；'
-              '也可以粘贴 M3U8、Mconnect JSON 或「歌名 - 歌手」文本',
+              widget.formatHint ??
+                  '支持网易云、QQ音乐、酷狗音乐的分享链接；'
+                      '也可以粘贴 M3U8、Mconnect JSON 或「歌名 - 歌手」文本',
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                 fontSize: 13,

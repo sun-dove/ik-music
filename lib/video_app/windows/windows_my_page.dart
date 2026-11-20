@@ -27,6 +27,10 @@ class WindowsMyPage extends StatelessWidget {
     this.onClose,
     this.onExit,
     this.onRetryNative,
+    this.showBrandSubtitle = true,
+    this.showWindowSettings = true,
+    this.showDesktopAppearance = true,
+    this.extraEntries = const [],
   });
   final VideoMyPage settings;
   final String playQuality, downloadQuality, backgroundLabel, fontLabel;
@@ -35,6 +39,8 @@ class WindowsMyPage extends StatelessWidget {
   final bool nativeAvailable;
   final List<String> errors;
   final VoidCallback? onBackground, onFont, onClose, onExit, onRetryNative;
+  final bool showBrandSubtitle, showWindowSettings, showDesktopAppearance;
+  final List<Widget> extraEntries;
   @override
   Widget build(BuildContext context) => Center(
     child: ConstrainedBox(
@@ -50,21 +56,22 @@ class WindowsMyPage extends StatelessWidget {
                 height: 44,
               ),
               const SizedBox(width: 14),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       VideoStrings.my,
                       style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    Text(
-                      WindowsMusicStrings.brandPronunciation,
-                      style: TextStyle(fontSize: 12),
-                    ),
+                    if (showBrandSubtitle)
+                      const Text(
+                        WindowsMusicStrings.brandPronunciation,
+                        style: TextStyle(fontSize: 12),
+                      ),
                   ],
                 ),
               ),
@@ -178,18 +185,20 @@ class WindowsMyPage extends StatelessWidget {
               Icons.palette_outlined,
               settings.onTheme,
             ),
-            _tile(
-              WindowsMusicStrings.background,
-              backgroundLabel,
-              Icons.image_outlined,
-              onBackground,
-            ),
-            _tile(
-              WindowsMusicStrings.font,
-              fontLabel,
-              Icons.font_download_outlined,
-              onFont,
-            ),
+            if (showDesktopAppearance)
+              _tile(
+                WindowsMusicStrings.background,
+                backgroundLabel,
+                Icons.image_outlined,
+                onBackground,
+              ),
+            if (showDesktopAppearance)
+              _tile(
+                WindowsMusicStrings.font,
+                fontLabel,
+                Icons.font_download_outlined,
+                onFont,
+              ),
           ]),
           for (final error in errors)
             Padding(
@@ -199,32 +208,35 @@ class WindowsMyPage extends StatelessWidget {
                 style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-          _heading(WindowsMusicStrings.windowSettings),
-          _group(context, [
-            _tile(
-              WindowsMusicStrings.closeWindow,
-              closeAction == WindowsCloseAction.minimize
-                  ? '${WindowsMusicStrings.minimize}\n${WindowsMusicStrings.minimizeHint}'
-                  : '${WindowsMusicStrings.exit}\n${WindowsMusicStrings.exitHint}',
-              Icons.close_rounded,
-              nativeAvailable ? onClose : null,
-            ),
-            if (!nativeAvailable)
+          if (showWindowSettings) ...[
+            _heading(WindowsMusicStrings.windowSettings),
+            _group(context, [
               _tile(
-                WindowsMusicStrings.failure(DesktopFailure.nativeUnavailable),
-                VideoStrings.retry,
-                Icons.refresh_rounded,
-                onRetryNative,
+                WindowsMusicStrings.closeWindow,
+                closeAction == WindowsCloseAction.minimize
+                    ? '${WindowsMusicStrings.minimize}\n${WindowsMusicStrings.minimizeHint}'
+                    : '${WindowsMusicStrings.exit}\n${WindowsMusicStrings.exitHint}',
+                Icons.close_rounded,
+                nativeAvailable ? onClose : null,
               ),
-            _tile(
-              WindowsMusicStrings.exit,
-              '',
-              Icons.logout_rounded,
-              nativeAvailable ? onExit : null,
-            ),
-          ]),
+              if (!nativeAvailable)
+                _tile(
+                  WindowsMusicStrings.failure(DesktopFailure.nativeUnavailable),
+                  VideoStrings.retry,
+                  Icons.refresh_rounded,
+                  onRetryNative,
+                ),
+              _tile(
+                WindowsMusicStrings.exit,
+                '',
+                Icons.logout_rounded,
+                nativeAvailable ? onExit : null,
+              ),
+            ]),
+          ],
           _heading(VideoStrings.otherSettings),
           _group(context, [
+            ...extraEntries,
             _tile(
               VideoStrings.localMusic,
               VideoStrings.importScan,
@@ -280,7 +292,7 @@ class WindowsMyPage extends StatelessWidget {
           count,
           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
         ),
-        Text(title, style: const TextStyle(fontSize: 11)),
+        Text(title, style: TextStyle(fontSize: showBrandSubtitle ? 11 : 12)),
       ],
     ),
   );

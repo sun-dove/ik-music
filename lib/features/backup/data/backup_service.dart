@@ -21,14 +21,19 @@ class BackupService {
   BackupService({
     required this.store,
     this.appVersion = AppConstants.appVersion,
+    this.fileNamePrefix = filePrefix,
     DateTime Function()? clock,
   }) : _clock = clock ?? DateTime.now;
 
   final BackupStore store;
   final String appVersion;
+  final String fileNamePrefix;
   final DateTime Function() _clock;
 
   static const String filePrefix = 'mconnect-backup-';
+
+  /// 文件选择器返回 UTF-8 字节；非法编码必须在解析/写入前失败。
+  static String decodeFileBytes(List<int> bytes) => utf8.decode(bytes);
 
   Future<String> exportToJson() async {
     final data = await store.collect();
@@ -50,7 +55,7 @@ class BackupService {
       await target.create(recursive: true);
     }
     final stamp = _timestamp(_clock());
-    final file = File(p.join(target.path, '$filePrefix$stamp.json'));
+    final file = File(p.join(target.path, '$fileNamePrefix$stamp.json'));
     await file.writeAsString(json, flush: true);
     return file;
   }

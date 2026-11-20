@@ -89,7 +89,8 @@ class AudioServicePlayerController
         PlaybackNotificationController,
         PlayerAudioController,
         PlaybackSpeedCapable,
-        SkipSilenceCapable {
+        SkipSilenceCapable,
+        VerifiedEqualizerCapable {
   AudioServicePlayerController._({
     MconnectAudioHandler? handler,
     PlayerAudioController Function()? audioControllerFactory,
@@ -120,7 +121,7 @@ class AudioServicePlayerController
       _initialize(channelName: 'Mconnect playback', diagnostics: diagnostics);
 
   Future<void> initializeVideoMusic({DiagnosticsService? diagnostics}) =>
-      _initialize(channelName: 'DJ Music playback', diagnostics: diagnostics);
+      _initialize(channelName: 'ik playback', diagnostics: diagnostics);
 
   Future<void> _initialize({
     required String channelName,
@@ -233,6 +234,21 @@ class AudioServicePlayerController
     required List<double> bandGains,
   }) {
     return _ensureAudioController().applyEqualizer(
+      enabled: enabled,
+      bandGains: bandGains,
+    );
+  }
+
+  @override
+  Future<void> applyEqualizerVerified({
+    required bool enabled,
+    required List<double> bandGains,
+  }) {
+    final controller = _ensureAudioController();
+    if (controller is! VerifiedEqualizerCapable) {
+      throw UnsupportedError('equalizer');
+    }
+    return (controller as VerifiedEqualizerCapable).applyEqualizerVerified(
       enabled: enabled,
       bandGains: bandGains,
     );

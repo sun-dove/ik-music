@@ -52,6 +52,8 @@ class WindowsAppearance extends ChangeNotifier {
       preferences.value.font?.label ??
       preferences.value.font?.family ??
       WindowsMusicStrings.defaultFont;
+  String get currentFontLabel =>
+      fontError == null ? fontLabel : WindowsMusicStrings.defaultFont;
   static Color backgroundOverlay(Brightness brightness) =>
       (brightness == Brightness.dark
               ? const Color(0xFF17171C)

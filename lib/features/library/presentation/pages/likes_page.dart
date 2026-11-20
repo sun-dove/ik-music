@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../video_app/ui/video_theme.dart';
+
 import '../../../../core/share/song_actions.dart';
 import '../../../../core/theme/platform_accent.dart';
 
@@ -16,7 +18,8 @@ import '../../../player/presentation/providers/player_provider.dart';
 import '../providers/likes_provider.dart';
 
 class LikesPage extends ConsumerWidget {
-  const LikesPage({super.key});
+  const LikesPage({super.key, this.allEntries = false});
+  final bool allEntries;
 
   Color _platformColor(PlatformType platform) =>
       PlatformAccent.neutralColorOf(platform);
@@ -54,7 +57,7 @@ class LikesPage extends ConsumerWidget {
           ? AsyncStateView.error(
               title: l.commonLoadFailed,
               message: state.error!,
-              onRetry: () => ref.read(likesProvider.notifier).loadLikes(),
+              onRetry: allEntries ? notifier.loadAllLikes : notifier.loadLikes,
             )
           : state.songs.isEmpty
           ? AsyncStateView.empty(
@@ -173,7 +176,10 @@ class _SongTile extends StatelessWidget {
                 0,
                 song.platform.displayName.length.clamp(0, 2),
               ),
-              style: TextStyle(fontSize: 10, color: platformColor),
+              style: TextStyle(
+                fontSize: VideoTheme.readableSize(context, 10),
+                color: platformColor,
+              ),
             ),
           ),
           const SizedBox(width: 6),

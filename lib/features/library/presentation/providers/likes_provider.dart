@@ -47,15 +47,27 @@ class LikesNotifier extends StateNotifier<LikesState> {
   final LikesDao _likesDao;
   final SongsDao _songsDao;
   bool _isToggling = false;
+  int _loadGeneration = 0;
+  bool _allEntries = false;
 
   LikesNotifier(this._likesDao, this._songsDao) : super(const LikesState()) {
     loadLikes();
   }
 
-  Future<void> loadLikes() async {
+  Future<void> loadLikes() => _loadLikes(all: false);
+
+  /// 聚合曲库读取完整收藏，旧页面默认仍读取 500 条。
+  Future<void> loadAllLikes() => _loadLikes(all: true);
+
+  Future<void> _loadLikes({required bool all}) async {
+    _allEntries = all;
+    final generation = ++_loadGeneration;
     state = state.copyWith(isLoading: true);
     try {
-      final userLikes = await _likesDao.getAllLikes(limit: 500);
+      final userLikes = all
+          ? ((await _likesDao.getAllLikeRows())
+              ..sort((a, b) => b.addedAt.compareTo(a.addedAt)))
+          : await _likesDao.getAllLikes(limit: 500);
       // Batch query instead of N+1
       final keys = userLikes
           .map((l) => (id: l.songId, platform: l.platform))
@@ -69,8 +81,10 @@ class LikesNotifier extends StateNotifier<LikesState> {
           songs.add(_recordToSong(record));
         }
       }
+      if (!mounted || generation != _loadGeneration) return;
       state = state.copyWith(songs: songs, isLoading: false, error: () => null);
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       state = state.copyWith(isLoading: false, error: () => '加载喜欢列表失败');
     }
   }
@@ -99,7 +113,7 @@ class LikesNotifier extends StateNotifier<LikesState> {
     } catch (e) {
       debugPrint('toggleLike error: $e');
       // Re-sync on failure
-      await loadLikes();
+      await _loadLikes(all: _allEntries);
       return false;
     } finally {
       _isToggling = false;

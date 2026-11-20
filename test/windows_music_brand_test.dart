@@ -6,12 +6,12 @@ import 'package:mconnect/l10n/expanded_strings.dart';
 import 'package:mconnect/l10n/windows_music_strings.dart';
 
 void main() {
-  test('品牌：DJ Music在独立入口文案与Windows预览中统一', () {
-    expect(VideoStrings.appName, 'DJ Music');
-    expect(ExpandedStrings.appName, 'DJ Music');
-    expect(VideoStrings.appVersion, 'DJ Music · 0.5.1');
-    expect(WindowsMusicStrings.brandShortName, 'DJ Music');
-    expect(WindowsMusicStrings.fontSample, contains('DJ Music'));
+  test('品牌：ik在独立入口文案与Windows预览中统一', () {
+    expect(VideoStrings.appName, 'ik');
+    expect(ExpandedStrings.appName, 'ik');
+    expect(VideoStrings.appVersion, 'ik · 0.6.0');
+    expect(WindowsMusicStrings.brandShortName, 'ik');
+    expect(WindowsMusicStrings.fontSample, contains('ik'));
   });
 
   test('品牌：Windows主题字体与品牌标识接线正确，保留字号复核项', () {
@@ -34,8 +34,8 @@ void main() {
     expect(defaults, contains("fontFamily: 'sans-serif'"));
     final labels = File('lib/l10n/windows_music_strings.dart')
         .readAsStringSync();
-    expect(labels, contains('static const brandShortName = \'DJ Music\';'));
-    expect(labels, contains('DJ Music'));
+    expect(labels, contains('static const brandShortName = IkVersion.name;'));
+    expect(labels, contains('ik'));
     final search = File('lib/video_app/ui/video_shell.dart').readAsStringSync();
     final mine = File('lib/video_app/windows/windows_my_page.dart')
         .readAsStringSync();
@@ -49,17 +49,20 @@ void main() {
       contains('assets/branding/dj-music/source/windows/yangyin-256.png'),
     );
     expect(search, contains('fontSize: 10'));
-    expect(search, contains('fontSize: 11'));
-    expect(mine, contains('fontSize: 11'));
+    expect(search, matches(RegExp(r'\?\s*11\s*:\s*12')));
+    expect(mine, contains('fontSize: showBrandSubtitle ? 11 : 12'));
   });
 
   test('品牌：Android启动器、媒体通知与Windows窗口/安装器同步', () {
     final installer = File('installer/yueyin.iss').readAsStringSync();
-    expect(installer, contains('MyAppName "DJ Music"'));
-    expect(installer, contains('MyAppVersion "0.5.1"'));
+    expect(installer, contains('#include "ik_version.iss"'));
+    final version = File('installer/ik_version.iss').readAsStringSync();
+    expect(version, contains('MyAppName "ik"'));
+    expect(version, contains('MyAppVersion "0.6.0"'));
     expect(installer, contains('MZ Music.lnk'));
-    expect(installer, isNot(contains("'{autodesktop}\\DJ Music.lnk'")));
-    expect(installer, isNot(contains("'{userprograms}\\DJ Music")));
+    expect(installer, contains('DJ Music.lnk'));
+    expect(installer, isNot(contains("'{autodesktop}\\ik.lnk'")));
+    expect(installer, isNot(contains("'{userprograms}\\ik")));
     expect(installer, contains('乐音音乐.lnk'));
     expect(installer, contains('悦音音乐.lnk'));
     expect(installer, contains('54A778C9-2261-4E1F-BA89-EE68844DA7AA'));
@@ -72,25 +75,32 @@ void main() {
       ),
     );
     final main = File('windows/runner/main.cpp').readAsStringSync();
-    expect(main, contains('L"DJ Music"'));
+    expect(main, contains('L"ik"'));
     expect(main, contains('sun-dove.YueyinMusic'));
     final closeDialog = File('windows/runner/win32_window.cpp')
         .readAsStringSync();
-    expect(closeDialog, contains('DJ Music'));
+    expect(closeDialog, contains('ik'));
     final floating = File('windows/runner/floating_lyrics_window.cpp')
         .readAsStringSync();
-    expect(floating, contains('L"DJ Music Floating Lyrics"'));
+    expect(floating, contains('L"ik Floating Lyrics"'));
     final android = File('android/app/build.gradle.kts').readAsStringSync();
     expect(android, contains('"app.videomusic.player"'));
-    expect(android, contains('if (videoAppBuild) "DJ Music" else "Mconnect"'));
     expect(
       android,
-      contains('versionCode = if (videoAppBuild) 9 else flutter.versionCode'),
+      contains(
+        'if (videoAppBuild) videoVersion["name"] as String else "Mconnect"',
+      ),
     );
     expect(
       android,
       contains(
-        'versionName = if (videoAppBuild) "0.5.1" else flutter.versionName',
+        'versionCode = if (videoAppBuild) (videoVersion["build"] as Number).toInt() else flutter.versionCode',
+      ),
+    );
+    expect(
+      android,
+      contains(
+        'versionName = if (videoAppBuild) videoVersion["version"] as String else flutter.versionName',
       ),
     );
     expect(android, contains('res.srcDir("src/yueyin/res")'));
@@ -104,11 +114,10 @@ void main() {
           .readAsStringSync(),
       contains('M12,3v10.55'),
     );
-    final widgetStrings = File(
-      'android/app/src/yueyin/res/values/strings.xml',
-    ).readAsStringSync();
-    expect(widgetStrings, contains('DJ Music playback controls'));
-    expect(widgetStrings, contains('mconnect_widget_idle">DJ Music<'));
+    final widgetStrings = File('android/app/src/yueyin/res/values/strings.xml')
+        .readAsStringSync();
+    expect(widgetStrings, contains('ik playback controls'));
+    expect(widgetStrings, contains('mconnect_widget_idle">ik<'));
     final notification = File(
       'lib/features/player/data/playback_notification_service.dart',
     ).readAsStringSync();
@@ -122,7 +131,7 @@ void main() {
         "_playbackNotificationChannelId = 'com.mconnect.mconnect.audio'",
       ),
     );
-    expect(notification, contains("channelName: 'DJ Music playback'"));
+    expect(notification, contains("channelName: 'ik playback'"));
     expect(notification, contains("channelName: 'Mconnect playback'"));
     expect(notification, contains('initializeVideoMusic'));
     final initializer = File(
@@ -132,7 +141,7 @@ void main() {
     final mainActivity = File(
       'android/app/src/main/kotlin/com/mconnect/mconnect/MainActivity.kt',
     ).readAsStringSync();
-    expect(mainActivity, contains('DJ Music playback'));
+    expect(mainActivity, contains('ik playback'));
     expect(mainActivity, contains('NotificationManager'));
     expect(mainActivity, contains('com.mconnect.mconnect.audio'));
     expect(
@@ -144,12 +153,21 @@ void main() {
   test('品牌：Windows安装身份与Android默认Mconnect入口保持', () {
     final windowsWorkflow = File('scripts/build_video_windows.ps1')
         .readAsStringSync();
-    expect(windowsWorkflow, contains('build-name 0.5.1 --build-number 9'));
-    expect(windowsWorkflow, contains('DJ-Music-0.5.1-windows-x64.zip'));
-    expect(windowsWorkflow, contains('DJ Music 051 Windows 使用与构建.md'));
+    expect(
+      windowsWorkflow,
+      contains(r'build-name $version.version --build-number $version.build'),
+    );
+    expect(
+      windowsWorkflow,
+      contains(r'ik-$($version.version)-windows-x64.zip'),
+    );
+    expect(windowsWorkflow, contains('ik 060 使用与构建.md'));
     final releaseWorkflow = File('scripts/build_video_apk.ps1')
         .readAsStringSync();
-    expect(releaseWorkflow, contains('--build-name 0.5.1 --build-number 9'));
+    expect(
+      releaseWorkflow,
+      contains(r'--build-name $version.version --build-number $version.build'),
+    );
     expect(releaseWorkflow, contains("VIDEO_MUSIC_BUILD = '1'"));
     final main = File('windows/runner/main.cpp').readAsStringSync();
     expect(main, contains('L"Mconnect"'));
@@ -159,11 +177,14 @@ void main() {
     final android = File('android/app/build.gradle.kts').readAsStringSync();
     expect(android, contains('else "Mconnect"'));
     final resource = File('windows/runner/Yueyin.rc').readAsStringSync();
-    expect(resource, contains('VERSION_AS_NUMBER 0,5,1,9'));
+    expect(resource, contains('VERSION_AS_NUMBER IK_VERSION_NUMBER'));
+    final version = File('windows/runner/ik_version.h').readAsStringSync();
+    expect(version, contains('IK_VERSION_NUMBER 0,6,0,10'));
+    expect(version, contains('IK_VERSION_STRING "0.6.0"'));
     // path_provider_windows 从 CompanyName/ProductName 推导账号和数据库目录。
     expect(resource, contains('"CompanyName", "sun-dove"'));
     expect(resource, contains('"ProductName", "YueyinMusic"'));
-    expect(resource, contains('"FileDescription", "DJ Music"'));
+    expect(resource, contains('"FileDescription", IK_APP_NAME'));
     expect(
       File('pubspec.yaml').readAsStringSync(),
       contains('version: 1.5.0+16'),
@@ -240,9 +261,24 @@ void main() {
       contains('<color name="dj_music_background">'),
     );
     final android = File('android/app/build.gradle.kts').readAsStringSync();
-    expect(android, contains('versionCode = if (videoAppBuild) 9'));
-    expect(android, contains('versionName = if (videoAppBuild) "0.5.1"'));
-    expect(android, contains('if (videoAppBuild) "DJ Music" else "Mconnect"'));
+    expect(
+      android,
+      contains(
+        'versionCode = if (videoAppBuild) (videoVersion["build"] as Number).toInt()',
+      ),
+    );
+    expect(
+      android,
+      contains(
+        'versionName = if (videoAppBuild) videoVersion["version"] as String',
+      ),
+    );
+    expect(
+      android,
+      contains(
+        'if (videoAppBuild) videoVersion["name"] as String else "Mconnect"',
+      ),
+    );
     expect(android, contains('"@mipmap/ic_launcher_round"'));
     final manifest = File('android/app/src/main/AndroidManifest.xml')
         .readAsStringSync();
@@ -304,29 +340,28 @@ void main() {
     );
   });
 
-  test('品牌：GitHub仓库归属保持原地址，独立产品显示DJ Music', () {
+  test('品牌：GitHub仓库归属保持原地址，独立产品显示ik', () {
     expect(
       File('README.md').readAsStringSync(),
       contains('https://github.com/sun-dove/yueyin-music'),
     );
     final labels = File('lib/l10n/video_strings.dart').readAsStringSync();
-    expect(labels, contains("static const appName = 'DJ Music';"));
+    expect(labels, contains("static const appName = IkVersion.name;"));
     expect(
       File('android/app/build.gradle.kts').readAsStringSync(),
-      contains('if (videoAppBuild) "DJ Music" else "Mconnect"'),
+      contains(
+        'if (videoAppBuild) videoVersion["name"] as String else "Mconnect"',
+      ),
     );
     final readme = File('README.md').readAsStringSync();
     expect(readme, contains('Dingjian'));
-    expect(readme, contains('DJ Music'));
+    expect(readme, contains('ik'));
     expect(readme, contains('https://github.com/sun-dove/yueyin-music'));
     expect(
       File('pubspec.yaml').readAsStringSync(),
       contains('assets/branding/dj-music/source/windows/yangyin-256.png'),
     );
-    expect(
-      File('docs/交付文档/DJ Music 051 Windows 使用与构建.md').existsSync(),
-      isTrue,
-    );
+    expect(File('docs/交付文档/ik 060 使用与构建.md').existsSync(), isTrue);
     expect(
       File('lib/video_app/ui/video_shell.dart').readAsStringSync(),
       contains('assets/branding/dj-music/source/windows/yangyin-256.png'),

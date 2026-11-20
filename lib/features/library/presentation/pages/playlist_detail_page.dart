@@ -14,7 +14,9 @@ import '../../../../models/playlist.dart';
 import '../../../../models/song.dart';
 import '../../../../platform/base/platform_registry.dart';
 import '../../../../l10n/l10n.dart';
+import '../../../../l10n/ik_strings.dart';
 import '../../../download/presentation/providers/download_provider.dart';
+import '../../../download/presentation/providers/download_quality_provider.dart';
 import '../../../download/presentation/widgets/download_button.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../providers/my_playlists_provider.dart';
@@ -173,9 +175,13 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
     var queued = 0;
     for (final song in songs) {
       try {
-        // Standard quality: a batch has no room for a per-song quality prompt,
-        // and each row's download button still offers the full picker.
-        await notifier.startDownload(song, AudioLevel.low);
+        // The independent app supplies its configured quality; existing callers
+        // retain standard quality and each row keeps its explicit picker.
+        await notifier.startDownload(
+          song,
+          ref.read(downloadQualityProvider)?.call(song.platform) ??
+              AudioLevel.low,
+        );
         queued++;
       } catch (_) {
         // One song failing must not stop the batch.
@@ -186,7 +192,12 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
     setState(() => _busy = false);
     _exitSelection();
     if (queued == songs.length) {
-      showSuccessSnackBar(context, '已按标准音质加入下载队列：$queued 首');
+      showSuccessSnackBar(
+        context,
+        ref.read(downloadQualityProvider) == null
+            ? '已按标准音质加入下载队列：$queued 首'
+            : IkStrings.downloadQueued(queued),
+      );
     } else {
       showErrorSnackBar(context, '已加入 $queued/${songs.length} 首，其余失败');
     }

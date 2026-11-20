@@ -1,7 +1,9 @@
+import '../video_app/ik/ik_version.dart';
+
 /// 视频独立入口的中文资源；显示文案与组件实现分开维护。
 abstract final class VideoStrings {
-  static const appName = 'DJ Music';
-  static const appVersion = 'DJ Music · 0.5.1';
+  static const appName = IkVersion.name;
+  static const appVersion = IkVersion.label;
   static const qqMusic = 'QQ 音乐';
   static const netease = '网易云';
   static const local = '本地';

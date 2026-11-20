@@ -276,8 +276,11 @@ class VideoMiniPlayer extends StatelessWidget {
                     song?.name ?? VideoStrings.chooseSong,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
+                    style: TextStyle(
+                      fontSize:
+                          Theme.of(context).extension<IkThemeColors>() == null
+                          ? 13
+                          : 15,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -298,7 +301,10 @@ class VideoMiniPlayer extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize:
+                          Theme.of(context).extension<IkThemeColors>() == null
+                          ? 11
+                          : 12,
                       color: VideoTheme.secondaryText(context),
                     ),
                   ),

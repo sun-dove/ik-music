@@ -10,6 +10,7 @@ import '../../../../models/user.dart';
 import '../../../../platform/base/platform_registry.dart';
 import '../../domain/entities/download_task.dart';
 import '../providers/download_provider.dart';
+import '../providers/download_quality_provider.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../l10n/app_localizations.dart';
 import '../../../../l10n/l10n.dart';
@@ -103,7 +104,12 @@ class DownloadButton extends ConsumerWidget {
   /// Adds [song] to the offline-cache queue at standard quality.
   Future<void> _addToOfflineCache(BuildContext context, WidgetRef ref) async {
     final notifier = ref.read(downloadProvider.notifier);
-    final report = await notifier.cacheSongs([song], quality: AudioLevel.low);
+    final report = await notifier.cacheSongs(
+      [song],
+      quality:
+          ref.read(downloadQualityProvider)?.call(song.platform) ??
+          AudioLevel.low,
+    );
     if (!context.mounted) return;
 
     final l = context.l10n;

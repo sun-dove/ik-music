@@ -16,6 +16,11 @@ import 'features/player/data/player_playback_memory_store.dart';
 import 'features/player/presentation/providers/player_provider.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/download/presentation/providers/download_provider.dart';
+import 'features/download/presentation/providers/download_quality_provider.dart';
+import 'features/discovery/presentation/providers/recommendations_provider.dart';
+import 'features/library/presentation/providers/my_playlists_provider.dart';
+import 'l10n/ik_strings.dart';
+import 'video_app/ik/ik_home_page.dart';
 import 'features/download/data/repositories/download_manager.dart';
 import 'features/download/domain/entities/download_failure.dart';
 import 'features/offline_cache/presentation/providers/offline_cache_provider.dart';
@@ -25,6 +30,8 @@ import 'platform/netease/netease_endpoints.dart';
 import 'platform/kugou/kugou_api.dart';
 import 'platform/kugou/kugou_platform.dart';
 import 'core/platform/platform_utils.dart';
+import 'core/share/share_service.dart';
+import 'video_app/ik/ik_share.dart';
 import 'models/platform_type.dart';
 import 'models/song.dart';
 import 'l10n/video_strings.dart';
@@ -40,7 +47,6 @@ import 'video_app/custom_source/custom_source_storage.dart';
 import 'video_app/lx_source/lx_source.dart';
 import 'video_app/lx_source/lx_runtime.dart';
 import 'video_app/lx_source/lx_runtime_v3.dart';
-import 'video_app/multi_source/source_collection.dart';
 import 'video_app/multi_source/source_coordinator.dart';
 import 'video_app/multi_source/source_service.dart';
 import 'video_app/multi_source/multi_source_player.dart';
@@ -83,9 +89,7 @@ Future<void> main() async {
   final preferences = VideoPreferences(settings);
   await preferences.loadCustomSource();
   await preferences.loadLxSource();
-  final SourceSettings sourceSettings = windowsStorage == null
-      ? SourceSettings(preferences)
-      : WindowsSourceSettings(preferences);
+  final sourceSettings = WindowsSourceSettings(preferences);
   sourceSettings.load();
   late VideoQqPlaybackApi qqApi;
   final kugouCatalog = VideoKugouCatalog();
@@ -107,14 +111,16 @@ Future<void> main() async {
       : WindowsAppearance(
           preferences: WindowsMusicPreferences(
             preferences,
-            sources: sourceSettings as WindowsSourceSettings,
+            sources: sourceSettings,
           )..load(),
           directory: Directory('${windowsStorage.path}/appearance'),
           window: WindowsWindowController(beforeExit: windowsSandbox!.shutdown),
         );
   if (windowsAppearance != null) await windowsAppearance.initialize();
-  final effectiveQuality =
-      windowsAppearance?.preferences.quality ?? preferences.quality;
+  final unifiedPreferences =
+      windowsAppearance?.preferences ??
+      (WindowsMusicPreferences(preferences, sources: sourceSettings)..load());
+  final effectiveQuality = unifiedPreferences.quality;
   final sourceRouter = PreparedSourceRouter(
     platformResolver: PlatformRegistry.get,
     fixedQuality: effectiveQuality,
@@ -153,6 +159,21 @@ Future<void> main() async {
   );
   final container = ProviderContainer(
     overrides: [
+      shareServiceProvider.overrideWithValue(
+        const IkShareService(SharePlusChannel()),
+      ),
+      myPlaylistsProvider.overrideWith(
+        (ref) => MyPlaylistsNotifier(
+          invalidShareMessage: IkStrings.invalidPlaylistLink,
+          importFailureLabel: IkStrings.importPlaylistFailed,
+        ),
+      ),
+      downloadQualityProvider.overrideWithValue(
+        (platform) => effectiveQuality(platform, download: true),
+      ),
+      recommendationsProvider.overrideWith(
+        (ref) => IkRecommendationsNotifier(),
+      ),
       authProvider.overrideWith((ref) => VideoAuthNotifier()),
       downloadProvider.overrideWith(
         (ref) => DownloadNotifier(
@@ -301,6 +322,7 @@ Future<void> main() async {
     UncontrolledProviderScope(
       container: container,
       child: VideoMusicApp(
+        redesign: true,
         expandedPlatforms: true,
         catalog: catalog,
         preferences: preferences,
@@ -309,6 +331,7 @@ Future<void> main() async {
         sourceSettings: sourceSettings,
         sourceEngine: sourceEngine,
         windowsAppearance: windowsAppearance,
+        unifiedPreferences: unifiedPreferences,
         onCustomSourceChanged: () {
           playbackCustomSourceFallback.cancel();
           downloadCustomSourceFallback.cancel();

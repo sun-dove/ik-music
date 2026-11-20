@@ -55,16 +55,25 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
   DateTime? _lastListenedAt;
   Timer? _pendingRecordTimer;
   String? _pendingRecordKey;
+  int _loadGeneration = 0;
 
   HistoryNotifier(this._historyDao, this._songsDao)
     : super(const HistoryState()) {
     loadHistory();
   }
 
-  Future<void> loadHistory() async {
+  Future<void> loadHistory() => _loadHistory(all: false);
+
+  /// 独立曲库完整读取历史；旧调用的 200 条默认不变。
+  Future<void> loadAllHistory() => _loadHistory(all: true);
+
+  Future<void> _loadHistory({required bool all}) async {
+    final generation = ++_loadGeneration;
     state = state.copyWith(isLoading: true);
     try {
-      final records = await _historyDao.getRecentHistory(limit: 200);
+      final records = await _historyDao.getRecentHistory(
+        limit: all ? await _historyDao.countHistory() : 200,
+      );
       // Batch query instead of N+1
       final keys = records
           .map((r) => (id: r.songId, platform: r.platform))
@@ -86,12 +95,14 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
           );
         }
       }
+      if (!mounted || generation != _loadGeneration) return;
       state = state.copyWith(
         entries: entries,
         isLoading: false,
         error: () => null,
       );
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       state = state.copyWith(isLoading: false, error: () => '加载历史失败');
     }
   }

@@ -35,10 +35,14 @@ class MyPlaylistsState {
 
 class MyPlaylistsNotifier extends StateNotifier<MyPlaylistsState> {
   final MyPlaylistsRepository _repository;
+  final String? invalidShareMessage, importFailureLabel;
 
-  MyPlaylistsNotifier({MyPlaylistsRepository? repository})
-    : _repository = repository ?? const MyPlaylistsRepository(),
-      super(const MyPlaylistsState()) {
+  MyPlaylistsNotifier({
+    MyPlaylistsRepository? repository,
+    this.invalidShareMessage,
+    this.importFailureLabel,
+  }) : _repository = repository ?? const MyPlaylistsRepository(),
+       super(const MyPlaylistsState()) {
     load();
   }
 
@@ -309,7 +313,9 @@ class MyPlaylistsNotifier extends StateNotifier<MyPlaylistsState> {
         state = state.copyWith(
           playlists: playlists,
           isSaving: false,
-          error: playlist == null ? () => '无法识别 Mconnect 歌单链接' : () => null,
+          error: playlist == null
+              ? () => invalidShareMessage ?? '无法识别 Mconnect 歌单链接'
+              : () => null,
         );
       }
       return playlist;
@@ -317,7 +323,7 @@ class MyPlaylistsNotifier extends StateNotifier<MyPlaylistsState> {
       if (mounted) {
         state = state.copyWith(
           isSaving: false,
-          error: () => '导入 Mconnect 歌单失败：$e',
+          error: () => '${importFailureLabel ?? '导入 Mconnect 歌单失败'}：$e',
         );
       }
       return null;
