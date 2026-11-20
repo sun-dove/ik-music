@@ -50,8 +50,13 @@ function Assert-GateInstalled([string]$Expected) {
     $shortcutState = [ordered]@{ expected=$Expected; link=$linkPath; target=$shortcut.TargetPath; working=$shortcut.WorkingDirectory; icon=$shortcut.IconLocation; length=(Get-Item -LiteralPath $linkPath).Length }
     $shortcutState | ConvertTo-Json | Write-Output
     $diagnosticName = 'shortcut-' + [Guid]::NewGuid().ToString('N')
-    Copy-Item -LiteralPath $linkPath -Destination (Join-Path $GateDirectory ($diagnosticName + '.lnk'))
+    $diagnosticLink = Join-Path $GateDirectory ($diagnosticName + '.lnk')
+    Copy-Item -LiteralPath $linkPath -Destination $diagnosticLink
+    if ((Get-FileHash -LiteralPath $linkPath -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $diagnosticLink -Algorithm SHA256).Hash) { throw '快捷方式诊断副本与原始文件字节不一致。' }
     [IO.File]::WriteAllText((Join-Path $GateDirectory ($diagnosticName + '.json')), ($shortcutState | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
+    # 英文runner的WScript可能无法从含中文的文件名加载LNK；校验同字节ASCII副本。
+    $shortcut = $shell.CreateShortcut($diagnosticLink)
+    [pscustomobject]@{ verifiedCopy=$diagnosticLink; target=$shortcut.TargetPath; working=$shortcut.WorkingDirectory; icon=$shortcut.IconLocation } | ConvertTo-Json | Write-Output
     if (-not $shortcut.TargetPath -or -not $shortcut.WorkingDirectory) { throw '隔离快捷方式目标或工作目录为空；原始LNK和实际字段已保留在本门目录。' }
     # ShellLink会展开TargetPath中的8.3短目录；CI的TEMP本身可能仍是RUNNER~1。
     $iconParts = [regex]::Match($shortcut.IconLocation, '^(.*),\s*0$')
