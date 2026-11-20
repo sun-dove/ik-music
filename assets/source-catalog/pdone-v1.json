@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "catalogVersion": 1,
+  "repository": "pdone/lx-music-source",
+  "commit": "ed8328dbd1a77aee3ee0116d835eb9d907eeaad2",
+  "entries": [
+    {
+      "sourceKey": "pdone:changqing",
+      "displayName": "常青",
+      "path": "changqing/1.3.0.js",
+      "byteLength": 27645,
+      "contentSha256": "6a942987c1e111a113376fbf8ff9fb677c487058f16ce792779c72f69c4ed6de",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/changqing/1.3.0.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化 script 失败",
+        "android": "Android 实际设备未验证"
+      },
+      "windowsBlockReason": "此固定版本既有 Windows 实际宿主初始化失败；Android 状态独立校验。"
+    },
+    {
+      "sourceKey": "pdone:feichangdao",
+      "displayName": "非常道",
+      "path": "feichangdao/5.js",
+      "byteLength": 17846,
+      "contentSha256": "49486cab064e64d5ad63723e670c44ee55eadadcc790ccf493351fbde64284d7",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/feichangdao/5.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:fish",
+      "displayName": "小鱼",
+      "path": "fish/1.9.0.js",
+      "byteLength": 639619,
+      "contentSha256": "a711e152c4f28c32fd46b38839a70f476e0b669905773a90e2ce63246136af47",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/fish/1.9.0.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:flower",
+      "displayName": "花花",
+      "path": "flower/1.js",
+      "byteLength": 10057,
+      "contentSha256": "15c166987edde41cf5917b3160c0ab253ff17e5e6bc6765c9eaa11a822c4aa97",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/flower/1.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:grass",
+      "displayName": "小草",
+      "path": "grass/1.js",
+      "byteLength": 9176,
+      "contentSha256": "d694275f382427d3fef809fc77338ef014dc330af710cca6b3233ece8740510f",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/grass/1.js",
+      "autoPolicy": "metadataOnly",
+      "reason": "仅声明酷我，当前应用支持 QQ、网易云和酷狗。",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过，无当前支持平台",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:helloworld",
+      "displayName": "HelloWorld",
+      "path": "helloworld/260925.js",
+      "byteLength": 21421,
+      "contentSha256": "12d7a289647b4f4ff8b94d4b27d06a55b7ca9b9be6ac89c602cac2052eced723",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/helloworld/260925.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:huanyin",
+      "displayName": "幻音",
+      "path": "huanyin/3.js",
+      "byteLength": 7316,
+      "contentSha256": "4a81129240ecae3ebf6b42f28c73e2d37bbcb6fccac9a73a401d90cdd36bee5f",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/huanyin/3.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:huibq",
+      "displayName": "Huibq",
+      "path": "huibq/1.2.0.js",
+      "byteLength": 2727,
+      "contentSha256": "a9adeb456690b523008038224091cee31977606302d79082eb06adb3c75c9146",
+      "licenseEvidence": "restrictedText",
+      "licenseNote": "脚本注释明确禁止批量下载；自动准备仅用于播放候选，下载保持关闭。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/huibq/1.2.0.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": true,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:hyw",
+      "displayName": "HYW",
+      "path": "hyw/1.2.0.js",
+      "byteLength": 12082,
+      "contentSha256": "0f48bdab4205e4423397f970b926565085a5af4f3b8a8a19f4cdc0e755647cd5",
+      "licenseEvidence": "headerMit",
+      "licenseNote": "该固定文件头部标注 MIT；仅保留逐文件证据，不扩大为整个仓库授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/hyw/1.2.0.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:ikun",
+      "displayName": "ikun",
+      "path": "ikun/22.js",
+      "byteLength": 4991,
+      "contentSha256": "8db6c45bc225f1f15fc2e96f7d9ad3bf2e49dd1f2a998cdf23704185ea41fe89",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/ikun/22.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:jiexiang",
+      "displayName": "杰翔",
+      "path": "jiexiang/2.3.0.js",
+      "byteLength": 91493,
+      "contentSha256": "a4f25710ea8c993e20626df2345fb933607eb4b91b794bd323f954e7085b94df",
+      "licenseEvidence": "headerMit",
+      "licenseNote": "该固定文件头部标注 MIT；仅保留逐文件证据，不扩大为整个仓库授权。 原作者许可正文：https://github.com/haonanren118/jiexiang-Music-Source/blob/4f575068f7b774294d5bc28a4e752f8098f9f813/LICENSE；聚合副本与该历史版本字节不同。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/jiexiang/2.3.0.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:juhe",
+      "displayName": "聚合",
+      "path": "juhe/3.js",
+      "byteLength": 994,
+      "contentSha256": "f7a661f01af7ea23035d5fac3b89d7c756372fc8a64bbfd649918f8a101cbf33",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/juhe/3.js",
+      "autoPolicy": "metadataOnly",
+      "reason": "既有主机初始化超时、Windows 脚本失败；当前目录不自动重试。",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化 script 失败",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:lx",
+      "displayName": "LX",
+      "path": "lx/7.js",
+      "byteLength": 64094,
+      "contentSha256": "79a5c4703e060eaff6f8ffaac05d2fadf5e22b7729f6fe151d1cca2fa3935171",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/lx/7.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:qdy",
+      "displayName": "倾听",
+      "path": "qdy/9.3.js",
+      "byteLength": 31090,
+      "contentSha256": "213f73232562b528826dd97601e74212b517014e06fd614b28d8d8aa0dda400c",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/qdy/9.3.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:qingliang",
+      "displayName": "清凉",
+      "path": "qingliang/2.1.0.js",
+      "byteLength": 26416,
+      "contentSha256": "f5d589c4ebe583800b25fe12e35dfd4f807f1758bfbea83054df4b9a4f95aa29",
+      "licenseEvidence": "headerMit",
+      "licenseNote": "该固定文件头部标注 MIT；仅保留逐文件证据，不扩大为整个仓库授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/qingliang/2.1.0.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:sixyin",
+      "displayName": "六音",
+      "path": "sixyin/1.2.1.js",
+      "byteLength": 333015,
+      "contentSha256": "a407ffe0ab23c29cd32ce249b83e61c8e2b70719895f16034566ad7557282785",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/sixyin/1.2.1.js",
+      "autoPolicy": "metadataOnly",
+      "reason": "初始化要求不受控 HTTP，当前安全桥只允许公开 HTTPS。",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化 HTTP 拒绝",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:suyin",
+      "displayName": "素音",
+      "path": "suyin/1.js",
+      "byteLength": 17656,
+      "contentSha256": "d10c9c28823b5c2ce4e3fef3b25b8ff16d2d165bd0883e2b866900ef7c0dc0ee",
+      "licenseEvidence": "none",
+      "licenseNote": "固定版本可读头部未发现明确许可；不代表已获内容授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/suyin/1.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:xinghai",
+      "displayName": "星海",
+      "path": "xinghai/3.2.18.js",
+      "byteLength": 21572,
+      "contentSha256": "d2f72c5c0dde51fbaa32c9ca5c634a1ae43eafa952abc1e5a83dab4f578487ab",
+      "licenseEvidence": "restrictedText",
+      "licenseNote": "头部仅供学习交流，请支持正版；暂不自动用于日常播放。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/xinghai/3.2.18.js",
+      "autoPolicy": "metadataOnly",
+      "reason": "使用范围待核对，不自动启用。",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:xinglan",
+      "displayName": "星岚",
+      "path": "xinglan/4.0.2.js",
+      "byteLength": 74386,
+      "contentSha256": "d186346cec8f813dc447bebcc4d5a29a5ad41f62c90102edb196d67cc870eaf2",
+      "licenseEvidence": "headerMit",
+      "licenseNote": "该固定文件头部标注 MIT；仅保留逐文件证据，不扩大为整个仓库授权。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/xinglan/4.0.2.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": false,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    },
+    {
+      "sourceKey": "pdone:yuningxi",
+      "displayName": "余宁曦",
+      "path": "yuningxi/1.2.5.js",
+      "byteLength": 144621,
+      "contentSha256": "5dd4752c16c17f7bab45dccf87dcd3f3c2a6e251e62bad68bde9554bfd275f79",
+      "licenseEvidence": "restrictedText",
+      "licenseNote": "脚本注释禁止批量下载，2秒内最多4次请求；下载保持关闭。",
+      "licenseUrl": "https://github.com/pdone/lx-music-source/blob/ed8328dbd1a77aee3ee0116d835eb9d907eeaad2/yuningxi/1.2.5.js",
+      "autoPolicy": "prepare",
+      "reason": "",
+      "downloadsAllowed": false,
+      "downloadRestricted": true,
+      "perRuntimeEvidence": {
+        "windows": "历史初始化通过；本机仍需校验",
+        "android": "Android 实际设备未验证"
+      }
+    }
+  ]
+}

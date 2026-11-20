@@ -140,6 +140,10 @@ class FloatingLyricsSyncController {
   final Ref _ref;
   final FloatingLyricsService _service;
   final DateTime Function() _now;
+  final bool strictDelivery;
+  final String emptyText;
+  final void Function(bool)? onDelivery;
+  bool _disposed = false;
   final List<ProviderSubscription> _subscriptions = [];
   final List<StreamSubscription> _nativeSubscriptions = [];
   FloatingLyricsPayload? _lastPayload;
@@ -153,6 +157,9 @@ class FloatingLyricsSyncController {
     this._ref, {
     FloatingLyricsService? service,
     DateTime Function()? now,
+    this.strictDelivery = false,
+    this.emptyText = '',
+    this.onDelivery,
   }) : _service = service ?? FloatingLyricsService.instance,
        _now = now ?? DateTime.now {
     _positionEstimator = LyricsProgressEstimator(now: _now);
@@ -360,6 +367,7 @@ class FloatingLyricsSyncController {
   bool _syncQueued = false;
 
   Future<void> sync() async {
+    if (strictDelivery && _disposed) return;
     if (_syncInFlight) {
       _syncQueued = true;
       return;
@@ -371,7 +379,16 @@ class FloatingLyricsSyncController {
       // and is serviced here.
       do {
         _syncQueued = false;
-        await _syncOnce();
+        if (strictDelivery) {
+          try {
+            await _syncOnce();
+          } catch (_) {
+            _updateSweepTimer(running: false);
+            if (!_disposed) onDelivery?.call(false);
+          }
+        } else {
+          await _syncOnce();
+        }
       } while (_syncQueued);
     } finally {
       _syncInFlight = false;
@@ -395,6 +412,27 @@ class FloatingLyricsSyncController {
       _updateSweepTimer(running: false);
       _progressRate.reset();
       _lastNativeSignature = null;
+      if (strictDelivery) {
+        final allowed = await _service.canDrawOverlays();
+        if (_disposed || syncGeneration != _syncGeneration) return;
+        if (!allowed) {
+          onDelivery?.call(false);
+          return;
+        }
+        final player = _ref.read(playerProvider);
+        final delivered = await _service.update(
+          FloatingLyricsPayload(
+            text: emptyText,
+            nextText: player.currentSong?.name ?? '',
+            isPlaying: player.isPlaying,
+            hasSong: player.currentSong != null,
+          ),
+          settings,
+        );
+        if (!_disposed && syncGeneration == _syncGeneration) {
+          onDelivery?.call(delivered);
+        }
+      }
       return;
     }
     final playerState = _ref.read(playerProvider);
@@ -433,8 +471,16 @@ class FloatingLyricsSyncController {
     if (_lastNativeSignature == signature) return;
 
     final hasPermission = await _service.canDrawOverlays();
-    if (syncGeneration != _syncGeneration) return;
-    if (!hasPermission) return;
+    if (syncGeneration != _syncGeneration || (strictDelivery && _disposed)) {
+      return;
+    }
+    if (!hasPermission) {
+      if (strictDelivery) {
+        _updateSweepTimer(running: false);
+        onDelivery?.call(false);
+      }
+      return;
+    }
     final latestSettings = _ref.read(floatingLyricsProvider);
     if (!latestSettings.enabled) {
       _updateSweepTimer(running: false);
@@ -442,7 +488,15 @@ class FloatingLyricsSyncController {
       await _service.hide();
       return;
     }
-    await _service.update(payload, latestSettings);
+    final delivered = await _service.update(payload, latestSettings);
+    if (strictDelivery) {
+      if (_disposed || syncGeneration != _syncGeneration) return;
+      onDelivery?.call(delivered);
+      if (!delivered) {
+        _updateSweepTimer(running: false);
+        return;
+      }
+    }
     if (syncGeneration == _syncGeneration) {
       _lastNativeSignature = _nativeSignature(payload, latestSettings);
     }
@@ -451,6 +505,8 @@ class FloatingLyricsSyncController {
   FloatingLyricsPayload? get lastPayloadForTest => _lastPayload;
 
   void dispose() {
+    _disposed = true;
+    if (strictDelivery) _syncGeneration++;
     _updateSweepTimer(running: false);
     for (final sub in _subscriptions) {
       sub.close();

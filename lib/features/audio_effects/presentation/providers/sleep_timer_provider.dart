@@ -80,6 +80,8 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   final Duration _tickInterval;
   Timer? _timer;
   Duration _lastPersistedRemaining = Duration.zero;
+  final Set<Future<void>> _pendingPersists = {};
+  bool _settingsRestorePaused = false;
 
   SleepTimerNotifier({
     required this._pausePlayback,
@@ -107,6 +109,7 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   }
 
   void setDuration(Duration duration) {
+    if (_settingsRestorePaused) return;
     final clamped = duration.inMinutes < 5
         ? duration
         : Duration(minutes: duration.inMinutes.clamp(5, 120));
@@ -121,6 +124,7 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   }
 
   void setEnabled(bool enabled) {
+    if (_settingsRestorePaused) return;
     if (!enabled) {
       _timer?.cancel();
       _timer = null;
@@ -134,6 +138,7 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   }
 
   void _startTimer() {
+    if (_settingsRestorePaused) return;
     _timer?.cancel();
     _timer = Timer.periodic(_tickInterval, (_) {
       final nextRemaining = state.remaining - _tickInterval;
@@ -153,6 +158,7 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   }
 
   void _persistState({bool force = false}) {
+    if (_settingsRestorePaused) return;
     final persist = _persist;
     if (persist == null) return;
     final remaining = state.remaining;
@@ -161,14 +167,27 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
       return;
     }
     _lastPersistedRemaining = remaining;
-    unawaited(
-      persist(enabled: state.enabled, remaining: remaining).catchError((
-        Object error,
-        StackTrace stack,
-      ) {
-        debugPrint('SleepTimerNotifier persist failed: $error');
-      }),
-    );
+    final pending = persist(enabled: state.enabled, remaining: remaining)
+        .catchError((Object error, StackTrace stack) {
+          debugPrint('SleepTimerNotifier persist failed: $error');
+        });
+    _pendingPersists.add(pending);
+    unawaited(pending.whenComplete(() => _pendingPersists.remove(pending)));
+  }
+
+  /// 仅安全恢复入口显式使用：先同步停止 tick，再等已发出的保存完成。
+  Future<void> pauseForSettingsRestore() async {
+    _settingsRestorePaused = true;
+    _timer?.cancel();
+    _timer = null;
+    await Future.wait(_pendingPersists);
+  }
+
+  /// 恢复失败时继续原剩余时间，不额外保存一份旧设置。
+  void resumeAfterSettingsRestoreFailure() {
+    if (!mounted || !_settingsRestorePaused) return;
+    _settingsRestorePaused = false;
+    if (state.enabled) _startTimer();
   }
 
   @override

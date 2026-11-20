@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import '../../../../video_app/ui/video_theme.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
@@ -699,7 +702,7 @@ class _DownloadTile extends StatelessWidget {
                     child: Text(
                       '与其他记录共用同一文件',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: VideoTheme.readableSize(context, 11),
                         color: cs.onSurfaceVariant,
                       ),
                       maxLines: 1,
@@ -722,20 +725,25 @@ class _DownloadTile extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   '${(task.progress * 100).toStringAsFixed(0)}%',
-                  style: const TextStyle(fontSize: 11),
+                  style: TextStyle(
+                    fontSize: VideoTheme.readableSize(context, 11),
+                  ),
                 ),
               ],
             ),
             Text(
               '${formatBytes(task.downloadedBytes)} / ${formatBytes(task.totalBytes ?? 0)}',
-              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: VideoTheme.readableSize(context, 11),
+                color: cs.onSurfaceVariant,
+              ),
             ),
           ],
           if (task.status == DownloadStatus.failed && task.error != null)
             Text(
               task.error!,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: VideoTheme.readableSize(context, 11),
                 color: Theme.of(context).colorScheme.error,
               ),
               maxLines: 1,
@@ -765,7 +773,7 @@ class _DownloadTile extends StatelessWidget {
               Text(
                 '${(task.progress * 100).toInt()}',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: VideoTheme.readableSize(context, 10),
                   color: Theme.of(context).colorScheme.primary,
                 ),
               ),

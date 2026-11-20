@@ -7,6 +7,28 @@ import 'dart:async';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
+import 'package:go_router/go_router.dart';
+
+import '../l10n/app_localizations.dart';
+import '../l10n/ik_strings.dart';
+import '../features/library/presentation/providers/likes_provider.dart';
+import 'ik/ik_search.dart';
+import 'ik/ik_catalog_pages.dart';
+import 'ik/ik_home_page.dart';
+import 'ik/ik_shell.dart';
+import 'ik/ik_router.dart';
+import 'ik/ik_runtime.dart';
+import 'ik/ik_theme.dart';
+import 'ik/ik_workspace.dart';
+import 'ik/ik_settings_workspace.dart';
+import 'ik/ik_playback_bar.dart';
+import 'ik/ik_recent_page.dart';
+import 'ik/ik_library_workspace.dart';
+import 'ik/ik_search_workspace.dart';
+import 'ik/ik_workspace_theme.dart';
+import 'ik/ik_lyrics_action.dart';
+import '../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
+import 'built_in/catalog_panel.dart';
 
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/providers/auth_provider.dart';
@@ -66,6 +88,9 @@ class VideoMusicApp extends StatefulWidget {
     this.catalog,
     this.expandedPlatforms = false,
     this.windowsAppearance,
+    this.unifiedPreferences,
+    this.redesign = false,
+    this.workspace = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -76,11 +101,63 @@ class VideoMusicApp extends StatefulWidget {
   final ExpandedVideoCatalog? catalog;
   final bool expandedPlatforms;
   final WindowsAppearance? windowsAppearance;
+  final WindowsMusicPreferences? unifiedPreferences;
+  final bool redesign;
+  final bool workspace;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
 
 class _VideoMusicAppState extends State<VideoMusicApp> {
+  final _homeKey = GlobalKey<_VideoHomeState>();
+  late final _router = createIkRouter(
+    home: (_) => _home(),
+    player: (_) => _homeKey.currentState?._playerPage() ?? const IkRouteError(),
+    settings: widget.workspace
+        ? (_, section) => Scaffold(
+            appBar: AppBar(leading: const BackButton()),
+            body:
+                _homeKey.currentState?._workspaceSettings(section) ??
+                const IkRouteError(),
+          )
+        : null,
+    detailShell: (context, page) => Scaffold(
+      body: Column(
+        children: [
+          Expanded(child: page),
+          Padding(
+            padding: const EdgeInsets.all(8),
+            child: Consumer(
+              builder: (context, ref, _) {
+                if (widget.workspace) {
+                  return IkPlaybackBar(
+                    onOpen: () => context.push('/player'),
+                    onAudio: () => context.push('/settings/audio'),
+                  );
+                }
+                final player = ref.watch(playerProvider);
+                return VideoMiniPlayer(
+                  song: player.currentSong,
+                  isPlaying: player.isPlaying,
+                  isLoading: player.isTransitioning,
+                  error: player.error,
+                  onOpen: () => context.push('/player'),
+                  onToggle: ref.read(playerProvider.notifier).togglePlay,
+                  onQueue: () => context.push('/queue'),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+  @override
+  void dispose() {
+    if (widget.redesign) _router.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => widget.windowsAppearance == null
       ? _app()
@@ -88,43 +165,81 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
           listenable: widget.windowsAppearance!,
           builder: (_, _) => _app(),
         );
-  Widget _app() => MaterialApp(
-    title: VideoStrings.appName,
-    debugShowCheckedModeBanner: false,
-    theme:
-        widget.windowsAppearance?.theme(Brightness.light) ?? VideoTheme.light,
-    darkTheme:
-        widget.windowsAppearance?.theme(Brightness.dark) ?? VideoTheme.dark,
-    builder: widget.windowsAppearance == null
-        ? null
-        : (context, child) => WindowsBackground(
-            appearance: widget.windowsAppearance!,
-            child: child!,
-          ),
-    themeMode: switch (widget.preferences.theme) {
-      'dark' => ThemeMode.dark,
-      'system' => ThemeMode.system,
-      _ => ThemeMode.light,
-    },
-    home: _VideoHome(
-      preferences: widget.preferences,
-      customSourceCredentials:
-          widget.customSourceCredentials ??
-          const SecureCustomSourceCredentialStore(),
-      customSourceDio: widget.customSourceDio ?? Dio(),
-      onCustomSourceChanged: widget.onCustomSourceChanged,
-      sourceSettings: widget.sourceSettings,
-      sourceEngine: widget.sourceEngine,
-      catalog: widget.catalog,
-      expandedPlatforms: widget.expandedPlatforms,
-      windowsAppearance: widget.windowsAppearance,
-      onThemeChanged: () => setState(() {}),
-    ),
+  Widget _app() {
+    if (widget.redesign) {
+      return MaterialApp.router(
+        title: VideoStrings.appName,
+        debugShowCheckedModeBanner: false,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: const [Locale('zh')],
+        theme: (widget.workspace ? IkWorkspaceTheme.from : IkTheme.from)(
+          widget.windowsAppearance?.theme(Brightness.light) ?? VideoTheme.light,
+        ),
+        darkTheme: (widget.workspace ? IkWorkspaceTheme.from : IkTheme.from)(
+          widget.windowsAppearance?.theme(Brightness.dark) ?? VideoTheme.dark,
+        ),
+        themeMode: switch (widget.preferences.theme) {
+          'dark' => ThemeMode.dark,
+          'system' => ThemeMode.system,
+          _ => ThemeMode.light,
+        },
+        routerConfig: _router,
+        builder: (context, child) => IkRuntime(
+          onNavigate: (path) => _router.push(path),
+          child: widget.windowsAppearance == null
+              ? child!
+              : WindowsBackground(
+                  appearance: widget.windowsAppearance!,
+                  child: child!,
+                ),
+        ),
+      );
+    }
+    return MaterialApp(
+      title: VideoStrings.appName,
+      debugShowCheckedModeBanner: false,
+      theme:
+          widget.windowsAppearance?.theme(Brightness.light) ?? VideoTheme.light,
+      darkTheme:
+          widget.windowsAppearance?.theme(Brightness.dark) ?? VideoTheme.dark,
+      builder: widget.windowsAppearance == null
+          ? null
+          : (context, child) => WindowsBackground(
+              appearance: widget.windowsAppearance!,
+              child: child!,
+            ),
+      themeMode: switch (widget.preferences.theme) {
+        'dark' => ThemeMode.dark,
+        'system' => ThemeMode.system,
+        _ => ThemeMode.light,
+      },
+      home: _home(),
+    );
+  }
+
+  Widget _home() => _VideoHome(
+    key: _homeKey,
+    redesign: widget.redesign,
+    workspace: widget.workspace,
+    preferences: widget.preferences,
+    customSourceCredentials:
+        widget.customSourceCredentials ??
+        const SecureCustomSourceCredentialStore(),
+    customSourceDio: widget.customSourceDio ?? Dio(),
+    onCustomSourceChanged: widget.onCustomSourceChanged,
+    sourceSettings: widget.sourceSettings,
+    sourceEngine: widget.sourceEngine,
+    catalog: widget.catalog,
+    expandedPlatforms: widget.expandedPlatforms,
+    windowsAppearance: widget.windowsAppearance,
+    unifiedPreferences: widget.unifiedPreferences,
+    onThemeChanged: () => setState(() {}),
   );
 }
 
 class _VideoHome extends ConsumerStatefulWidget {
   const _VideoHome({
+    super.key,
     required this.preferences,
     required this.customSourceCredentials,
     required this.customSourceDio,
@@ -135,6 +250,9 @@ class _VideoHome extends ConsumerStatefulWidget {
     this.catalog,
     this.expandedPlatforms = false,
     this.windowsAppearance,
+    this.unifiedPreferences,
+    this.redesign = false,
+    this.workspace = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore customSourceCredentials;
@@ -146,20 +264,22 @@ class _VideoHome extends ConsumerStatefulWidget {
   final ExpandedVideoCatalog? catalog;
   final bool expandedPlatforms;
   final WindowsAppearance? windowsAppearance;
+  final WindowsMusicPreferences? unifiedPreferences;
+  final bool redesign;
+  final bool workspace;
   @override
   ConsumerState<_VideoHome> createState() => _VideoHomeState();
 }
 
 class _VideoHomeState extends ConsumerState<_VideoHome>
     with WidgetsBindingObserver {
+  WindowsMusicPreferences? get _unifiedPreferences =>
+      widget.unifiedPreferences ?? widget.windowsAppearance?.preferences;
   AudioLevel _effectiveQuality(
     PlatformType platform, {
     bool download = false,
   }) =>
-      widget.windowsAppearance?.preferences.quality(
-        platform,
-        download: download,
-      ) ??
+      _unifiedPreferences?.quality(platform, download: download) ??
       widget.preferences.quality(platform, download: download);
   late final VideoCatalog _catalog = widget.catalog ?? VideoCatalog();
   List<PlatformType> get _platforms => [
@@ -175,19 +295,74 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   final _pendingLikes = <String>{};
   var _result = const VideoCatalogViewState();
   var _searchPlatform = PlatformType.qq;
-  late var _index = widget.expandedPlatforms ? 4 : 3;
+  late var _index = widget.redesign
+      ? 0
+      : widget.expandedPlatforms
+      ? 4
+      : 3;
+  late final _ikSearch = IkSearchController(
+    search: (platform, query, page) async {
+      if (platform == PlatformType.local) {
+        await ref.read(localMusicProvider.notifier).initialize();
+        final songs = ref
+            .read(localMusicProvider)
+            .songs
+            .where(
+              (song) =>
+                  '${song.name} ${song.artistNames} ${song.album?.name ?? ''}'
+                      .toLowerCase()
+                      .contains(query.toLowerCase()),
+            )
+            .toList();
+        return VideoPage(
+          songs: songs,
+          total: songs.length,
+          page: 1,
+          hasMore: false,
+        );
+      }
+      return _catalog.search(platform, query, page: page);
+    },
+  );
   var _page = 0;
   var _submitted = false;
   var _localReady = false;
   var _committedQuery = '';
   var _hotTerms = <String>[];
+  var _settingsSection = 'audio';
+  Offset? _workspacePointer;
   final _totals = <PlatformType, int?>{};
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    unawaited(_initialize());
+    if (widget.redesign) {
+      widget.windowsAppearance?.addListener(_appearanceChanged);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_initialize());
+      });
+    } else {
+      unawaited(_initialize());
+    }
+  }
+
+  void _appearanceChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoHome oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.redesign != widget.redesign ||
+        oldWidget.windowsAppearance != widget.windowsAppearance) {
+      if (oldWidget.redesign) {
+        oldWidget.windowsAppearance?.removeListener(_appearanceChanged);
+      }
+      if (widget.redesign) {
+        widget.windowsAppearance?.addListener(_appearanceChanged);
+      }
+    }
   }
 
   Future<void> _initialize() async {
@@ -229,6 +404,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   @override
   void dispose() {
+    if (widget.redesign) {
+      widget.windowsAppearance?.removeListener(_appearanceChanged);
+      _ikSearch.dispose();
+    }
     _query.invalidate();
     WidgetsBinding.instance.removeObserver(this);
     _search.dispose();
@@ -528,100 +707,151 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   }
 
   void _openPlayer() {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => Consumer(
-          builder: (context, ref, _) {
-            final player = ref.watch(playerProvider);
-            final song = player.currentSong;
-            if (song == null) {
-              return Scaffold(
-                appBar: AppBar(),
-                body: const Center(child: Text(VideoStrings.chooseSong)),
-              );
-            }
-            final lyrics = ref.watch(lyricsProvider);
-            final info = ref.watch(videoStreamInfoProvider)[videoSongKey(song)];
-            final notifier = ref.read(playerProvider.notifier);
-            final source = ref.watch(sourcePlaybackViewProvider);
-            if (widget.windowsAppearance != null) {
-              final document = lyrics.asData?.value;
-              return WindowsPlayerPage(
-                song: song,
-                position: player.position,
-                duration: player.duration,
-                isPlaying: player.isPlaying,
-                isLoading: player.isTransitioning,
-                error: player.error,
-                sourceStatus: source.message.isEmpty
-                    ? null
-                    : _sourceStatus(context, source, notifier),
-                qualityLabel: song.platform == PlatformType.local
-                    ? VideoStrings.localAudio
-                    : source.message.isNotEmpty
-                    ? SourceStrings.qualityAbove
-                    : player.error != null
-                    ? VideoStrings.requestedQuality(
-                        WindowsMusicPreferences.qualityName(
-                          _effectiveQuality(song.platform),
-                        ),
-                      )
-                    : videoStreamLabel(info),
-                isPreview: source.message.isEmpty && info?.isPreview == true,
-                lyrics: document?.lines ?? const [],
-                timedLyrics: document?.format.name != 'unknown',
-                lyricsLoading: lyrics.isLoading,
-                lyricsError: lyrics.hasError ? VideoStrings.lyricsRetry : null,
-                onLyricsRetry: () => ref.invalidate(lyricsProvider),
-                modeLabel: _modeLabel(player),
-                onToggle: notifier.togglePlay,
-                onPrevious: notifier.skipToPrevious,
-                onNext: notifier.skipToNext,
-                onSeek: notifier.seek,
-                onQueue: _queue,
-                onMode: _mode,
-                onQuality: () => _quality(song.platform, false),
-              );
-            }
-            return VideoPlayerPage(
-              song: song,
-              position: player.position,
-              duration: player.duration,
-              isPlaying: player.isPlaying,
-              isLoading: player.isTransitioning,
-              error: player.error,
-              sourceStatus: source.message.isEmpty
-                  ? null
-                  : _sourceStatus(context, source, notifier),
-              qualityLabel: song.platform == PlatformType.local
-                  ? VideoStrings.localAudio
-                  : source.message.isNotEmpty
-                  ? SourceStrings.qualityAbove
-                  : player.error != null
-                  ? VideoStrings.requestedQuality(
-                      widget.preferences
-                          .quality(song.platform)
-                          .displayNameFor(song.platform),
-                    )
-                  : videoStreamLabel(info),
-              isPreview: source.message.isEmpty && info?.isPreview == true,
-              lyrics: lyrics.asData?.value?.lines ?? const [],
-              lyricsLoading: lyrics.isLoading,
-              lyricsError: lyrics.hasError ? VideoStrings.lyricsRetry : null,
-              modeLabel: _modeLabel(player),
-              onToggle: notifier.togglePlay,
-              onPrevious: notifier.skipToPrevious,
-              onNext: notifier.skipToNext,
-              onSeek: notifier.seek,
-              onQueue: _queue,
-              onMode: _mode,
-              onQuality: () => _quality(song.platform, false),
-            );
-          },
-        ),
-      ),
-    );
+    if (widget.redesign) {
+      context.push('/player');
+      return;
+    }
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => _playerPage()));
   }
+
+  Widget _playerPage() => Consumer(
+    builder: (context, ref, _) {
+      final player = ref.watch(playerProvider);
+      final song = player.currentSong;
+      if (song == null) {
+        return Scaffold(
+          appBar: AppBar(),
+          body: const Center(child: Text(VideoStrings.chooseSong)),
+        );
+      }
+      final lyrics = ref.watch(lyricsProvider);
+      final info = ref.watch(videoStreamInfoProvider)[videoSongKey(song)];
+      final notifier = ref.read(playerProvider.notifier);
+      final source = ref.watch(sourcePlaybackViewProvider);
+      final multiSource =
+          source.message.isNotEmpty ||
+          (notifier is MultiSourceVideoPlayerNotifier &&
+              notifier.router.guarded);
+      final currentSourceQuality = <String>[
+        if (source.format?.isNotEmpty == true) source.format!.toUpperCase(),
+        if (source.bitrate != null && source.bitrate! > 0)
+          '${(source.bitrate! / 1000).round()} kbps',
+      ];
+      if (widget.windowsAppearance != null || widget.redesign) {
+        final document = lyrics.asData?.value;
+        return WindowsPlayerPage(
+          playbackBar: widget.workspace
+              ? IkPlaybackBar(
+                  onOpen: null,
+                  onAudio: () => context.push('/settings/audio'),
+                )
+              : null,
+          onDesktopLyrics:
+              widget.workspace &&
+                  ref.watch(ikLyricsCapabilityProvider).supported &&
+                  !ref.watch(ikLyricsActionProvider)
+              ? () => ref
+                    .read(ikLyricsActionProvider.notifier)
+                    .setEnabled(!ref.read(floatingLyricsProvider).enabled)
+              : null,
+          desktopLyricsEnabled:
+              widget.workspace && ref.watch(floatingLyricsProvider).enabled,
+          song: song,
+          position: player.position,
+          duration: player.duration,
+          isPlaying: player.isPlaying,
+          isLoading: player.isTransitioning,
+          error: player.error,
+          sourceStatus: source.message.isEmpty
+              ? null
+              : _sourceStatus(context, source, notifier),
+          qualityLabel: song.platform == PlatformType.local
+              ? VideoStrings.localAudio
+              : widget.redesign && multiSource
+              ? currentSourceQuality.isEmpty
+                    ? VideoStrings.qualityUnknown
+                    : currentSourceQuality.join(' · ')
+              : source.message.isNotEmpty
+              ? SourceStrings.qualityAbove
+              : player.error != null
+              ? VideoStrings.requestedQuality(
+                  WindowsMusicPreferences.qualityName(
+                    _effectiveQuality(song.platform),
+                  ),
+                )
+              : videoStreamLabel(info),
+          isPreview:
+              (widget.redesign ? !multiSource : source.message.isEmpty) &&
+              info?.isPreview == true,
+          sourceDetails: widget.redesign
+              ? WindowsSourceDetails(
+                  sourceName: multiSource
+                      ? source.sourceName
+                      : info?.customSourceName ??
+                            videoPlatformLabel(song.platform),
+                  format: multiSource ? source.format : info?.actualFormat,
+                  bitrate: multiSource ? source.bitrate : info?.actualBitrate,
+                  note: source.message.isNotEmpty
+                      ? source.message
+                      : !multiSource && info?.isPreview == true
+                      ? VideoStrings.previewSuffix
+                      : null,
+                )
+              : null,
+          lyrics: document?.lines ?? const [],
+          timedLyrics: document?.format.name != 'unknown',
+          lyricsLoading: lyrics.isLoading,
+          lyricsError: lyrics.hasError ? VideoStrings.lyricsRetry : null,
+          onLyricsRetry: () => ref.invalidate(lyricsProvider),
+          modeLabel: _modeLabel(player),
+          onToggle: notifier.togglePlay,
+          onPrevious: notifier.skipToPrevious,
+          onNext: notifier.skipToNext,
+          onSeek: notifier.seek,
+          onQueue: _queue,
+          onMode: _mode,
+          onQuality: widget.workspace
+              ? () => context.push('/settings/audio')
+              : () => _quality(song.platform, false),
+        );
+      }
+      return VideoPlayerPage(
+        song: song,
+        position: player.position,
+        duration: player.duration,
+        isPlaying: player.isPlaying,
+        isLoading: player.isTransitioning,
+        error: player.error,
+        sourceStatus: source.message.isEmpty
+            ? null
+            : _sourceStatus(context, source, notifier),
+        qualityLabel: song.platform == PlatformType.local
+            ? VideoStrings.localAudio
+            : source.message.isNotEmpty
+            ? SourceStrings.qualityAbove
+            : player.error != null
+            ? VideoStrings.requestedQuality(
+                widget.preferences
+                    .quality(song.platform)
+                    .displayNameFor(song.platform),
+              )
+            : videoStreamLabel(info),
+        isPreview: source.message.isEmpty && info?.isPreview == true,
+        lyrics: lyrics.asData?.value?.lines ?? const [],
+        lyricsLoading: lyrics.isLoading,
+        lyricsError: lyrics.hasError ? VideoStrings.lyricsRetry : null,
+        modeLabel: _modeLabel(player),
+        onToggle: notifier.togglePlay,
+        onPrevious: notifier.skipToPrevious,
+        onNext: notifier.skipToNext,
+        onSeek: notifier.seek,
+        onQueue: _queue,
+        onMode: _mode,
+        onQuality: () => _quality(song.platform, false),
+      );
+    },
+  );
 
   Widget _sourceStatus(
     BuildContext context,
@@ -690,7 +920,19 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     }
   }
 
-  void _queue() => showModalBottomSheet<void>(
+  void _queue() {
+    if (widget.workspace) {
+      showIkQueue(context);
+      return;
+    }
+    if (widget.redesign && MediaQuery.sizeOf(context).width >= 840) {
+      context.push('/queue');
+      return;
+    }
+    _legacyQueue();
+  }
+
+  void _legacyQueue() => showModalBottomSheet<void>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
@@ -753,7 +995,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   );
 
   Future<bool> _windowsQuality(bool download) async {
-    final preferences = widget.windowsAppearance!.preferences;
+    final preferences = _unifiedPreferences!;
     final highest = preferences.sources?.value.highestQuality == true;
     final selected = await showModalBottomSheet<(AudioLevel?, bool)>(
       context: context,
@@ -820,36 +1062,139 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     return true;
   }
 
+  Widget _settingsPage() {
+    final auth = ref.watch(authProvider);
+    final downloads = ref.watch(downloadProvider);
+    final cache = ref.watch(offlineCacheSettingsProvider);
+    return _myPage(
+      VideoMyPage(
+        platforms: _platforms,
+        localSongCount: _localReady
+            ? ref.watch(localMusicProvider).songs.length
+            : null,
+        accounts: {
+          for (final platform in _platforms)
+            if (auth.userFor(platform) case final user?)
+              platform: VideoAccountSummary(
+                nickname: user.nickname,
+                avatarUrl: user.avatarUrl,
+                loaded: _libraries[platform]?.loaded ?? 0,
+                total: _libraries[platform]?.total,
+                complete: _libraries[platform]?.complete ?? false,
+              ),
+        },
+        cacheLabel:
+            '${_mb(downloads.estimatedOfflineCacheBytes)} / ${cache.sizeLimitMb} MB',
+        downloadLabel: VideoStrings.taskCount(downloads.tasks.length),
+        themeLabel: switch (widget.preferences.theme) {
+          'dark' => VideoStrings.darkTheme,
+          'system' => VideoStrings.systemTheme,
+          _ => VideoStrings.lightTheme,
+        },
+        qualityLabels: {
+          for (final platform in _platforms) ...{
+            '${platform.name}:play':
+                widget.sourceSettings?.value.highestQuality == true
+                ? SourceStrings.highest
+                : widget.preferences.quality(platform).displayNameFor(platform),
+            '${platform.name}:download': widget.preferences
+                .quality(platform, download: true)
+                .displayNameFor(platform),
+          },
+        },
+        customSourceLabel: _customSourceLabel,
+        onAccount: _account,
+        onQuality: _quality,
+        onCache: _cache,
+        onDownloads: _downloads,
+        onDirectory: widget.windowsAppearance == null
+            ? _directory
+            : _windowsDirectory,
+        onTheme: _theme,
+        onLocal: _local,
+        onCustomSource: _customSource,
+      ),
+    );
+  }
+
   Widget _myPage(VideoMyPage settings) {
     final appearance = widget.windowsAppearance;
-    if (appearance == null) return settings;
+    if (appearance == null && !widget.redesign) return settings;
     return WindowsMyPage(
       settings: settings,
-      playQuality: appearance.preferences.qualityLabel(),
-      downloadQuality: appearance.preferences.qualityLabel(download: true),
-      onQuality: (download) => _windowsQuality(download),
-      backgroundLabel: appearance.backgroundFile == null
+      showBrandSubtitle: !widget.redesign,
+      showDesktopAppearance: appearance != null || !widget.redesign,
+      extraEntries: widget.redesign
+          ? [
+              for (final entry in [
+                (IkStrings.stats, '/listening-stats', Icons.insights),
+                (IkStrings.smart, '/smart-playlists', Icons.auto_awesome),
+                (IkStrings.backup, '/backup', Icons.backup_outlined),
+                (IkStrings.audio, '/settings/audio', Icons.equalizer),
+                (
+                  IkStrings.floating,
+                  '/settings/floating-lyrics',
+                  Icons.picture_in_picture_alt_outlined,
+                ),
+              ])
+                ListTile(
+                  leading: Icon(entry.$3),
+                  title: Text(entry.$1),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => context.push(entry.$2),
+                ),
+            ]
+          : const [],
+      showWindowSettings: appearance != null,
+      playQuality:
+          _unifiedPreferences?.qualityLabel() ??
+          _effectiveQuality(PlatformType.qq).displayNameFor(PlatformType.qq),
+      downloadQuality:
+          _unifiedPreferences?.qualityLabel(download: true) ??
+          _effectiveQuality(
+            PlatformType.qq,
+            download: true,
+          ).displayNameFor(PlatformType.qq),
+      onQuality: (download) => _unifiedPreferences == null
+          ? _quality(PlatformType.qq, download)
+          : _windowsQuality(download),
+      backgroundLabel: appearance?.backgroundFile == null
           ? WindowsMusicStrings.defaultBackground
           : WindowsMusicStrings.savedBackground,
-      fontLabel: appearance.fontLabel,
-      closeAction: appearance.preferences.closeAction,
-      nativeAvailable: appearance.nativeAvailable,
+      fontLabel:
+          (widget.redesign
+              ? appearance?.currentFontLabel
+              : appearance?.fontLabel) ??
+          WindowsMusicStrings.defaultFont,
+      closeAction:
+          appearance?.preferences.closeAction ?? WindowsCloseAction.minimize,
+      nativeAvailable: appearance?.nativeAvailable ?? false,
       errors: [
         for (final error in [
-          appearance.preferences.loadError,
-          appearance.backgroundError,
-          appearance.fontError,
-          appearance.nativeError,
+          appearance?.preferences.loadError,
+          appearance?.backgroundError,
+          appearance?.fontError,
+          appearance?.nativeError,
         ].whereType<DesktopFailure>().toSet())
           WindowsMusicStrings.failure(error),
       ],
-      onBackground: () => showWindowsBackgroundPicker(context, appearance),
-      onFont: () => showWindowsFontPicker(context, appearance),
-      onClose: () => showWindowsClosePicker(context, appearance),
-      onRetryNative: appearance.initialize,
+      onBackground: appearance == null
+          ? null
+          : () => showWindowsBackgroundPicker(context, appearance),
+      onFont: appearance == null
+          ? null
+          : () => showWindowsFontPicker(
+              context,
+              appearance,
+              preserveTheme: widget.redesign,
+            ),
+      onClose: appearance == null
+          ? null
+          : () => showWindowsClosePicker(context, appearance),
+      onRetryNative: appearance?.initialize,
       onExit: () async {
         try {
-          await appearance.window.exitApplication();
+          await appearance?.window.exitApplication();
         } on DesktopConfigurationException catch (error) {
           _notice(error.toString());
         }
@@ -857,9 +1202,25 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     );
   }
 
+  Widget _workspaceSettings([String? section]) => IkSettingsWorkspace(
+    preferences: widget.preferences,
+    unified: _unifiedPreferences,
+    appearance: widget.windowsAppearance,
+    initialSection: section ?? _settingsSection,
+    onThemeChanged: widget.onThemeChanged,
+    onAccount: _account,
+    onSync: _sync,
+    onSources: _customSource,
+    onDirectory: widget.windowsAppearance == null
+        ? _directory
+        : _windowsDirectory,
+    onDownloads: _downloads,
+    onCache: () => context.push('/offline-cache'),
+  );
+
   Future<void> _quality(PlatformType platform, bool download) async {
     if (platform == PlatformType.local) return;
-    if (widget.windowsAppearance != null) {
+    if (_unifiedPreferences != null) {
       await _windowsQuality(download);
       return;
     }
@@ -982,6 +1343,156 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     ),
   );
 
+  Future<void> _ikSongMore(Song song) async {
+    final local = ref.read(likesProvider).songs.contains(song);
+    final action = widget.workspace
+        ? await _workspaceSongMenu(song, local)
+        : await showModalBottomSheet<String>(
+            context: context,
+            showDragHandle: true,
+            builder: (sheet) => SafeArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: Text(song.name),
+                      subtitle: Text(song.artistNames),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.favorite_outline),
+                      title: Text(
+                        local ? IkStrings.removeLocal : IkStrings.saveLocal,
+                      ),
+                      onTap: () => Navigator.pop(sheet, 'local'),
+                    ),
+                    if (song.platform != PlatformType.local)
+                      ListTile(
+                        leading: const Icon(Icons.cloud_outlined),
+                        title: const Text(VideoStrings.toggleLike),
+                        onTap: () => Navigator.pop(sheet, 'like'),
+                      ),
+                    ListTile(
+                      leading: const Icon(Icons.album_outlined),
+                      title: const Text(IkStrings.album),
+                      enabled:
+                          (song.albumId ?? song.album?.id ?? '').isNotEmpty,
+                      onTap: () => Navigator.pop(sheet, 'album'),
+                    ),
+                    for (final artist in song.artists.where(
+                      (value) => value.id.isNotEmpty,
+                    ))
+                      ListTile(
+                        leading: const Icon(Icons.person_outline),
+                        title: Text('${IkStrings.artist} · ${artist.name}'),
+                        onTap: () =>
+                            Navigator.pop(sheet, 'artist:${artist.id}'),
+                      ),
+                    if (song.platform != PlatformType.local)
+                      ListTile(
+                        leading: const Icon(Icons.download_outlined),
+                        title: const Text(VideoStrings.downloadSong),
+                        onTap: () => Navigator.pop(sheet, 'download'),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          );
+    if (!mounted || action == null) return;
+    if (action == 'local') {
+      await ref.read(likesProvider.notifier).toggleLike(song);
+    } else if (action == 'like') {
+      await _toggleLike(song);
+    } else if (action == 'download') {
+      await _download([song]);
+    } else if (action == 'album') {
+      await context.push<void>(
+        Uri(
+          pathSegments: [
+            '',
+            'album',
+            song.platform.name,
+            song.albumId ?? song.album!.id,
+          ],
+          queryParameters: {'name': song.album?.name ?? ''},
+        ).toString(),
+      );
+    } else if (action.startsWith('artist:')) {
+      await context.push<void>(
+        Uri(
+          pathSegments: ['', 'artist', song.platform.name, action.substring(7)],
+        ).toString(),
+      );
+    }
+  }
+
+  Future<String?> _workspaceSongMenu(Song song, bool local) {
+    final size = MediaQuery.sizeOf(context);
+    final point = _workspacePointer ?? Offset(size.width / 2, size.height / 2);
+    PopupMenuItem<String> item(
+      String value,
+      String label,
+      IconData icon, {
+      bool enabled = true,
+    }) => PopupMenuItem(
+      value: value,
+      enabled: enabled,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 22,
+            height: 22,
+            child: Center(child: Icon(icon, size: 18)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
+    return showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        point.dx,
+        point.dy,
+        size.width - point.dx,
+        size.height - point.dy,
+      ),
+      constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
+      items: [
+        PopupMenuItem<String>(
+          enabled: false,
+          child: Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+        const PopupMenuDivider(),
+        item(
+          'local',
+          local ? IkStrings.removeLocal : IkStrings.saveLocal,
+          Icons.favorite_border,
+        ),
+        if (song.platform != PlatformType.local)
+          item('like', VideoStrings.toggleLike, Icons.cloud_outlined),
+        item(
+          'album',
+          IkStrings.album,
+          Icons.album_outlined,
+          enabled: (song.albumId ?? song.album?.id ?? '').isNotEmpty,
+        ),
+        for (final artist in song.artists.where((value) => value.id.isNotEmpty))
+          item(
+            'artist:${artist.id}',
+            '${IkStrings.artist} · ${artist.name}',
+            Icons.person_outline,
+          ),
+        if (song.platform != PlatformType.local)
+          item('download', VideoStrings.downloadSong, Icons.download_outlined),
+      ],
+    );
+  }
+
   void _downloads() => Navigator.of(context).push(
     MaterialPageRoute<void>(
       builder: (_) => Consumer(
@@ -1025,14 +1536,24 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                                       DownloadStatus.failed =>
                                         VideoStrings.downloadFailed,
                                     },
-                                style: const TextStyle(fontSize: 11),
+                                style: TextStyle(
+                                  fontSize: VideoTheme.readableSize(
+                                    context,
+                                    11,
+                                  ),
+                                ),
                               ),
                               if (widget.windowsAppearance != null)
                                 Text(
                                   WindowsMusicPreferences.qualityName(
                                     task.quality,
                                   ),
-                                  style: const TextStyle(fontSize: 11),
+                                  style: TextStyle(
+                                    fontSize: VideoTheme.readableSize(
+                                      context,
+                                      11,
+                                    ),
+                                  ),
                                 ),
                               if (task.status == DownloadStatus.downloading)
                                 LinearProgressIndicator(value: task.progress),
@@ -1462,32 +1983,34 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       await Navigator.of(context).push<void>(
         MaterialPageRoute(
           builder: (_) => widget.expandedPlatforms
-              ? SourceManagerPage(
-                  initial: settings.value,
-                  warning: settings.loadError,
-                  runtimeId: '${Theme.of(context).platform.name}-lx3',
-                  initialChecks: SourceCheckStore(widget.preferences.box)
-                      .load(),
-                  onChecksChanged: SourceCheckStore(widget.preferences.box)
-                      .save,
-                  onImport: (link, token) => LxSourceImporterV3(
-                    dio: dio,
-                    engine: engine,
-                  ).importLink(link, cancelToken: token),
-                  onInspect: (config, token) async {
-                    await engine.inspect(config.script, cancelToken: token);
-                  },
-                  onSave: (value) async {
-                    await settings.save(value);
-                    widget.onCustomSourceChanged?.call();
-                    if (mounted) {
-                      setState(() {});
-                    }
-                  },
-                  onHttp: () {
-                    Navigator.pop(context);
-                    unawaited(_httpCustomSource());
-                  },
+              ? IkSourceEditingScope(
+                  child: SourceManagerPage(
+                    initial: settings.value,
+                    warning: settings.loadError,
+                    runtimeId: '${Theme.of(context).platform.name}-lx3',
+                    initialChecks: SourceCheckStore(widget.preferences.box)
+                        .load(),
+                    onChecksChanged: SourceCheckStore(widget.preferences.box)
+                        .save,
+                    onImport: (link, token) => LxSourceImporterV3(
+                      dio: dio,
+                      engine: engine,
+                    ).importLink(link, cancelToken: token),
+                    onInspect: (config, token) async {
+                      await engine.inspect(config.script, cancelToken: token);
+                    },
+                    onSave: (value) async {
+                      await settings.save(value);
+                      widget.onCustomSourceChanged?.call();
+                      if (mounted) {
+                        setState(() {});
+                      }
+                    },
+                    onHttp: () {
+                      Navigator.pop(context);
+                      unawaited(_httpCustomSource());
+                    },
+                  ),
                 )
               : SourceCollectionPage(
                   initial: settings.value,
@@ -1610,7 +2133,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     final local = ref.read(localMusicProvider);
     _notice(local.error ?? VideoStrings.loadedLocalSongs(local.songs.length));
     setState(() {
-      _index = 0;
+      _index = widget.redesign ? 1 : 0;
       _searchPlatform = PlatformType.local;
     });
     if (_search.text.trim().isNotEmpty) unawaited(_runSearch(_search.text));
@@ -1622,9 +2145,23 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final player = ref.watch(playerProvider);
-    final downloads = ref.watch(downloadProvider);
-    final cache = ref.watch(offlineCacheSettingsProvider);
     ref.listen(authProvider, (previous, next) {
+      if (widget.redesign) {
+        for (final platform in _platforms) {
+          if (previous?.userFor(platform)?.id == next.userFor(platform)?.id) {
+            continue;
+          }
+          _libraryEpoch[platform] = (_libraryEpoch[platform] ?? 0) + 1;
+          _syncing.remove(platform);
+          _libraries.remove(platform);
+          _pushLikes();
+          if (next.isLoggedIn(platform)) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) unawaited(_sync(platform));
+            });
+          }
+        }
+      }
       if (next.expiredPlatform != null &&
           previous?.expiryNoticeId != next.expiryNoticeId) {
         final platform = next.expiredPlatform!;
@@ -1650,6 +2187,126 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       );
     }
 
+    if (widget.redesign) {
+      final localLikes = ref.watch(likesProvider);
+      final pages = <Widget>[
+        IkHomePage(
+          workspace: widget.workspace,
+          onNavigate: (path) => context.push(path),
+          onPlayer: _openPlayer,
+          onPlay: _play,
+          onMore: _ikSongMore,
+        ),
+        if (widget.workspace)
+          IkSearchWorkspace(
+            search: _ikSearch,
+            onPlay: _play,
+            onLike: _toggleLike,
+            onMore: _ikSongMore,
+            onAccount: _account,
+            likedKeys: liked,
+            currentSong: player.currentSong,
+          )
+        else
+          IkSearchPage(
+            search: _ikSearch,
+            onPlay: _play,
+            onLike: _toggleLike,
+            onMore: _ikSongMore,
+            onAccount: _account,
+            likedKeys: liked,
+            currentSong: player.currentSong,
+          ),
+        if (widget.workspace)
+          IkLibraryWorkspace(
+            libraries: _libraries,
+            syncing: _syncing,
+            loggedIn: {
+              for (final platform in _platforms)
+                if (auth.isLoggedIn(platform)) platform,
+            },
+            onSync: _sync,
+            onPlay: _play,
+            onMore: _ikSongMore,
+            onNavigate: (path) => context.push(path),
+            onDownloads: _downloads,
+            onAccounts: () => setState(() {
+              _settingsSection = 'accounts';
+              _index = 4;
+            }),
+            localLikes: localLikes.songs,
+            localLoading: localLikes.isLoading,
+            localError: localLikes.error,
+            onRetryLocal: () =>
+                unawaited(ref.read(likesProvider.notifier).loadAllLikes()),
+            currentSong: player.currentSong,
+          )
+        else
+          IkLibraryPage(
+            libraries: _libraries,
+            syncing: _syncing,
+            loggedIn: {
+              for (final platform in _platforms)
+                if (auth.isLoggedIn(platform)) platform,
+            },
+            onAccount: _account,
+            onSync: _sync,
+            onPlay: _play,
+            onLike: _toggleLike,
+            onMore: _ikSongMore,
+            onNavigate: (path) => context.push(path),
+            onDownloads: _downloads,
+            localLikes: localLikes.songs,
+            localLoading: localLikes.isLoading,
+            localError: localLikes.error,
+            onRetryLocal: () =>
+                unawaited(ref.read(likesProvider.notifier).loadAllLikes()),
+            currentSong: player.currentSong,
+          ),
+        if (widget.workspace)
+          IkRecentPage(
+            onNavigate: (path) => context.push(path),
+            onMore: _ikSongMore,
+          ),
+        widget.workspace ? _workspaceSettings() : _settingsPage(),
+      ];
+      if (widget.workspace) {
+        return Listener(
+          onPointerDown: (event) => _workspacePointer = event.position,
+          child: IkDesktopWorkspace(
+            index: _index,
+            onSelect: (index) => setState(() => _index = index),
+            onAccount: () => setState(() {
+              _settingsSection = 'accounts';
+              _index = 4;
+            }),
+            pages: pages,
+            playbackBar: IkPlaybackBar(
+              onOpen: _openPlayer,
+              onAudio: () => setState(() {
+                _settingsSection = 'audio';
+                _index = 4;
+              }),
+            ),
+          ),
+        );
+      }
+      return IkShell(
+        index: _index,
+        onSelect: (index) => setState(() => _index = index),
+        pages: pages,
+        queue: const IkQueuePanel(),
+        miniPlayer: VideoMiniPlayer(
+          song: player.currentSong,
+          isPlaying: player.isPlaying,
+          isLoading: player.isTransitioning,
+          error: player.error,
+          onOpen: _openPlayer,
+          onToggle: ref.read(playerProvider.notifier).togglePlay,
+          onQueue: _queue,
+        ),
+      );
+    }
     return VideoShell(
       expandedPlatforms: widget.expandedPlatforms,
       platformIcons: widget.windowsAppearance != null,
@@ -1702,57 +2359,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             currentSong: player.currentSong,
             syncComplete: _libraries[platform]?.complete ?? false,
           ),
-        _myPage(
-          VideoMyPage(
-            platforms: _platforms,
-            localSongCount: _localReady
-                ? ref.watch(localMusicProvider).songs.length
-                : null,
-            accounts: {
-              for (final platform in _platforms)
-                if (auth.userFor(platform) case final user?)
-                  platform: VideoAccountSummary(
-                    nickname: user.nickname,
-                    avatarUrl: user.avatarUrl,
-                    loaded: _libraries[platform]?.loaded ?? 0,
-                    total: _libraries[platform]?.total,
-                    complete: _libraries[platform]?.complete ?? false,
-                  ),
-            },
-            cacheLabel:
-                '${_mb(downloads.estimatedOfflineCacheBytes)} / ${cache.sizeLimitMb} MB',
-            downloadLabel: VideoStrings.taskCount(downloads.tasks.length),
-            themeLabel: switch (widget.preferences.theme) {
-              'dark' => VideoStrings.darkTheme,
-              'system' => VideoStrings.systemTheme,
-              _ => VideoStrings.lightTheme,
-            },
-            qualityLabels: {
-              for (final platform in _platforms) ...{
-                '${platform.name}:play':
-                    widget.sourceSettings?.value.highestQuality == true
-                    ? SourceStrings.highest
-                    : widget.preferences
-                          .quality(platform)
-                          .displayNameFor(platform),
-                '${platform.name}:download': widget.preferences
-                    .quality(platform, download: true)
-                    .displayNameFor(platform),
-              },
-            },
-            customSourceLabel: _customSourceLabel,
-            onAccount: _account,
-            onQuality: _quality,
-            onCache: _cache,
-            onDownloads: _downloads,
-            onDirectory: widget.windowsAppearance == null
-                ? _directory
-                : _windowsDirectory,
-            onTheme: _theme,
-            onLocal: _local,
-            onCustomSource: _customSource,
-          ),
-        ),
+        _settingsPage(),
       ],
       miniPlayer: VideoMiniPlayer(
         song: player.currentSong,

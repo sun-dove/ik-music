@@ -1,0 +1,4 @@
+# 原生构建脚本跨 Windows/Ubuntu 复现，保持 LF；上游补丁上下文空行保留。
+native/ik_spatial/*.sh text eol=lf
+native/ik_spatial/*.patch text eol=lf -whitespace
+native/ik_spatial/data/MIT-KEMAR-LICENSE text eol=lf

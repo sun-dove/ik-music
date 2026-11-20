@@ -184,10 +184,10 @@ Win32Window::MessageHandler(HWND hwnd,
 #ifdef YUEYIN_BUILD
         const int choice = MessageBoxW(
             hwnd,
-            L"是否让悦音音乐在后台继续运行？\n\n"
+            L"是否让 IK Music 在后台继续运行？\n\n"
             L"选择“是”：最小化窗口并继续播放。\n"
-            L"选择“否”：退出悦音音乐。",
-            L"关闭悦音音乐",
+            L"选择“否”：退出 IK Music。",
+            L"关闭 IK Music",
             MB_YESNO | MB_ICONQUESTION | MB_DEFBUTTON1);
 #else
         const int choice = MessageBoxW(

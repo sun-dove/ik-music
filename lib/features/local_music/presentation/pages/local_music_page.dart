@@ -2,6 +2,9 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+
+import '../../../../video_app/ui/video_theme.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/share/song_actions.dart';
@@ -169,9 +172,9 @@ class _Header extends StatelessWidget {
             dense: true,
             value: state.mergeWithOnline,
             title: const Text('与在线曲库去重', style: TextStyle(fontSize: 13)),
-            subtitle: const Text(
+            subtitle: Text(
               '同一首歌只显示一条（本地优先）',
-              style: TextStyle(fontSize: 11),
+              style: TextStyle(fontSize: VideoTheme.readableSize(context, 11)),
             ),
             onChanged: (value) => notifier.setMergeWithOnline(value),
           ),

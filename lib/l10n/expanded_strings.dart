@@ -1,3 +1,5 @@
+import '../video_app/ik/ik_version.dart';
+
 /// 悦音扩展入口的文案，沿用独立入口的集中管理方式。
 class ExpandedStrings {
   static const operationCancelled = '已取消音源操作。';
@@ -6,7 +8,7 @@ class ExpandedStrings {
   static const windowsCodeLimit = '音源脚本超出Windows运行时大小限制。';
   static const windowsScriptTimeout = '音源脚本执行超时，已结束独立运行进程，可重试或切换音源。';
   static const windowsScriptFailed = 'Windows音源脚本执行失败，请检查兼容范围或切换音源。';
-  static const appName = '乐音音乐';
+  static const appName = IkVersion.name;
   static const kugouUnavailable = '酷狗服务暂未返回可用数据，请稍后重试。';
   static const kugouInvalid = '酷狗返回数据不完整，请重试。';
   static const positivePage = '页数和数量必须为正数';

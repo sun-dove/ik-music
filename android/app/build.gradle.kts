@@ -1,4 +1,5 @@
 import java.util.Properties
+import groovy.json.JsonSlurper
 
 plugins {
     id("com.android.application")
@@ -8,6 +9,9 @@ plugins {
 }
 
 val videoAppBuild = providers.environmentVariable("VIDEO_MUSIC_BUILD").orNull == "1"
+val videoVersion = if (videoAppBuild) {
+    JsonSlurper().parse(rootProject.file("../ik-version.json")) as Map<*, *>
+} else emptyMap<String, Any>()
 val videoSigning = Properties().apply {
     if (videoAppBuild) {
         val propertiesPath = providers.environmentVariable("VIDEO_MUSIC_SIGNING_PROPERTIES").orNull
@@ -32,11 +36,17 @@ android {
 
     defaultConfig {
         applicationId = if (videoAppBuild) "app.videomusic.player" else "com.mconnect.mconnect"
-        manifestPlaceholders["appLabel"] = if (videoAppBuild) "乐音音乐" else "Mconnect"
+        manifestPlaceholders["appLabel"] = if (videoAppBuild) videoVersion["name"] as String else "Mconnect"
+        manifestPlaceholders["flutterDeepLinkingEnabled"] = !videoAppBuild
+        manifestPlaceholders["roundIcon"] = if (videoAppBuild) {
+            "@mipmap/ic_launcher_round"
+        } else {
+            "@mipmap/ic_launcher"
+        }
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
-        versionCode = if (videoAppBuild) 8 else flutter.versionCode
-        versionName = if (videoAppBuild) "0.5.0" else flutter.versionName
+        versionCode = if (videoAppBuild) (videoVersion["build"] as Number).toInt() else flutter.versionCode
+        versionName = if (videoAppBuild) videoVersion["version"] as String else flutter.versionName
     }
 
     if (videoAppBuild) {

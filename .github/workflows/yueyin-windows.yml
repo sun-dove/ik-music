@@ -1,8 +1,8 @@
-name: 乐音 Windows 构建
+name: IK Music Windows 构建
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, release/dj-music-0.5.1, feature/ik-complete]
     paths:
       - 'lib/**'
       - 'test/**'
@@ -12,8 +12,19 @@ on:
       - 'windows/**'
       - 'scripts/build_video_windows.ps1'
       - 'scripts/build_windows_lx_host.ps1'
+      - 'scripts/ik_*.ps1'
+      - 'scripts/prepare_ik_*.ps1'
+      - 'scripts/verify_ik_*.ps1'
+      - 'scripts/write_ik_*.ps1'
+      - 'scripts/copy_ik_*.ps1'
+      - 'native/**'
       - 'installer/yueyin.iss'
-      - 'docs/交付文档/乐音音乐050Windows说明.md'
+      - 'installer/ik_version.iss'
+      - 'ik-version.json'
+      - 'scripts/sync_ik_version.ps1'
+      - 'docs/交付文档/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
       - '.github/workflows/yueyin-windows.yml'
 permissions:
   contents: read
@@ -23,7 +34,47 @@ concurrency:
   group: yueyin-windows-${{ github.ref }}
   cancel-in-progress: false
 jobs:
+  native:
+    uses: ./.github/workflows/ik-native.yml
+  spatial:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: 准备固定原生工具链与源码
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential patch xz-utils python3 ca-certificates gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix meson ninja-build pkg-config nasm autoconf automake libtool
+          python3 native/ik_spatial/download_sources.py --directory "$RUNNER_TEMP/ik-sources"
+          python3 native/ik_spatial/generate_hrtf.py
+      - name: HRTF 核心确定性门及单 DLL 构建
+        run: |
+          gcc -O3 -std=c11 -Wall -Wextra -Werror native/ik_spatial/ik_spatial.c native/ik_spatial/ik_spatial_gate.c -lm -o "$RUNNER_TEMP/ik-spatial-gate"
+          "$RUNNER_TEMP/ik-spatial-gate"
+          bash native/ik_spatial/build_windows.sh "$RUNNER_TEMP/ik-spatial-build" "$RUNNER_TEMP/ik-sources"
+      - name: 收集同次构建二进制、许可与可重建源码
+        run: |
+          mkdir -p "$RUNNER_TEMP/ik-spatial/spatial" "$RUNNER_TEMP/ik-audio-source/upstream" "$RUNNER_TEMP/ik-audio-release"
+          cp "$RUNNER_TEMP/ik-spatial-build/mpv/libmpv-2.dll" "$RUNNER_TEMP/ik-spatial/spatial/"
+          cp -r "$RUNNER_TEMP/ik-spatial-build/licenses" "$RUNNER_TEMP/ik-spatial/licenses"
+          cp "$RUNNER_TEMP/ik-sources/"* "$RUNNER_TEMP/ik-audio-source/upstream/"
+          git archive HEAD LICENSE NOTICE.md native/ik_spatial | tar -xf - -C "$RUNNER_TEMP/ik-audio-source"
+          cp -r "$RUNNER_TEMP/ik-spatial-build/licenses" "$RUNNER_TEMP/ik-audio-source/licenses"
+          tar -czf "$RUNNER_TEMP/ik-audio-release/ik-audio-sources.tar.gz" -C "$RUNNER_TEMP/ik-audio-source" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ik-spatial-windows
+          path: ${{ runner.temp }}/ik-spatial/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ik-audio-sources
+          path: ${{ runner.temp }}/ik-audio-release/ik-audio-sources.tar.gz
+          if-no-files-found: error
+          retention-days: 14
   windows:
+    needs: [native, spatial]
     runs-on: windows-2022
     timeout-minutes: 45
     steps:
@@ -38,18 +89,33 @@ jobs:
           flutter pub get --enforce-lockfile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git diff --exit-code -- pubspec.lock
+      - uses: actions/download-artifact@v4
+        with:
+          name: ik-spatial-windows
+          path: ${{ runner.temp }}/ik-spatial
+      - name: 真实解码格式、网络音频、均衡器与 3D 共存门
+        run: |
+          choco install ffmpeg --no-progress -y
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:IK_GATE_FFMPEG = 'C:/ProgramData/chocolatey/bin/ffmpeg.exe'
+          python native/ik_spatial/verify_formats.py --dll "$env:RUNNER_TEMP/ik-spatial/spatial/libmpv-2.dll" --output-dir "$env:RUNNER_TEMP/ik-format-gate"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: 完整静态检查和回归
         run: |
+          ./scripts/sync_ik_version.ps1 -Check
           flutter analyze --no-pub
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           flutter test --no-pub -j 1
           exit $LASTEXITCODE
       - name: 编译独立宿主、原生验收与发行包
         shell: powershell
-        run: ./scripts/build_video_windows.ps1 -FlutterSdk $env:FLUTTER_ROOT -DependencyDirectory "$env:RUNNER_TEMP/yueyin-native"
+        run: |
+          $dll = "$env:RUNNER_TEMP/ik-spatial/spatial/libmpv-2.dll"
+          $hash = (Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash
+          ./scripts/build_video_windows.ps1 -FlutterSdk $env:FLUTTER_ROOT -DependencyDirectory "$env:RUNNER_TEMP/yueyin-native" -Compact -SpatialAudioDll $dll -SpatialAudioSha256 $hash -SpatialAudioLicenses "$env:RUNNER_TEMP/ik-spatial/licenses"
       - uses: actions/upload-artifact@v4
         with:
-          name: yueyin-0.5.0-windows-x64
+          name: ik-windows-x64
           path: build/yueyin-release/*
           if-no-files-found: error
           retention-days: 14

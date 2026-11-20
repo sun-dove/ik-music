@@ -14,6 +14,7 @@ class ExpandedSourcePlayerNotifier extends MultiSourceVideoPlayerNotifier {
     super.playbackMemoryStore,
     super.offlineFilePathResolver,
     super.isOfflineModeEnabled,
+    super.userGain,
   });
   @override
   List<SourceCandidate> candidatesFor(Song song, AudioLevel quality) =>

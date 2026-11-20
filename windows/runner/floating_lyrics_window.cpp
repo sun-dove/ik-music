@@ -191,9 +191,14 @@ bool FloatingLyricsWindow::EnsureWindow() {
   }
 
   RegisterFloatingLyricsWindowClass();
+#ifdef YUEYIN_BUILD
+  const wchar_t* title = L"IK Music Floating Lyrics";
+#else
+  const wchar_t* title = L"Mconnect Floating Lyrics";
+#endif
   window_ = CreateWindowExW(
       WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TOOLWINDOW, kClassName,
-      L"Mconnect Floating Lyrics", WS_POPUP, 0, 0, width_, height_, nullptr,
+      title, WS_POPUP, 0, 0, width_, height_, nullptr,
       nullptr, GetModuleHandle(nullptr), this);
   if (window_ == nullptr) {
     return false;

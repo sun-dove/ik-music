@@ -1,6 +1,7 @@
 package com.mconnect.mconnect
 
 import android.app.Activity
+import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.res.Configuration
@@ -57,6 +58,21 @@ class MainActivity : AudioServiceActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        if (packageName == "app.videomusic.player" && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            val channelId = "com.mconnect.mconnect.audio"
+            val channel = notificationManager.getNotificationChannel(channelId)
+                ?: android.app.NotificationChannel(
+                    channelId,
+                    "IK Music playback",
+                    NotificationManager.IMPORTANCE_LOW,
+                )
+            if (channel.name.toString() != "IK Music playback") {
+                channel.name = "IK Music playback"
+                notificationManager.createNotificationChannel(channel)
+            }
+        }
 
         if (packageName == "app.videomusic.player" && Build.VERSION.SDK_INT >= 26 && !flutterEngine.plugins.has(VideoLxPlugin::class.java)) {
             flutterEngine.plugins.add(VideoLxPlugin())

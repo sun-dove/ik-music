@@ -10,28 +10,43 @@ class VideoTheme {
   static ThemeData get light => _theme(Brightness.light);
   static ThemeData get dark => _theme(Brightness.dark);
 
-  static Color canvas(BuildContext context) =>
-      Theme.of(context).extension<WindowsAppearanceTheme>()?.hasBackground ==
-          true
-      ? Colors.transparent
-      : Theme.of(context).brightness == Brightness.dark
-      ? const Color(0xFF17171C)
-      : background;
+  static Color canvas(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = theme.extension<IkThemeColors>();
+    if (palette?.hasBackground == true ||
+        theme.extension<WindowsAppearanceTheme>()?.hasBackground == true) {
+      return Colors.transparent;
+    }
+    return palette?.background ??
+        (theme.brightness == Brightness.dark
+            ? const Color(0xFF17171C)
+            : background);
+  }
 
   static Color surface(BuildContext context) {
-    final color = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF25242C)
-        : card;
-    return Theme.of(context)
-                .extension<WindowsAppearanceTheme>()
-                ?.hasBackground ==
-            true
+    final theme = Theme.of(context);
+    final palette = theme.extension<IkThemeColors>();
+    final color =
+        palette?.surface ??
+        (theme.brightness == Brightness.dark ? const Color(0xFF25242C) : card);
+    return palette?.hasBackground == true ||
+            theme.extension<WindowsAppearanceTheme>()?.hasBackground == true
         ? color.withValues(alpha: .86)
         : color;
   }
 
+  static Color accent(BuildContext context) =>
+      Theme.of(context).extension<IkThemeColors>() == null
+      ? primary
+      : Theme.of(context).colorScheme.primary;
+
   static Color secondaryText(BuildContext context) =>
       Theme.of(context).colorScheme.onSurface.withValues(alpha: .58);
+
+  static double readableSize(BuildContext context, double legacy) =>
+      Theme.of(context).extension<IkThemeColors>() != null && legacy < 12
+      ? 12
+      : legacy;
 
   static ThemeData _theme(Brightness brightness) {
     final dark = brightness == Brightness.dark;
@@ -74,6 +89,35 @@ class VideoTheme {
       ),
     );
   }
+}
+
+/// 仅 ik 改版装配；共享组件缺省仍使用原颜色。
+class IkThemeColors extends ThemeExtension<IkThemeColors> {
+  const IkThemeColors({
+    required this.background,
+    required this.surface,
+    this.hasBackground = false,
+  });
+  final Color background, surface;
+  final bool hasBackground;
+  @override
+  IkThemeColors copyWith({
+    Color? background,
+    Color? surface,
+    bool? hasBackground,
+  }) => IkThemeColors(
+    background: background ?? this.background,
+    surface: surface ?? this.surface,
+    hasBackground: hasBackground ?? this.hasBackground,
+  );
+  @override
+  IkThemeColors lerp(covariant IkThemeColors? other, double t) => other == null
+      ? this
+      : IkThemeColors(
+          background: Color.lerp(background, other.background, t)!,
+          surface: Color.lerp(surface, other.surface, t)!,
+          hasBackground: t < .5 ? hasBackground : other.hasBackground,
+        );
 }
 
 /// 仅新 Windows 装配提供该扩展；原 light/dark 及缺省颜色精确保持。

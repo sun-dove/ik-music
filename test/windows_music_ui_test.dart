@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mconnect/lyrics/models/lyrics_line.dart';
+import 'package:mconnect/l10n/ik_strings.dart';
+import 'package:mconnect/l10n/windows_music_strings.dart';
 import 'package:mconnect/models/artist.dart';
 import 'package:mconnect/models/platform_type.dart';
 import 'package:mconnect/models/song.dart';
@@ -117,6 +119,22 @@ Future<void> mount(
 }
 
 void main() {
+  testWidgets('Windows「我的」页显示 IK Music 与新图标', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await mount(tester, settingsPage());
+    expect(find.text('IK Music'), findsOneWidget);
+    expect(
+      find.image(
+        const AssetImage(
+          'assets/branding/dj-music/source/windows/yangyin-256.png',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('W01/W03：桌面只有播放和下载两项，分别可点', (tester) async {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -144,6 +162,36 @@ void main() {
     expect(find.text('下一句歌词'), findsOneWidget);
     await tester.tap(find.text('下一句歌词'));
     expect(seeks, [const Duration(seconds: 20)]);
+  });
+  testWidgets('U06 完整播放器320宽150%字号的返回与桌面歌词均可点', (tester) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    var lyricsCalls = 0;
+    await mount(
+      tester,
+      WindowsPlayerPage(
+        song: song,
+        position: const Duration(seconds: 12),
+        duration: const Duration(minutes: 4),
+        isPlaying: true,
+        lyrics: lines,
+        onToggle: () {},
+        onPrevious: () {},
+        onNext: () {},
+        onSeek: (_) {},
+        onQueue: () {},
+        onMode: () {},
+        onDesktopLyrics: () => lyricsCalls++,
+        playbackBar: const SizedBox(height: 180),
+      ),
+      size: const Size(320, 800),
+      scale: 1.5,
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text(WindowsMusicStrings.back).hitTestable(), findsOneWidget);
+    expect(find.text(IkStrings.floating).hitTestable(), findsOneWidget);
+    await tester.tap(find.text(IkStrings.floating));
+    expect(lyricsCalls, 1);
   });
   for (final size in [
     const Size(900, 600),

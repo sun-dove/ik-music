@@ -1,5 +1,6 @@
 import 'l10n/source_strings.dart';
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -14,8 +15,16 @@ import 'core/network/platform_http.dart';
 import 'features/player/data/background_audio_initializer.dart';
 import 'features/player/data/player_playback_memory_store.dart';
 import 'features/player/presentation/providers/player_provider.dart';
+import 'features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
+import 'features/audio_effects/presentation/providers/audio_effects_provider.dart';
 import 'features/auth/presentation/providers/auth_provider.dart';
 import 'features/download/presentation/providers/download_provider.dart';
+import 'features/download/presentation/providers/download_quality_provider.dart';
+import 'features/discovery/presentation/providers/recommendations_provider.dart';
+import 'features/library/presentation/providers/my_playlists_provider.dart';
+import 'features/library/presentation/providers/library_metadata_provider.dart';
+import 'l10n/ik_strings.dart';
+import 'video_app/ik/ik_home_page.dart';
 import 'features/download/data/repositories/download_manager.dart';
 import 'features/download/domain/entities/download_failure.dart';
 import 'features/offline_cache/presentation/providers/offline_cache_provider.dart';
@@ -25,6 +34,12 @@ import 'platform/netease/netease_endpoints.dart';
 import 'platform/kugou/kugou_api.dart';
 import 'platform/kugou/kugou_platform.dart';
 import 'core/platform/platform_utils.dart';
+import 'core/share/share_service.dart';
+import 'video_app/ik/ik_share.dart';
+import 'video_app/ik/ik_spatial_runtime.dart';
+import 'video_app/ik/ik_lyrics_action.dart';
+import 'video_app/ik/ik_strict_settings.dart';
+import 'video_app/ik/ik_user_gain.dart';
 import 'models/platform_type.dart';
 import 'models/song.dart';
 import 'l10n/video_strings.dart';
@@ -40,18 +55,21 @@ import 'video_app/custom_source/custom_source_storage.dart';
 import 'video_app/lx_source/lx_source.dart';
 import 'video_app/lx_source/lx_runtime.dart';
 import 'video_app/lx_source/lx_runtime_v3.dart';
-import 'video_app/multi_source/source_collection.dart';
 import 'video_app/multi_source/source_coordinator.dart';
 import 'video_app/multi_source/source_service.dart';
 import 'video_app/multi_source/multi_source_player.dart';
-import 'video_app/multi_source/expanded_source_player.dart';
+import 'video_app/built_in/catalog.dart';
+import 'video_app/built_in/catalog_coordinator.dart';
+import 'video_app/built_in/catalog_player.dart';
+import 'video_app/built_in/catalog_sandbox.dart';
+import 'video_app/built_in/fixed_importer.dart';
+import 'video_app/built_in/managed_settings.dart';
 import 'video_app/multi_source/source_candidates_v3.dart';
 import 'video_app/playback/video_platforms.dart';
 import 'video_app/playback/video_stream_state.dart';
 import 'video_app/video_app.dart';
 import 'video_app/video_preferences.dart';
 import 'video_app/windows/managed_windows_lx_sandbox.dart';
-import 'video_app/windows/windows_music_preferences.dart';
 import 'video_app/windows/windows_appearance.dart';
 import 'video_app/windows/windows_window_controller.dart';
 
@@ -77,13 +95,13 @@ Future<void> main() async {
       ? DiagnosticsService.instance
       : DiagnosticsService(directoryProvider: () async => windowsStorage);
   await diagnostics.initialize();
-  await BackgroundAudioInitializer.initialize(diagnostics: diagnostics);
+  await BackgroundAudioInitializer.initializeVideoMusic(
+    diagnostics: diagnostics,
+  );
   final preferences = VideoPreferences(settings);
   await preferences.loadCustomSource();
   await preferences.loadLxSource();
-  final SourceSettings sourceSettings = windowsStorage == null
-      ? SourceSettings(preferences)
-      : WindowsSourceSettings(preferences);
+  final sourceSettings = IkManagedSourceSettings(preferences);
   sourceSettings.load();
   late VideoQqPlaybackApi qqApi;
   final kugouCatalog = VideoKugouCatalog();
@@ -92,7 +110,7 @@ Future<void> main() async {
       ? ManagedWindowsLxSandbox()
       : null;
   final sourceEngine = LxSourceRuntimeV3(
-    sandbox: windowsSandbox,
+    sandbox: windowsSandbox == null ? null : IkCatalogSandbox(windowsSandbox),
     environment: PlatformUtils.isDesktop ? 'desktop' : 'mobile',
     kugouInfo: kugouCatalog.musicInfo,
     qqInfoCancellable: (id, token) => qqApi.withCancellation(
@@ -100,19 +118,38 @@ Future<void> main() async {
       () async => (await qqApi.ensureMetadata(id))?.lxInfo ?? {},
     ),
   );
+  late final ProviderContainer container;
+  final sourceCatalog = await IkSourceCatalog.load();
+  final catalogCoordinator = IkSourceCatalogCoordinator(
+    catalog: sourceCatalog,
+    settings: sourceSettings,
+    importer: IkFixedSourceImporter(engine: sourceEngine),
+    runtimeId: '${Platform.operatingSystem}-lx3',
+    isPlaybackActive: () {
+      final state = container.read(playerProvider);
+      return state.currentSong != null || state.isTransitioning;
+    },
+  );
   final windowsAppearance = windowsStorage == null
       ? null
       : WindowsAppearance(
-          preferences: WindowsMusicPreferences(
+          preferences: IkManagedMusicPreferences(
             preferences,
-            sources: sourceSettings as WindowsSourceSettings,
+            sources: sourceSettings,
           )..load(),
           directory: Directory('${windowsStorage.path}/appearance'),
-          window: WindowsWindowController(beforeExit: windowsSandbox!.shutdown),
+          window: WindowsWindowController(
+            beforeExit: () async {
+              catalogCoordinator.dispose();
+              await windowsSandbox!.shutdown();
+            },
+          ),
         );
   if (windowsAppearance != null) await windowsAppearance.initialize();
-  final effectiveQuality =
-      windowsAppearance?.preferences.quality ?? preferences.quality;
+  final unifiedPreferences =
+      windowsAppearance?.preferences ??
+      (IkManagedMusicPreferences(preferences, sources: sourceSettings)..load());
+  final effectiveQuality = unifiedPreferences.quality;
   final sourceRouter = PreparedSourceRouter(
     platformResolver: PlatformRegistry.get,
     fixedQuality: effectiveQuality,
@@ -149,8 +186,34 @@ Future<void> main() async {
     resolver: customSourceResolver,
     config: () => preferences.activeExpandedSourceConfig,
   );
-  final container = ProviderContainer(
+  container = ProviderContainer(
     overrides: [
+      ikSourceCatalogProvider.overrideWithValue(catalogCoordinator),
+      floatingLyricsProvider.overrideWith(
+        (ref) => IkStrictFloatingLyricsNotifier(),
+      ),
+      audioEffectsSettingsProvider.overrideWith(
+        (ref) => IkStrictAudioSettings(),
+      ),
+      offlineCacheSettingsProvider.overrideWith(
+        (ref) => IkStrictCacheSettings(),
+      ),
+      libraryMetadataProvider.overrideWithValue(true),
+      shareServiceProvider.overrideWithValue(
+        const IkShareService(SharePlusChannel()),
+      ),
+      myPlaylistsProvider.overrideWith(
+        (ref) => MyPlaylistsNotifier(
+          invalidShareMessage: IkStrings.invalidPlaylistLink,
+          importFailureLabel: IkStrings.importPlaylistFailed,
+        ),
+      ),
+      downloadQualityProvider.overrideWithValue(
+        (platform) => effectiveQuality(platform, download: true),
+      ),
+      recommendationsProvider.overrideWith(
+        (ref) => IkRecommendationsNotifier(),
+      ),
       authProvider.overrideWith((ref) => VideoAuthNotifier()),
       downloadProvider.overrideWith(
         (ref) => DownloadNotifier(
@@ -215,7 +278,9 @@ Future<void> main() async {
         ),
       ),
       playerProvider.overrideWith(
-        (ref) => ExpandedSourcePlayerNotifier(
+        (ref) => IkCatalogPlayerNotifier(
+          userGain: ref.read(ikUserGainProvider.notifier),
+          catalogCoordinator: catalogCoordinator,
           settings: sourceSettings,
           router: sourceRouter,
           resolve: sourceService.resolve,
@@ -295,10 +360,13 @@ Future<void> main() async {
     ),
   );
   PlatformRegistry.register(KugouPlatform(api: KugouApi(dio: kugouDio)));
+  container.read(ikSpatialRuntimeProvider);
   runApp(
     UncontrolledProviderScope(
       container: container,
       child: VideoMusicApp(
+        redesign: true,
+        workspace: true,
         expandedPlatforms: true,
         catalog: catalog,
         preferences: preferences,
@@ -307,6 +375,7 @@ Future<void> main() async {
         sourceSettings: sourceSettings,
         sourceEngine: sourceEngine,
         windowsAppearance: windowsAppearance,
+        unifiedPreferences: unifiedPreferences,
         onCustomSourceChanged: () {
           playbackCustomSourceFallback.cancel();
           downloadCustomSourceFallback.cancel();
@@ -314,6 +383,9 @@ Future<void> main() async {
       ),
     ),
   );
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    unawaited(catalogCoordinator.prepareOnce());
+  });
 }
 
 class _PreferenceCustomSourceResolver implements CustomSourceResolver {

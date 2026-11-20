@@ -1,0 +1,262 @@
+<div id="mz-current-ui" aria-label="DJ Music Windows 界面改版稿">
+  <style>
+    #mz-current-ui {
+      --ink: light-dark(#24272b, #f1f3f4);
+      --muted: light-dark(#626970, #b6bdc4);
+      --window: light-dark(#efedf1, #22252a);
+      --side: light-dark(#fbf9fb, #191c20);
+      --surface: light-dark(#fffefe, #2b3036);
+      --line: light-dark(#e5e2e6, #41474e);
+      --accent: light-dark(#118d82, #57cfc1);
+      --accent-soft: light-dark(#e3f2ef, #203c39);
+      --font: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+      width: 100%;
+      color: var(--ink);
+      font: 400 14px/1.45 var(--font);
+    }
+    #mz-current-ui *, #mz-current-ui *::before, #mz-current-ui *::after { box-sizing: border-box; }
+    #mz-current-ui .stage { width: 100%; min-height: 760px; }
+    #mz-current-ui .app { width: min(100%, 1280px); height: 760px; margin: 0 auto; overflow: hidden; border: 1px solid var(--line); border-radius: 8px; background: var(--window); display: flex; flex-direction: column; }
+    #mz-current-ui .titlebar { height: 38px; padding: 0 10px 0 13px; display: flex; align-items: center; justify-content: space-between; background: var(--side); border-bottom: 1px solid var(--line); font-size: 13px; }
+    #mz-current-ui .brand { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+    #mz-current-ui .brand img { width: 21px; height: 21px; border-radius: 5px; }
+    #mz-current-ui .window-controls { align-self: stretch; display: flex; align-items: center; color: var(--muted); }
+    #mz-current-ui .window-controls span { width: 42px; text-align: center; font-size: 16px; }
+    #mz-current-ui .workspace { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: 204px minmax(0,1fr); grid-template-rows: minmax(0,1fr) 72px; }
+    #mz-current-ui aside { padding: 18px 12px 13px; display: flex; flex-direction: column; gap: 5px; background: var(--side); border-right: 1px solid var(--line); }
+    #mz-current-ui .logo { min-height: 50px; padding: 3px 8px 12px; display: flex; align-items: center; gap: 9px; }
+    #mz-current-ui .logo img { width: 36px; height: 36px; border-radius: 10px; }
+    #mz-current-ui .logo strong { font-size: 16px; font-weight: 500; }
+    #mz-current-ui .nav { min-height: 43px; padding: 0 10px; display: flex; align-items: center; gap: 11px; border-radius: 6px; color: var(--ink); }
+    #mz-current-ui .nav.active { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+    #mz-current-ui .nav i { width: 19px; height: 19px; color: var(--muted); }
+    #mz-current-ui .nav.active i { color: var(--accent); }
+    #mz-current-ui main { min-width: 0; min-height: 0; overflow-y: auto; padding: 23px 25px 18px; }
+    #mz-current-ui .page-head { min-height: 39px; margin-bottom: 13px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    #mz-current-ui h2 { margin: 0; font-size: 21px; line-height: 1.35; font-weight: 500; }
+    #mz-current-ui .refresh { width: 35px; height: 35px; display: grid; place-items: center; color: var(--muted); }
+    #mz-current-ui .search-box { height: 42px; margin-bottom: 12px; padding: 0 12px; display: flex; align-items: center; gap: 9px; border-radius: 22px; background: var(--surface); }
+    #mz-current-ui .search-box i { color: var(--muted); }
+    #mz-current-ui .search-box input { min-width: 0; flex: 1; border: 0; outline: 0; color: var(--ink); background: transparent; font: inherit; }
+    #mz-current-ui .sources { min-height: 38px; margin-bottom: 12px; padding: 3px; display: flex; gap: 3px; border-radius: 22px; background: var(--surface); }
+    #mz-current-ui .source { min-width: 0; flex: 1; padding: 6px 8px; border: 0; border-radius: 18px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; }
+    #mz-current-ui .source.active { background: var(--accent); color: #fff; }
+    #mz-current-ui .source:focus-visible, #mz-current-ui .icon-btn:focus-visible, #mz-current-ui .play:focus-visible, #mz-current-ui input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    #mz-current-ui .source:focus-visible, #mz-current-ui .icon-btn:focus-visible, #mz-current-ui .play:focus-visible, #mz-current-ui input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    #mz-current-ui .result-meta { margin: 0 2px 6px; display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 13px; }
+    #mz-current-ui .songs { padding: 0 5px; }
+    #mz-current-ui .song { min-height: 59px; display: grid; grid-template-columns: 22px 42px minmax(0,1fr) auto 24px 24px; align-items: center; gap: 9px; border-bottom: 1px solid color-mix(in srgb, var(--line) 68%, transparent); }
+    #mz-current-ui .rank, #mz-current-ui .duration { color: var(--muted); font-size: 12px; }
+    #mz-current-ui .cover { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 5px; color: #fff; background: linear-gradient(145deg,#1ab2a2,#176076); }
+    #mz-current-ui .cover.c2 { background: linear-gradient(145deg,#dd8070,#7a3652); }
+    #mz-current-ui .cover.c3 { background: linear-gradient(145deg,#498ebe,#283e72); }
+    #mz-current-ui .track { min-width: 0; }
+    #mz-current-ui .track strong, #mz-current-ui .track small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #mz-current-ui .track strong { font-size: 14px; font-weight: 500; }
+    #mz-current-ui .track small { margin-top: 3px; color: var(--muted); font-size: 12px; }
+    #mz-current-ui .icon-btn { min-width: 30px; min-height: 30px; padding: 4px; display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); }
+    #mz-current-ui button { font-family: inherit; cursor: pointer; }
+    #mz-current-ui .fav { color: var(--accent); }
+    #mz-current-ui .account-row { margin: 0 0 13px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+    #mz-current-ui .account { min-height: 72px; padding: 10px; display: flex; align-items: center; gap: 10px; border-radius: 7px; background: var(--surface); }
+    #mz-current-ui .platform { width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 9px; color: #fff; font-weight: 500; }
+    #mz-current-ui .platform.qq { background: url('data:image/webp;base64,UklGRrAEAABXRUJQVlA4IKQEAADwHwCdASpgAGAAPmEqkUWkIqGiqdLtGIAMCWwAzQocfqvUUZN6T+Qv5AdJDuR3f/KnMP/D/0b/Uf1T+t/tr2iPtu9wD9F/9Z/P+sf+yvqA/Yf/Vf4D2N/2A7AD+O/3n/79hJ6DH7KemN+1vwYfs1+yXs9/+5Ao0gLONO7iG1rgvsf/LI5NKLq1sjaclIoEkRZU4FVfPsoixMDefSmZuKxaKlanESSLJ9MUAEeyV6RWeENU40MCKwHGSb2sP3TtgluNRJ92pbDNy/5896HTwmTia5+G7vgLf4RA+zCx7b7UHgZ/3EVQA+A5knwdyMaXXhr0o3KNe+8HmYMZ9HjGVsZPnVgOegLEgAAA/v/cGFgXFhMTCTGmS1Ii1jFN+wKPZQ7PBodMnkPUCXNJCFcjRCTVVIKfggDW4hQtpaIPW0V9PwRgn8X1IZ4/HIgvJd+KB8A3PUT9pY/yGAxrP+BlHGa89TQiBakt2eavZI+J7Kmp40ihIeSen+ZI80tnwmLbpBZDDRSqwl/jhAgDgukbDWqrh6QPlXmYLdBCQUERzHhvkkmQ2lBliFBhc0lgP1KfVb03I6VVFDVaBaTyVF311f5qcqKbY33Js8cmNvq2o0k+z60B2L8CnJJMbvGMgA9ojvA03BQOOLHmusycH2/RlMmqEkqL9AcwW4s7KahS7t+hdLiTOx5phw7llo/Jme6UYsdEdA/meR5yLsAE+P1FZM+OeMhAffYgx0PcXXN/FvJI8GHGEW8Atig6kuk6985+bH+9jhNYimA3QUbM0yFnx52W4qtgl1AFsRpKJd+jFIu9Oh6cSmceOlrJCXJwVW3Uaj0HssOSnfSs4wg3NUbX+GzJKQxqFoF/dkNMn2smNrOlSX1lB6VE2RpdyzpXHKOA/qVj+D93j6+1J3O4LwI5K4ORKq0I3gTiksZFHde6mI82VKPxxUrLEXry17aZ95MF3bZzR8BUajCF0SxplO5GvyptSxxoOlLpxUMoA/+GzYZWH1qf3o3X1HzbBCbBTAOQs4EJ3ralWenE7FoiklhfDBBWyGavV9BjOqzicEeeB+Vjpp5eXSzTqSoAsCfAZrfkU19qK7z9vXRrpxb73ho8ErpW/0ZXEFCDccz2ama2IlAKLY1s2GQ3AJCSVd9xBn7y+hCp7WyyBoVmYSmYEiLuaRIzuv7sIQYQ72QPeWSqqM2W4C1pqy90m47sDl3T3m//mN8iZvzb+ulYwPJr+Xg1bqypsArgk3/fGqoPP7lS1bhUp/6GlADDZj0a1ulMZ5EUmHLzHEpgPPozMQ3ukiu4+vR8tPqXjzCjzpyKA8VvakPrc0mQKCfqnyv9YbsPIqhGCz54xkxEdfyvHnzC0bKm9MIBJtUAW+JxpSzop46L4AzDzNdqr1z3AroFnUtFKrQacNi9O8pJypghTyQgRlSVeEmESvVuKS1dtP4Y8GjwzfFuPlXQZ6jhfKv/8xfFwQAC/7UORrISR+m3KAUL6aOrUwv/C9rO0ZrqBxONnTIiHI83QGiNY/i+RN6NwV5pdb6kjXIzBAHQPi5ZwZQKwVbBAMepmTvFw9NsIZUjm21Pn2W9zzAAAAA=') center/cover; }
+    #mz-current-ui .platform.ne { background: url('data:image/webp;base64,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') center/cover; }
+    #mz-current-ui .platform.kg { background: url('data:image/webp;base64,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') center/cover; }
+    #mz-current-ui .platform { font-size: 0; }
+    #mz-current-ui .account strong, #mz-current-ui .account small { display: block; }
+    #mz-current-ui .account strong { font-weight: 500; }
+    #mz-current-ui .account small { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    #mz-current-ui .stats { min-height: 66px; margin-bottom: 15px; display: grid; grid-template-columns: repeat(4,1fr); align-items: center; border-radius: 7px; background: var(--surface); }
+    #mz-current-ui .stat { text-align: center; }
+    #mz-current-ui .stat b, #mz-current-ui .stat span { display: block; }
+    #mz-current-ui .stat b { font-size: 18px; font-weight: 500; }
+    #mz-current-ui .stat span { color: var(--muted); font-size: 12px; }
+    #mz-current-ui .group-title { margin: 15px 2px 7px; font-weight: 500; }
+    #mz-current-ui .setting-list { padding: 0 13px; border-radius: 7px; background: var(--surface); }
+    #mz-current-ui .setting { min-height: 58px; display: grid; grid-template-columns: 22px minmax(0,1fr) auto 18px; gap: 9px; align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--line) 62%, transparent); }
+    #mz-current-ui .setting:last-child { border: 0; }
+    #mz-current-ui .setting i { color: var(--muted); }
+    #mz-current-ui .setting small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+    #mz-current-ui .setting-value { color: var(--muted); font-size: 12px; }
+    #mz-current-ui .empty { min-height: 330px; display: grid; align-content: center; justify-items: center; gap: 9px; color: var(--muted); text-align: center; }
+    #mz-current-ui .empty i { width: 25px; height: 25px; }
+    #mz-current-ui .empty strong { color: var(--ink); font-weight: 500; }
+    #mz-current-ui .link { color: var(--accent); }
+    #mz-current-ui .player { grid-column: 1 / -1; min-height: 71px; margin: 0 12px 11px; padding: 8px 13px; display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 16px; border-radius: 8px; background: var(--surface); }
+    #mz-current-ui .playing { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    #mz-current-ui .playing-cover { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 6px; background: linear-gradient(145deg,#2c3338,#111820); color: white; }
+    #mz-current-ui .playing-copy { min-width: 0; }
+    #mz-current-ui .playing-copy strong, #mz-current-ui .playing-copy small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    #mz-current-ui .playing-copy strong { font-weight: 500; }
+    #mz-current-ui .playing-copy small { margin-top: 2px; color: var(--muted); font-size: 12px; }
+    #mz-current-ui .transport { display: flex; align-items: center; gap: 14px; }
+    #mz-current-ui .transport .icon-btn { width: 34px; height: 34px; }
+    #mz-current-ui .play { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; color: white; background: var(--accent); }
+    #mz-current-ui .player-tail { justify-self: end; display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+    #mz-current-ui .mini-progress { flex: 1; display: flex; align-items: center; justify-content: center; gap: 9px; color: var(--muted); font-size: 12px; }
+    #mz-current-ui .progress-track { width: min(240px,28vw); height: 3px; border-radius: 3px; background: var(--line); }
+    #mz-current-ui .progress-track span { display: block; width: 4%; height: 3px; border-radius: 3px; background: var(--accent); }
+    #mz-current-ui .queue { width: min(100%,640px); max-height: 510px; margin: 0 auto; overflow: auto; border-radius: 9px; background: var(--surface); }
+    #mz-current-ui .queue-overlay { position: absolute; inset: 0 0 71px; z-index: 3; display: flex; align-items: flex-end; justify-content: center; padding: 0 0 0; background: rgba(20,20,22,.43); }
+    #mz-current-ui .queue-head { min-height: 58px; padding: 12px 17px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
+    #mz-current-ui .queue-row { min-height: 55px; padding: 7px 17px; display: flex; justify-content: space-between; align-items: center; gap: 12px; border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
+    #mz-current-ui .queue-row small { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+    #mz-current-ui .full-player-content { min-height: 0; display: grid; grid-template-columns: minmax(270px,.8fr) minmax(0,1.2fr); gap: 9%; align-items: center; padding: 0 4%; }
+    #mz-current-ui .full-player-content .album-panel { display: grid; justify-items: center; gap: 15px; text-align: center; }
+    #mz-current-ui .full-player-content .album-art { width: min(100%,320px); aspect-ratio: 1; border-radius: 9px; display: grid; place-items: center; color: white; background: linear-gradient(145deg,#2c3338,#101820); }
+    #mz-current-ui .full-player-content .lyrics { height: 100%; max-height: 460px; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 22px; color: var(--muted); font-size: 18px; }
+    #mz-current-ui .player-screen { flex: 1; min-height: 0; padding: 18px 28px 12px; display: grid; grid-template-rows: 36px minmax(0,1fr) 18px 57px; gap: 12px; }
+    #mz-current-ui [hidden] { display: none !important; }
+    @media (max-width: 740px) {
+      #mz-current-ui .workspace { grid-template-columns: 60px minmax(0,1fr); }
+      #mz-current-ui aside { padding-inline: 6px; align-items: center; }
+      #mz-current-ui .logo { padding-inline: 0; }
+      #mz-current-ui .logo strong, #mz-current-ui .nav span { display: none; }
+      #mz-current-ui .nav { width: 44px; padding: 0; justify-content: center; }
+      #mz-current-ui main { padding: 19px 15px; }
+      #mz-current-ui .account-row { grid-template-columns: 1fr; gap: 6px; }
+      #mz-current-ui .account { min-height: 57px; }
+      #mz-current-ui .player { grid-template-columns: minmax(0,1fr) auto; }
+      #mz-current-ui .player-tail { display: flex; }
+      #mz-current-ui .mini-progress { display: none; }
+      #mz-current-ui .full-player-content { grid-template-columns: 1fr; gap: 10px; padding: 0 4%; }
+      #mz-current-ui .full-player-content { grid-template-rows: auto minmax(0,1fr); align-content: start; gap: 8px; }
+      #mz-current-ui .full-player-content .album-panel { grid-template-columns: 76px minmax(0,1fr); justify-items: start; align-items: center; gap: 2px 12px; text-align: left; }
+      #mz-current-ui .full-player-content .album-art { grid-row: 1 / span 2; width: 76px; }
+      #mz-current-ui .full-player-content .lyrics { height: auto; max-height: 245px; gap: 8px; justify-content: flex-start; font-size: 15px; }
+    }
+    @media (max-width: 440px) {
+      #mz-current-ui .workspace { grid-template-columns: 52px minmax(0,1fr); }
+      #mz-current-ui .stage { min-height: 920px; }
+      #mz-current-ui .app { height: 920px; }
+      #mz-current-ui main { padding: 16px 10px; }
+      #mz-current-ui .sources { flex-wrap: wrap; height: auto; border-radius: 12px; }
+      #mz-current-ui .source { flex: 1 1 40%; }
+      #mz-current-ui .stats { grid-template-columns: repeat(2,1fr); row-gap: 10px; padding: 11px 0; }
+      #mz-current-ui .setting { grid-template-columns: 20px minmax(0,1fr) 16px; gap: 7px; }
+      #mz-current-ui .setting-value { display: none; }
+      #mz-current-ui .song { grid-template-columns: 17px 36px minmax(0,1fr) 24px; gap: 6px; }
+      #mz-current-ui .cover { width: 34px; height: 34px; }
+      #mz-current-ui .song .duration, #mz-current-ui .song .more { display: none; }
+      #mz-current-ui .player { margin-inline: 5px; padding-inline: 8px; gap: 7px; }
+      #mz-current-ui .transport { gap: 5px; }
+      #mz-current-ui .full-player-content { grid-template-columns: 1fr; gap: 20px; padding: 8px 4%; }
+      #mz-current-ui .player-screen { padding: 14px 10px 10px; grid-template-rows: 32px minmax(0,1fr) 14px 54px; gap: 8px; }
+      #mz-current-ui .full-player-content { grid-template-rows: auto minmax(0,1fr); gap: 12px; padding: 0 4%; align-content: start; }
+      #mz-current-ui .full-player-content .album-panel { grid-template-columns: 76px minmax(0,1fr); justify-items: start; align-items: center; gap: 2px 12px; text-align: left; }
+      #mz-current-ui .full-player-content .album-art { grid-row: 1 / span 2; width: 76px; }
+      #mz-current-ui .full-player-content .album-panel strong { align-self: end; }
+      #mz-current-ui .full-player-content .album-panel span { align-self: start; }
+      #mz-current-ui .full-player-content .lyrics { height: auto; max-height: none; gap: 7px; justify-content: flex-start; font-size: 14px; }
+      #mz-current-ui .mini-progress { display: none; }
+    }
+  </style>
+  <p style="margin:0 0 10px;color:light-dark(#626970,#b6bdc4);font-size:13px;">按 0.5.0 实机页面布局 · 曲目为示意数据 · 平台保持未登录状态</p>
+  <div class="viz-carousel" aria-label="DJ Music 现有功能界面稿" data-previous-label="上一页" data-next-label="下一页">
+    <section data-variant="搜索与结果" aria-label="搜索与歌曲结果">
+      <div class="stage">
+        <div class="app">
+          <div class="titlebar"><div class="brand"><img class="brand-icon" alt=""><span>DJ Music</span></div><div class="window-controls" aria-hidden="true"><span>−</span><span>□</span><span>×</span></div></div>
+          <div class="workspace">
+            <aside aria-label="主导航" role="navigation">
+              <div class="logo"><img class="brand-icon" alt=""><strong>DJ Music</strong></div>
+              <div class="nav active"><i data-lucide="search" aria-hidden="true"></i><span>搜索</span></div>
+              <div class="nav"><i data-lucide="music-2" aria-hidden="true"></i><span>QQ 音乐</span></div>
+              <div class="nav"><i data-lucide="disc-3" aria-hidden="true"></i><span>网易云</span></div>
+              <div class="nav"><i data-lucide="library" aria-hidden="true"></i><span>酷狗</span></div>
+              <div class="nav"><i data-lucide="user-round" aria-hidden="true"></i><span>我的</span></div>
+            </aside>
+            <main>
+              <div class="search-box"><i data-lucide="search" aria-hidden="true"></i><input aria-label="搜索歌曲" value="夜色慢慢"><button class="icon-btn" aria-label="清除搜索"><i data-lucide="x" aria-hidden="true"></i></button></div>
+              <div class="sources" aria-label="搜索来源"><button class="source">本地 —</button><button class="source active">QQ 音乐 · 600</button><button class="source">网易云 —</button><button class="source">酷狗 —</button></div>
+              <div class="result-meta"><span>已加载 30 首 · 共 600 首</span><button class="icon-btn" aria-label="刷新结果"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+              <div class="songs">
+                <div class="song"><span class="rank">1</span><div class="cover"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="track"><strong>夜色慢慢</strong><small>示例歌手 · 夜色慢慢</small></div><span class="duration">3:26</span><button class="icon-btn fav" aria-label="收藏夜色慢慢"><i data-lucide="heart" aria-hidden="true"></i></button><button class="icon-btn more" aria-label="更多操作"><i data-lucide="ellipsis" aria-hidden="true"></i></button></div>
+                <div class="song"><span class="rank">2</span><div class="cover c2"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="track"><strong>夜色慢慢</strong><small>林屿 · 晚风</small></div><span class="duration">3:49</span><button class="icon-btn" aria-label="收藏歌曲"><i data-lucide="heart" aria-hidden="true"></i></button><button class="icon-btn more" aria-label="更多操作"><i data-lucide="ellipsis" aria-hidden="true"></i></button></div>
+                <div class="song"><span class="rank">3</span><div class="cover c3"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="track"><strong>雨落窗边</strong><small>示例歌手 · 夜色慢慢</small></div><span class="duration">3:49</span><button class="icon-btn" aria-label="收藏歌曲"><i data-lucide="heart" aria-hidden="true"></i></button><button class="icon-btn more" aria-label="更多操作"><i data-lucide="ellipsis" aria-hidden="true"></i></button></div>
+                <div class="song"><span class="rank">4</span><div class="cover"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="track"><strong>沿途</strong><small>岛屿电台 · 沿途</small></div><span class="duration">3:49</span><button class="icon-btn" aria-label="收藏歌曲"><i data-lucide="heart" aria-hidden="true"></i></button><button class="icon-btn more" aria-label="更多操作"><i data-lucide="ellipsis" aria-hidden="true"></i></button></div>
+                <div class="song"><span class="rank">5</span><div class="cover c2"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="track"><strong>晚风</strong><small>周沐 · 林间的风</small></div><span class="duration">3:29</span><button class="icon-btn" aria-label="收藏歌曲"><i data-lucide="heart" aria-hidden="true"></i></button><button class="icon-btn more" aria-label="更多操作"><i data-lucide="ellipsis" aria-hidden="true"></i></button></div>
+              </div>
+            </main>
+            <div class="player"><div class="playing"><div class="playing-cover"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="playing-copy"><strong>风经过</strong><small>示例歌手 · QQ 音乐</small></div></div><div class="transport"><button class="icon-btn" aria-label="上一首"><i data-lucide="skip-back" aria-hidden="true"></i></button><button class="play" aria-label="播放"><i data-lucide="play" aria-hidden="true"></i></button><button class="icon-btn" aria-label="下一首"><i data-lucide="skip-forward" aria-hidden="true"></i></button></div><div class="player-tail"><div class="mini-progress"><span>0:00</span><div class="progress-track"><span></span></div><span>--:--</span></div><button class="icon-btn" aria-label="打开播放队列"><i data-lucide="list-music" aria-hidden="true"></i></button></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-variant="平台收藏" aria-label="QQ 网易云与酷狗收藏页面" hidden>
+      <div class="stage">
+        <div class="app">
+          <div class="titlebar"><div class="brand"><img class="brand-icon" alt=""><span>DJ Music</span></div><div class="window-controls" aria-hidden="true"><span>−</span><span>□</span><span>×</span></div></div>
+          <div class="workspace">
+            <aside aria-label="主导航" role="navigation"><div class="logo"><img class="brand-icon" alt=""><strong>DJ Music</strong></div><div class="nav"><i data-lucide="search" aria-hidden="true"></i><span>搜索</span></div><div class="nav"><i data-lucide="music-2" aria-hidden="true"></i><span>QQ 音乐</span></div><div class="nav active"><i data-lucide="disc-3" aria-hidden="true"></i><span>网易云</span></div><div class="nav"><i data-lucide="library" aria-hidden="true"></i><span>酷狗</span></div><div class="nav"><i data-lucide="user-round" aria-hidden="true"></i><span>我的</span></div></aside>
+            <main>
+              <div class="page-head"><h2>网易云</h2><button class="icon-btn refresh" aria-label="刷新"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+              <div class="setting-list" style="padding:13px 15px;">
+                <div class="playing"><div class="platform ne" style="width:52px;height:52px;" aria-label="网易云图标"></div><div class="playing-copy"><strong>我喜欢的音乐</strong><small>0 首 · 已载入 0 分钟 · 网易云</small><div style="display:flex;gap:12px;margin-top:7px;color:var(--muted);font-size:12px;"><span>▶ 播放全部</span><span>⇩ 下载</span></div></div></div>
+              </div>
+              <div class="group-title">歌曲 <span style="color:var(--muted);font-size:12px;font-weight:400;">按收藏时间排序</span></div>
+              <div class="empty"><i data-lucide="user-round" aria-hidden="true"></i><strong>登录后同步你喜欢的音乐</strong><span class="link">登录网易云</span></div>
+            </main>
+            <div class="player"><div class="playing"><div class="playing-cover"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="playing-copy"><strong>风经过</strong><small>示例歌手 · QQ 音乐</small></div></div><div class="transport"><button class="icon-btn" aria-label="上一首"><i data-lucide="skip-back" aria-hidden="true"></i></button><button class="play" aria-label="播放"><i data-lucide="play" aria-hidden="true"></i></button><button class="icon-btn" aria-label="下一首"><i data-lucide="skip-forward" aria-hidden="true"></i></button></div><div class="player-tail"><div class="mini-progress"><span>0:00</span><div class="progress-track"><span></span></div><span>--:--</span></div><button class="icon-btn" aria-label="打开播放队列"><i data-lucide="list-music" aria-hidden="true"></i></button></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-variant="我的与设置" aria-label="账号、音质、下载和个性化设置" hidden>
+      <div class="stage">
+        <div class="app">
+          <div class="titlebar"><div class="brand"><img class="brand-icon" alt=""><span>DJ Music</span></div><div class="window-controls" aria-hidden="true"><span>−</span><span>□</span><span>×</span></div></div>
+          <div class="workspace">
+            <aside aria-label="主导航" role="navigation"><div class="logo"><img class="brand-icon" alt=""><strong>DJ Music</strong></div><div class="nav"><i data-lucide="search" aria-hidden="true"></i><span>搜索</span></div><div class="nav"><i data-lucide="music-2" aria-hidden="true"></i><span>QQ 音乐</span></div><div class="nav"><i data-lucide="disc-3" aria-hidden="true"></i><span>网易云</span></div><div class="nav"><i data-lucide="library" aria-hidden="true"></i><span>酷狗</span></div><div class="nav active"><i data-lucide="user-round" aria-hidden="true"></i><span>我的</span></div></aside>
+            <main>
+              <div class="page-head"><div><h2>我的</h2></div></div>
+              <div class="account-row"><div class="account"><div class="platform qq" aria-label="QQ 音乐图标"></div><div><strong>登录 QQ 音乐</strong><small>登录后同步喜欢的歌曲</small></div></div><div class="account"><div class="platform ne" aria-label="网易云图标"></div><div><strong>登录网易云</strong><small>登录后同步喜欢的歌曲</small></div></div><div class="account"><div class="platform kg" aria-label="酷狗图标"></div><div><strong>登录酷狗</strong><small>登录后同步喜欢的歌曲</small></div></div></div>
+              <div class="stats"><div class="stat"><b>—</b><span>QQ 音乐</span></div><div class="stat"><b>—</b><span>网易云</span></div><div class="stat"><b>—</b><span>酷狗</span></div><div class="stat"><b>0</b><span>本地歌曲</span></div></div>
+              <div class="group-title">播放设置</div><div class="setting-list"><div class="setting"><i data-lucide="audio-lines" aria-hidden="true"></i><div>自定义音源<small>未配置</small></div><span class="setting-value">添加音源</span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><div>播放音质<small>标准</small></div><span class="setting-value">实际档位视歌曲和音源</span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="database" aria-hidden="true"></i><div>缓存管理<small>0.0 MB / 10240 MB</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div></div>
+              <div class="group-title">下载设置</div><div class="setting-list"><div class="setting"><i data-lucide="download" aria-hidden="true"></i><div>下载音质<small>标准</small></div><span class="setting-value">与播放音质独立保存</span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="list-checks" aria-hidden="true"></i><div>下载管理<small>0 项</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="folder" aria-hidden="true"></i><div>存储位置<small>选择文件夹</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div></div>
+              <div class="group-title">个性化设置</div><div class="setting-list"><div class="setting"><i data-lucide="palette" aria-hidden="true"></i><div>外观主题<small>浅色</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="image" aria-hidden="true"></i><div>更换背景<small>默认背景</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="type" aria-hidden="true"></i><div>更换字体<small>默认字体</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div></div>
+              <div class="group-title">窗口设置与其他</div><div class="setting-list"><div class="setting"><i data-lucide="panel-top-close" aria-hidden="true"></i><div>关闭主窗口时<small>退出应用</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="log-out" aria-hidden="true"></i><div>退出应用</div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="library" aria-hidden="true"></i><div>本地音乐<small>导入 / 扫描</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div></div>
+              <div style="margin:12px 0 0;text-align:center;color:var(--muted);font-size:12px;">DJ Music · 0.5.1</div>
+            </main>
+            <div class="player"><div class="playing"><div class="playing-cover"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="playing-copy"><strong>风经过</strong><small>示例歌手 · QQ 音乐</small></div></div><div class="transport"><button class="icon-btn" aria-label="上一首"><i data-lucide="skip-back" aria-hidden="true"></i></button><button class="play" aria-label="播放"><i data-lucide="play" aria-hidden="true"></i></button><button class="icon-btn" aria-label="下一首"><i data-lucide="skip-forward" aria-hidden="true"></i></button></div><div class="player-tail"><span>0:00</span><button class="icon-btn" aria-label="打开播放队列"><i data-lucide="list-music" aria-hidden="true"></i></button></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-variant="全屏播放" aria-label="封面、歌词、播放进度和控制器" hidden>
+      <div class="stage">
+        <div class="app">
+          <div class="titlebar"><div class="brand"><img class="brand-icon" alt=""><span>DJ Music</span></div><div class="window-controls" aria-hidden="true"><span>−</span><span>□</span><span>×</span></div></div>
+          <div class="player-screen">
+            <div style="color:var(--accent);display:flex;align-items:center;gap:7px;"><i data-lucide="chevron-down" aria-hidden="true"></i><span>返回</span></div>
+            <div class="full-player-content">
+              <div class="album-panel"><div class="album-art"><i data-lucide="disc-3" style="width:25%;height:25%;opacity:.8;" aria-hidden="true"></i></div><strong style="font-size:19px;font-weight:500;">示例歌曲</strong><span style="color:var(--muted);">示例歌手</span></div>
+              <div class="lyrics"><strong style="color:var(--accent);font-size:20px;font-weight:500;">示例歌曲 · 示例歌手</strong><span>夜色慢慢落下</span><span>灯光亮在窗前</span><span>沿着熟悉的街道</span><span>听见风轻轻经过</span><span>远方传来旋律</span><span>脚步跟着节拍</span><span>这一刻刚刚好</span><span style="color:var(--muted);">QQ 音乐 · 音质信息待获取</span></div>
+            </div>
+            <div style="height:4px;border-radius:3px;background:var(--line);position:relative;"><span style="position:absolute;left:0;top:0;width:4%;height:4px;border-radius:3px;background:var(--accent);"></span></div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:27px;color:var(--ink);"><button class="icon-btn" aria-label="循环模式"><i data-lucide="repeat" aria-hidden="true"></i></button><button class="icon-btn" aria-label="上一首"><i data-lucide="skip-back" aria-hidden="true"></i></button><button class="play" style="width:46px;height:46px;" aria-label="播放"><i data-lucide="play" aria-hidden="true"></i></button><button class="icon-btn" aria-label="下一首"><i data-lucide="skip-forward" aria-hidden="true"></i></button><button class="icon-btn" aria-label="打开播放队列"><i data-lucide="list-music" aria-hidden="true"></i></button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section data-variant="播放队列" aria-label="底部弹层中的接下来播放列表" hidden>
+      <div class="stage">
+        <div class="app">
+          <div class="titlebar"><div class="brand"><img class="brand-icon" alt=""><span>DJ Music</span></div><div class="window-controls" aria-hidden="true"><span>−</span><span>□</span><span>×</span></div></div>
+          <div class="workspace" style="min-height:600px;">
+            <aside aria-label="主导航" role="navigation"><div class="logo"><img class="brand-icon" alt=""><strong>DJ Music</strong></div><div class="nav"><i data-lucide="search" aria-hidden="true"></i><span>搜索</span></div><div class="nav"><i data-lucide="music-2" aria-hidden="true"></i><span>QQ 音乐</span></div><div class="nav"><i data-lucide="disc-3" aria-hidden="true"></i><span>网易云</span></div><div class="nav"><i data-lucide="library" aria-hidden="true"></i><span>酷狗</span></div><div class="nav active"><i data-lucide="user-round" aria-hidden="true"></i><span>我的</span></div></aside>
+            <main><div class="page-head"><h2>我的</h2></div><div class="setting-list"><div class="setting"><i data-lucide="palette" aria-hidden="true"></i><div>外观主题<small>浅色</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div><div class="setting"><i data-lucide="image" aria-hidden="true"></i><div>更换背景<small>默认背景</small></div><span class="setting-value"></span><i data-lucide="chevron-right" aria-hidden="true"></i></div></div></main>
+            <div class="queue-overlay"><div class="queue"><div style="padding:8px 0;text-align:center;color:var(--muted);">━</div><div class="queue-head"><strong>播放队列 · 30 首</strong><button class="icon-btn" style="color:var(--accent);">清空</button></div><div class="queue-row"><div>海风之间<small>林屿</small></div><div style="display:flex;gap:12px;color:var(--muted);"><span>×</span><i data-lucide="grip" aria-hidden="true"></i></div></div><div class="queue-row"><div>星河<small>示例歌手</small></div><div style="display:flex;gap:12px;color:var(--muted);"><span>×</span><i data-lucide="grip" aria-hidden="true"></i></div></div><div class="queue-row" style="color:var(--accent);"><div>云朵邮局<small>林间的风</small></div><div style="display:flex;gap:12px;"><span>×</span><i data-lucide="grip" aria-hidden="true"></i></div></div><div class="queue-row"><div>沿途<small>岛屿电台</small></div><div style="display:flex;gap:12px;color:var(--muted);"><span>×</span><i data-lucide="grip" aria-hidden="true"></i></div></div><div class="queue-row"><div>慢慢喜欢你<small>示例歌手</small></div><div style="display:flex;gap:12px;color:var(--muted);"><span>×</span><i data-lucide="grip" aria-hidden="true"></i></div></div></div></div>
+            <div class="player"><div class="playing"><div class="playing-cover"><i data-lucide="music-2" aria-hidden="true"></i></div><div class="playing-copy"><strong>风经过</strong><small>示例歌手 · QQ 音乐</small></div></div><div class="transport"><button class="icon-btn" aria-label="上一首"><i data-lucide="skip-back" aria-hidden="true"></i></button><button class="play" aria-label="播放"><i data-lucide="play" aria-hidden="true"></i></button><button class="icon-btn" aria-label="下一首"><i data-lucide="skip-forward" aria-hidden="true"></i></button></div><div class="player-tail"><span>0:00</span><button class="icon-btn" aria-label="播放队列"><i data-lucide="list-music" aria-hidden="true"></i></button></div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+    const root = document.getElementById("mz-current-ui");
+    const icon = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDI0IDEwMjQiIHdpZHRoPSIxMDI0IiBoZWlnaHQ9IjEwMjQiPjxkZWZzPjxsaW5lYXJHcmFkaWVudCBpZD0iYmciIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIiB4MT0iMCIgeTE9IjAiIHgyPSIxMDI0IiB5Mj0iMTAyNCI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMTZDMkIwIi8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjMEIyQTZCIi8+PC9saW5lYXJHcmFkaWVudD48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMjQiIGhlaWdodD0iMTAyNCIgcng9IjIzMCIgZmlsbD0idXJsKCNiZykiLz48cGF0aCBmaWxsPSIjZmZmIiBkPSJNMjMyLjcsNzUxLjMyMyBBMTE2LjM3NSw4Ni4wMTYgLTIyIDEsMCA0NDguNTAxLDY2NC4xMzQgQTExNi4zNzUsODYuMDE2IC0yMiAxLDAgMjMyLjcsNzUxLjMyMyBaIi8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTQwOS43NTEsMjI1LjM2NCBMNDUzLjYwMiwyMjUuMzY0IEw0NTMuNjAyLDY4OS4xNzYgTDQwOS43NTEsNjg5LjE3NiBaIi8+PHBhdGggZmlsbD0iI2ZmZiIgZD0iTTQxNi40OTcsMjI1LjM2NCBMNDUzLjYwMiwyMjUuMzY0IEM1MzAuMzQyLDIyNS4zNjQgNTcyLjUwNiwzMjIuMzQzIDY1Ni44MzYsMzIyLjM0MyBDNzE1Ljg2NiwzMjIuMzQzIDc1OC4wMzEsMjg4LjYxMSA3OTUuOTc5LDI0Ni40NDcgQzc3Mi4zNjcsMzM0Ljk5MyA3MTUuODY2LDM5NS43MSA2MzkuOTcsMzk1LjcxIEM1NTkuODU3LDM5NS43MSA1MjEuOTA5LDMyOC4yNDYgNDUzLjYwMiwzMjguMjQ2IEw0MTYuNDk3LDMyOC4yNDYgWiIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik00MTYuNDk3LDM3Mi45NDEgTDQ1My42MDIsMzcyLjk0MSBDNTI2LjEyNSwzNzIuOTQxIDU2NC4wNzMsNDYxLjQ4NyA2MzkuOTcsNDYxLjQ4NyBDNjk0Ljc4NCw0NjEuNDg3IDczMi43MzIsNDMxLjk3MSA3NjYuNDY0LDM5NS43MSBDNzQ1LjM4Miw0NzYuNjY2IDY5NC43ODQsNTMwLjYzNyA2MjcuMzIsNTMwLjYzNyBDNTUxLjQyNCw1MzAuNjM3IDUxNy42OTIsNDY5LjkyIDQ1My42MDIsNDY5LjkyIEw0MTYuNDk3LDQ2OS45MiBaIi8+PC9zdmc+Cg==";
+    root.querySelectorAll(".brand-icon").forEach((image) => { image.src = icon; });
+  </script>
+</div>

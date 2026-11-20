@@ -6,6 +6,13 @@ part of '../presentation/providers/player_provider.dart';
 /// 不是独立模块：淡入淡出直接读写 facade 的音量与 generation 字段。
 
 extension PlayerFadeAndVolumeOps on PlayerNotifier {
+  SpatialAudioCapable? get spatialAudioCapability {
+    final controller = _ensureAudioController();
+    return controller is SpatialAudioCapable
+        ? controller as SpatialAudioCapable
+        : null;
+  }
+
   void setFadeOptions({required bool enabled, required Duration duration}) {
     _fadeEnabled = enabled;
     _fadeGeneration++;
@@ -37,6 +44,24 @@ extension PlayerFadeAndVolumeOps on PlayerNotifier {
         data: {'enabled': settings.equalizerEnabled},
       );
     }
+  }
+
+  /// ik 使用此入口显示成功、失败和不支持；原入口继续保留兼容降级。
+  Future<void> applyEqualizerSettingsVerified(
+    AudioEffectsSettings settings,
+  ) async {
+    final controller = _ensureAudioController();
+    if (controller is! VerifiedEqualizerCapable) {
+      throw UnsupportedError('equalizer');
+    }
+    // 记录最新请求；较早请求迟到完成不能覆盖重建控制器时应恢复的曲线。
+    _lastEqualizerSettings = settings;
+    await (controller as VerifiedEqualizerCapable)
+        .applyEqualizerVerified(
+          enabled: settings.equalizerEnabled,
+          bandGains: settings.effectiveEqualizerBandGains,
+        )
+        .timeout(const Duration(seconds: 5));
   }
 
   /// Whether the current backend can change playback speed.

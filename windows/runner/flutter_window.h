@@ -9,6 +9,7 @@
 #include "floating_lyrics_channel.h"
 #include "win32_window.h"
 #ifdef YUEYIN_BUILD
+#include "ik_desktop_channel.h"
 #include "windows_desktop_channel.h"
 #endif
 
@@ -30,6 +31,7 @@ class FlutterWindow : public Win32Window {
 #ifdef YUEYIN_BUILD
   WindowsDesktopPolicy desktop_policy_;
   std::unique_ptr<WindowsDesktopChannel> desktop_channel_;
+  std::unique_ptr<IkDesktopChannel> ik_desktop_channel_;
 #endif
 };
 

@@ -16,7 +16,10 @@ final backupServiceProvider = Provider<BackupService>((ref) {
 /// 数据备份与恢复 — single-file JSON export/import of likes, playlists,
 /// smart-playlist rules, statistics and settings.
 class BackupPage extends ConsumerStatefulWidget {
-  const BackupPage({super.key});
+  const BackupPage({super.key, this.service, this.onImported});
+
+  final BackupService? service;
+  final Future<void> Function()? onImported;
 
   @override
   ConsumerState<BackupPage> createState() => _BackupPageState();
@@ -106,7 +109,9 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       _status = null;
     });
     try {
-      final file = await ref.read(backupServiceProvider).exportToFile();
+      final service =
+          widget.service ?? ref.read<BackupService>(backupServiceProvider);
+      final file = await service.exportToFile();
       final sizeKb = (await file.length()) / 1024;
       if (!mounted) return;
       setState(() {
@@ -140,11 +145,12 @@ class _BackupPageState extends ConsumerState<BackupPage> {
       }
       final pickedFile = picked.files.single;
       final raw = pickedFile.bytes != null
-          ? String.fromCharCodes(pickedFile.bytes!)
+          ? BackupService.decodeFileBytes(pickedFile.bytes!)
           : await File(pickedFile.path!).readAsString();
       if (!mounted) return;
 
-      final service = ref.read(backupServiceProvider);
+      final service =
+          widget.service ?? ref.read<BackupService>(backupServiceProvider);
       final BackupFileSummary summary;
       try {
         summary = service.inspect(raw);
@@ -175,6 +181,7 @@ class _BackupPageState extends ConsumerState<BackupPage> {
 
       setState(() => _busy = true);
       final report = await service.importFromJson(raw);
+      await widget.onImported?.call();
       if (!mounted) return;
       setState(() => _status = '导入完成：$report');
     } on BackupFormatException catch (e) {

@@ -6,11 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/database/app_database.dart';
+import '../../../../core/database/song_record_mapping.dart';
 import '../../../../models/song.dart';
 import '../../../../models/platform_type.dart';
 import '../../../../models/artist.dart';
 import '../../../../models/album.dart';
 import '../../../player/presentation/providers/player_provider.dart';
+import 'library_metadata_provider.dart';
 
 class HistoryEntry {
   final Song song;
@@ -51,20 +53,33 @@ class HistoryState {
 class HistoryNotifier extends StateNotifier<HistoryState> {
   final HistoryDao _historyDao;
   final SongsDao _songsDao;
+  final bool _preserveMetadata;
   String? _lastListenedSongId;
   DateTime? _lastListenedAt;
   Timer? _pendingRecordTimer;
   String? _pendingRecordKey;
+  int _loadGeneration = 0;
 
-  HistoryNotifier(this._historyDao, this._songsDao)
-    : super(const HistoryState()) {
+  HistoryNotifier(
+    this._historyDao,
+    this._songsDao, {
+    this._preserveMetadata = false,
+  }) : super(const HistoryState()) {
     loadHistory();
   }
 
-  Future<void> loadHistory() async {
+  Future<void> loadHistory() => _loadHistory(all: false);
+
+  /// 独立曲库完整读取历史；旧调用的 200 条默认不变。
+  Future<void> loadAllHistory() => _loadHistory(all: true);
+
+  Future<void> _loadHistory({required bool all}) async {
+    final generation = ++_loadGeneration;
     state = state.copyWith(isLoading: true);
     try {
-      final records = await _historyDao.getRecentHistory(limit: 200);
+      final records = await _historyDao.getRecentHistory(
+        limit: all ? await _historyDao.countHistory() : 200,
+      );
       // Batch query instead of N+1
       final keys = records
           .map((r) => (id: r.songId, platform: r.platform))
@@ -86,12 +101,14 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
           );
         }
       }
+      if (!mounted || generation != _loadGeneration) return;
       state = state.copyWith(
         entries: entries,
         isLoading: false,
         error: () => null,
       );
     } catch (e) {
+      if (!mounted || generation != _loadGeneration) return;
       state = state.copyWith(isLoading: false, error: () => '加载历史失败');
     }
   }
@@ -159,6 +176,7 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
   }
 
   Song _recordToSong(SongRecord record) {
+    if (_preserveMetadata) return songFromSongRecord(record);
     final platformType = PlatformType.values.firstWhere(
       (p) => p.name == record.platform,
       orElse: () => PlatformType.netease,
@@ -183,6 +201,7 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
   }
 
   SongsCompanion _songToCompanion(Song song) {
+    if (_preserveMetadata) return songsCompanionFromSong(song);
     return SongsCompanion.insert(
       id: song.id,
       platform: song.platform.name,
@@ -200,7 +219,11 @@ final historyProvider = StateNotifierProvider<HistoryNotifier, HistoryState>((
   ref,
 ) {
   final db = database;
-  final notifier = HistoryNotifier(db.historyDao, db.songsDao);
+  final notifier = HistoryNotifier(
+    db.historyDao,
+    db.songsDao,
+    preserveMetadata: ref.read(libraryMetadataProvider),
+  );
 
   ref.listen<PlayerState>(playerProvider, (prev, next) {
     final song = next.currentSong;

@@ -10,13 +10,16 @@ import '../../../core/diagnostics/diagnostics_service.dart';
 import '../../../core/platform/platform_utils.dart';
 import '../../../models/song.dart';
 import 'audio_focus_diagnostics.dart';
+import 'android_spatial_audio.dart';
 import 'player_audio_controller.dart';
+import 'spatial_audio_capability.dart';
 
 typedef PlaybackCommand = Future<void> Function();
 typedef PlaybackSeekCommand = Future<void> Function(Duration position);
 
 const playbackNotificationLikeAction = 'like_current_song';
 const playbackNotificationLyricsAction = 'toggle_floating_lyrics';
+const _playbackNotificationChannelId = 'com.mconnect.mconnect.audio';
 
 class PlaybackNotificationActions {
   final PlaybackCommand play;
@@ -88,7 +91,9 @@ class AudioServicePlayerController
         PlaybackNotificationController,
         PlayerAudioController,
         PlaybackSpeedCapable,
-        SkipSilenceCapable {
+        SkipSilenceCapable,
+        VerifiedEqualizerCapable,
+        SpatialAudioCapable {
   AudioServicePlayerController._({
     MconnectAudioHandler? handler,
     PlayerAudioController Function()? audioControllerFactory,
@@ -104,6 +109,16 @@ class AudioServicePlayerController
   PlayerAudioController? _audioController;
   AudioFocusDiagnosticsObserver? _focusObserver;
   bool _initialized = false;
+  final _spatial = AndroidSpatialAudio();
+
+  @override
+  Future<bool> supportsSpatialAudio() => _spatial.supportsSpatialAudio();
+  @override
+  Future<void> applySpatialAudio(SpatialSettings settings, int requestId) =>
+      _spatial.applySpatialAudio(settings, requestId);
+  @override
+  Future<SpatialProcessingReport> readSpatialAudio() =>
+      _spatial.readSpatialAudio();
 
   PlayerAudioController _ensureAudioController() {
     final existing = _audioController;
@@ -115,7 +130,16 @@ class AudioServicePlayerController
   }
 
   @override
-  Future<void> initialize({DiagnosticsService? diagnostics}) async {
+  Future<void> initialize({DiagnosticsService? diagnostics}) =>
+      _initialize(channelName: 'Mconnect playback', diagnostics: diagnostics);
+
+  Future<void> initializeVideoMusic({DiagnosticsService? diagnostics}) =>
+      _initialize(channelName: 'IK Music playback', diagnostics: diagnostics);
+
+  Future<void> _initialize({
+    required String channelName,
+    DiagnosticsService? diagnostics,
+  }) async {
     if (!PlatformUtils.isAndroid || _initialized) return;
     try {
       final session = await AudioSession.instance;
@@ -126,9 +150,9 @@ class AudioServicePlayerController
       )..start();
       await AudioService.init(
         builder: () => _handler,
-        config: const AudioServiceConfig(
-          androidNotificationChannelId: 'com.mconnect.mconnect.audio',
-          androidNotificationChannelName: 'Mconnect playback',
+        config: AudioServiceConfig(
+          androidNotificationChannelId: _playbackNotificationChannelId,
+          androidNotificationChannelName: channelName,
           // 状态栏图标必须是纯白单色 drawable：带背景的自适应 launcher 图标会被
           // Android 5.0+ 的系统整块涂灰（通知栏里的灰方块就是这个原因）。
           // 【需真机验收】
@@ -223,6 +247,21 @@ class AudioServicePlayerController
     required List<double> bandGains,
   }) {
     return _ensureAudioController().applyEqualizer(
+      enabled: enabled,
+      bandGains: bandGains,
+    );
+  }
+
+  @override
+  Future<void> applyEqualizerVerified({
+    required bool enabled,
+    required List<double> bandGains,
+  }) {
+    final controller = _ensureAudioController();
+    if (controller is! VerifiedEqualizerCapable) {
+      throw UnsupportedError('equalizer');
+    }
+    return (controller as VerifiedEqualizerCapable).applyEqualizerVerified(
       enabled: enabled,
       bandGains: bandGains,
     );

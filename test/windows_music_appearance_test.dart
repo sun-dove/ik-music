@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:mconnect/l10n/windows_music_strings.dart';
 import 'package:path/path.dart' as p;
 import 'package:mconnect/video_app/video_preferences.dart';
 import 'package:mconnect/video_app/windows/windows_appearance.dart';
@@ -198,11 +199,14 @@ void main() {
     await appearance.initialize();
     expect(appearance.fontFamily, selected.family);
     expect(appearance.fontError, isNull);
+    expect(appearance.currentFontLabel, selected.label);
     expect(await stored.exists(), isTrue);
     await stored.delete();
     await appearance.initialize();
     expect(appearance.fontError, DesktopFailure.fileMissing);
     expect(appearance.fontFamily, 'Microsoft YaHei UI');
+    expect(appearance.fontLabel, selected.label);
+    expect(appearance.currentFontLabel, WindowsMusicStrings.defaultFont);
   });
   test('W10：关闭配置保存失败恢复原生动作，不假报成功', () async {
     final failingPreferences = WindowsMusicPreferences(

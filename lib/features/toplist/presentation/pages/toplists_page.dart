@@ -1,5 +1,8 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import '../../../../video_app/ui/video_theme.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -15,6 +18,7 @@ import '../../../../models/platform_type.dart';
 import '../../../../models/song.dart';
 import '../../../../models/toplist.dart';
 import '../../../download/presentation/providers/download_provider.dart';
+import '../../../download/presentation/providers/download_quality_provider.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../providers/toplist_detail_provider.dart';
 import '../providers/toplists_provider.dart';
@@ -200,19 +204,22 @@ class _HotChartCard extends StatelessWidget {
                               color: PlatformAccent.qq.withValues(alpha: 0.14),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: const Text(
+                            child: Text(
                               '置顶',
                               style: TextStyle(
-                                fontSize: 10,
+                                fontSize: VideoTheme.readableSize(context, 10),
                                 color: PlatformAccent.qq,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Text(
+                          Text(
                             'QQ音乐',
-                            style: TextStyle(fontSize: 11, color: Colors.grey),
+                            style: TextStyle(
+                              fontSize: VideoTheme.readableSize(context, 11),
+                              color: Colors.grey,
+                            ),
                           ),
                         ],
                       ),
@@ -435,7 +442,10 @@ class _OfflineBadge extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(4),
       ),
-      child: const Text('离线缓存', style: TextStyle(fontSize: 10)),
+      child: Text(
+        '离线缓存',
+        style: TextStyle(fontSize: VideoTheme.readableSize(context, 10)),
+      ),
     );
   }
 }
@@ -593,7 +603,12 @@ class _ToplistDetailPageState extends ConsumerState<ToplistDetailPage> {
   Future<void> _cacheAll(List<Song> songs) async {
     final report = await ref
         .read(downloadProvider.notifier)
-        .cacheSongs(songs, quality: AudioLevel.low);
+        .cacheSongs(
+          songs,
+          quality:
+              ref.read(downloadQualityProvider)?.call(widget.platform) ??
+              AudioLevel.low,
+        );
     if (!mounted) return;
     final started = report.started + report.queued;
     showSuccessSnackBar(
@@ -674,7 +689,10 @@ class _ChartHeader extends StatelessWidget {
                             ),
                             child: Text(
                               chip,
-                              style: TextStyle(fontSize: 11, color: accent),
+                              style: TextStyle(
+                                fontSize: VideoTheme.readableSize(context, 11),
+                                color: accent,
+                              ),
                             ),
                           ),
                       ],
@@ -716,7 +734,10 @@ class _ChartHeader extends StatelessWidget {
           Text(
             '涨跌：↑ 上升 · ↓ 下降 · — 持平 · 新 新上榜',
             key: const Key('toplist-movement-legend'),
-            style: TextStyle(fontSize: 11, color: cs.outline),
+            style: TextStyle(
+              fontSize: VideoTheme.readableSize(context, 11),
+              color: cs.outline,
+            ),
           ),
         ],
       ),

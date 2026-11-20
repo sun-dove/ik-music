@@ -242,8 +242,9 @@ Future<void> showWindowsBackgroundPicker(
 
 Future<void> showWindowsFontPicker(
   BuildContext context,
-  WindowsAppearance appearance,
-) async {
+  WindowsAppearance appearance, {
+  bool preserveTheme = false,
+}) async {
   final messenger = ScaffoldMessenger.of(context);
   var family = appearance.fontFamily;
   FontDraft? imported;
@@ -253,10 +254,20 @@ Future<void> showWindowsFontPicker(
     context: context,
     builder: (dialog) => StatefulBuilder(
       builder: (dialog, refresh) => Theme(
-        data: appearance.theme(
-          Theme.of(dialog).brightness,
-          previewFont: family,
-        ),
+        data: preserveTheme
+            ? Theme.of(dialog).copyWith(
+                textTheme: Theme.of(dialog).textTheme.apply(fontFamily: family),
+                primaryTextTheme: Theme.of(dialog).primaryTextTheme
+                    .apply(fontFamily: family),
+                appBarTheme: Theme.of(dialog).appBarTheme.copyWith(
+                  titleTextStyle: Theme.of(dialog).appBarTheme.titleTextStyle
+                      ?.copyWith(fontFamily: family),
+                ),
+              )
+            : appearance.theme(
+                Theme.of(dialog).brightness,
+                previewFont: family,
+              ),
         child: AlertDialog(
           title: const Text(WindowsMusicStrings.fontPreview),
           content: SizedBox(

@@ -27,6 +27,7 @@ import '../../../offline_cache/presentation/providers/offline_cache_provider.dar
 import '../../data/media_kit_windows_audio_controller.dart';
 import '../../data/next_track_prefetcher.dart';
 import '../../data/player_audio_controller.dart';
+import '../../data/spatial_audio_capability.dart';
 import '../../data/player_playback_memory_store.dart';
 import '../../data/playback_keep_alive_service.dart';
 import '../../data/playback_notification_service.dart' as playback_notification;

@@ -1,0 +1,383 @@
+import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
+import '../../features/library/presentation/providers/likes_provider.dart';
+import '../../features/player/presentation/providers/player_provider.dart';
+import '../../l10n/ik_strings.dart';
+import '../../l10n/ik_runtime_strings.dart';
+import '../../l10n/ik_workspace_strings.dart';
+import '../../l10n/video_strings.dart';
+import '../ui/video_shell.dart';
+import 'ik_floating_lyrics.dart';
+import 'ik_lyrics_action.dart';
+import 'ik_like_action.dart';
+import 'ik_user_gain.dart';
+import 'ik_runtime.dart';
+
+Future<void> showIkQueue(BuildContext context) => showGeneralDialog<void>(
+  context: context,
+  barrierDismissible: true,
+  barrierLabel: IkStrings.close,
+  barrierColor: Colors.black.withValues(alpha: .12),
+  transitionDuration: const Duration(milliseconds: 160),
+  pageBuilder: (context, _, _) => Align(
+    alignment: Alignment.centerRight,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: SizedBox(
+        width: 360,
+        height: MediaQuery.sizeOf(context).height - 120,
+        child: Material(
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  tooltip: IkStrings.close,
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.close),
+                ),
+              ),
+              const Expanded(child: IkQueuePanel()),
+            ],
+          ),
+        ),
+      ),
+    ),
+  ),
+);
+
+class IkPlaybackBar extends ConsumerWidget {
+  const IkPlaybackBar({super.key, required this.onOpen, required this.onAudio});
+  final VoidCallback? onOpen;
+  final VoidCallback onAudio;
+  String _time(Duration value) =>
+      '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final player = ref.watch(playerProvider);
+    final notifier = ref.read(playerProvider.notifier);
+    final song = player.currentSong;
+    final lyrics = ref.watch(floatingLyricsProvider).enabled;
+    final busy = ref.watch(ikLyricsActionProvider);
+    final failed = ref.watch(ikFloatingFailureProvider);
+    final lyricsCapability = ref.watch(ikLyricsCapabilityProvider);
+    final lyricsIssue = ref.watch(ikLyricsIssueProvider);
+    final likes = ref.watch(likesProvider);
+    final likeAction = ref.watch(ikLikeActionProvider);
+    final gain = ref.watch(ikUserGainProvider);
+    final liked =
+        song != null &&
+        likes.songs.any(
+          (entry) => entry.id == song.id && entry.platform == song.platform,
+        );
+    final scheme = Theme.of(context).colorScheme;
+    final title = Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: song == null ? null : onOpen,
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  VideoCover(url: song?.coverUrl, size: 44, radius: 8),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          song?.name ?? IkWorkspaceStrings.noTrack,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        if (song != null)
+                          Text(
+                            song.artistNames,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (song != null)
+          IconButton(
+            tooltip: liked ? VideoStrings.unlike : VideoStrings.like,
+            onPressed: likeAction.busy
+                ? null
+                : () => ref.read(ikLikeActionProvider.notifier).toggle(song),
+            icon: Icon(
+              liked ? Icons.favorite : Icons.favorite_border,
+              size: 19,
+              color: liked ? scheme.primary : null,
+            ),
+          ),
+      ],
+    );
+    final controls = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            IconButton(
+              tooltip: VideoStrings.shuffle,
+              onPressed: notifier.toggleShuffle,
+              color: player.isShuffle ? scheme.primary : null,
+              icon: const Icon(Icons.shuffle_rounded, size: 18),
+            ),
+            IconButton(
+              tooltip: VideoStrings.previousSong,
+              onPressed: song == null ? null : notifier.skipToPrevious,
+              icon: const Icon(Icons.skip_previous_rounded),
+            ),
+            IconButton.filled(
+              tooltip: player.isPlaying
+                  ? VideoStrings.pause
+                  : VideoStrings.play,
+              onPressed: song == null || player.isTransitioning
+                  ? null
+                  : notifier.togglePlay,
+              icon: player.isTransitioning
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(
+                      player.isPlaying
+                          ? Icons.pause_rounded
+                          : Icons.play_arrow_rounded,
+                    ),
+            ),
+            IconButton(
+              tooltip: VideoStrings.nextSong,
+              onPressed: song == null ? null : notifier.skipToNext,
+              icon: const Icon(Icons.skip_next_rounded),
+            ),
+            IconButton(
+              tooltip: VideoStrings.repeatAll,
+              onPressed: notifier.cycleRepeatMode,
+              icon: Icon(
+                player.repeatMode == RepeatMode.one
+                    ? Icons.repeat_one_rounded
+                    : Icons.repeat_rounded,
+                size: 18,
+              ),
+              color: player.repeatMode == RepeatMode.off
+                  ? null
+                  : scheme.primary,
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Text(_time(player.position), style: const TextStyle(fontSize: 12)),
+            Expanded(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 3,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 4,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 10,
+                  ),
+                ),
+                child: Slider(
+                  key: const ValueKey('ik-bar-seek'),
+                  value: player.position.inMilliseconds.toDouble().clamp(
+                    0,
+                    player.duration.inMilliseconds.toDouble().clamp(
+                      1,
+                      double.infinity,
+                    ),
+                  ),
+                  max: player.duration.inMilliseconds.toDouble().clamp(
+                    1,
+                    double.infinity,
+                  ),
+                  onChanged:
+                      song == null ||
+                          player.isTransitioning ||
+                          player.duration <= Duration.zero
+                      ? null
+                      : (value) => notifier.seek(
+                          Duration(milliseconds: value.round()),
+                        ),
+                ),
+              ),
+            ),
+            Text(_time(player.duration), style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+      ],
+    );
+    final volume = SizedBox(
+      width: 104,
+      child: Row(
+        children: [
+          IconButton(
+            tooltip:
+                '${IkWorkspaceStrings.volume} ${(gain.gain * 100).round()}%',
+            onPressed: () => ref.read(ikUserGainProvider.notifier).toggleMute(),
+            icon: Icon(
+              gain.gain == 0
+                  ? Icons.volume_off_outlined
+                  : Icons.volume_up_outlined,
+              size: 20,
+            ),
+          ),
+          Expanded(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackHeight: 3,
+                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+                overlayShape: const RoundSliderOverlayShape(overlayRadius: 8),
+              ),
+              child: Slider(
+                key: const ValueKey('ik-bar-volume'),
+                value: gain.gain,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                semanticFormatterCallback: (value) =>
+                    '${(value * 100).round()}%',
+                onChanged: (value) =>
+                    ref.read(ikUserGainProvider.notifier).setGain(value),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    final tools = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: !lyricsCapability.supported
+              ? lyricsCapability.message
+              : lyricsIssue ??
+                    (failed
+                        ? IkRuntimeStrings.floatingFailed
+                        : IkStrings.floating),
+          child: TextButton(
+            key: const ValueKey('ik-bar-lyrics'),
+            onPressed: busy || !lyricsCapability.supported
+                ? null
+                : () => ref
+                      .read(ikLyricsActionProvider.notifier)
+                      .setEnabled(!lyrics),
+            style: TextButton.styleFrom(
+              minimumSize: const Size(44, 44),
+              foregroundColor: failed
+                  ? scheme.error
+                  : lyrics
+                  ? scheme.primary
+                  : scheme.onSurfaceVariant,
+            ),
+            child: const Text(IkWorkspaceStrings.lyricsShort),
+          ),
+        ),
+        IconButton(
+          tooltip: IkWorkspaceStrings.audio,
+          onPressed: onAudio,
+          icon: const Icon(Icons.tune_rounded, size: 21),
+        ),
+        IconButton(
+          key: const ValueKey('ik-bar-queue'),
+          tooltip: IkStrings.nextUp,
+          onPressed: () => showIkQueue(context),
+          icon: const Icon(Icons.queue_music_rounded, size: 23),
+        ),
+      ],
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) => Container(
+        decoration: BoxDecoration(
+          color: scheme.surface,
+          border: Border(
+            top: BorderSide(
+              color: scheme.outlineVariant.withValues(alpha: .55),
+            ),
+          ),
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: constraints.maxWidth < 360 ? 12 : 20,
+          vertical: 10,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (gain.error != null)
+              Text(
+                gain.error!,
+                style: TextStyle(fontSize: 12, color: scheme.error),
+              ),
+            if (likeAction.issue != null)
+              Text(
+                likeAction.issue!,
+                style: TextStyle(fontSize: 12, color: scheme.error),
+              ),
+            if (player.error != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  player.error!,
+                  style: TextStyle(fontSize: 12, color: scheme.error),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            LayoutBuilder(
+              builder: (context, size) => size.maxWidth >= 850
+                  ? Row(
+                      children: [
+                        Expanded(flex: 10, child: title),
+                        const SizedBox(width: 24),
+                        Expanded(flex: 12, child: controls),
+                        const SizedBox(width: 24),
+                        volume,
+                        tools,
+                      ],
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(child: title),
+                            if (size.maxWidth >= 470) tools,
+                          ],
+                        ),
+                        controls,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [volume, if (size.maxWidth < 470) tools],
+                        ),
+                      ],
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

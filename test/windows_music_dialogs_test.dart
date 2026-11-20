@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mconnect/l10n/windows_music_strings.dart';
+import 'package:mconnect/video_app/ik/ik_theme.dart';
 import 'package:mconnect/video_app/video_preferences.dart';
 import 'package:mconnect/video_app/windows/windows_appearance.dart';
 import 'package:mconnect/video_app/windows/windows_appearance_dialogs.dart';
@@ -84,6 +85,7 @@ void main() {
     Future<void> Function(BuildContext) picker, {
     Size size = const Size(1200, 800),
     double scale = 1,
+    ThemeData? theme,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = scale;
@@ -91,7 +93,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
-        theme: appearance.theme(Brightness.light),
+        theme: theme ?? appearance.theme(Brightness.light),
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
               .copyWith(textScaler: TextScaler.linear(scale)),
@@ -237,6 +239,49 @@ void main() {
       'Noto Sans SC',
     );
   });
+
+  for (final preserve in [false, true]) {
+    testWidgets('K08 字体预览保持新版主题=$preserve，切换字体不改变对应配色', (tester) async {
+      final legacy = appearance.theme(Brightness.light);
+      final modern = IkTheme.from(legacy);
+      await open(
+        tester,
+        (context) =>
+            showWindowsFontPicker(context, appearance, preserveTheme: preserve),
+        theme: modern,
+      );
+      final before = Theme.of(tester.element(find.byType(AlertDialog)));
+      if (preserve) {
+        expect(before.textTheme.bodyMedium!.fontSize, 15);
+      }
+      await tester.tap(find.byType(DropdownButtonFormField<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Noto Sans SC').last);
+      await tester.pumpAndSettle();
+
+      final preview = Theme.of(tester.element(find.byType(AlertDialog)));
+      expect(
+        preview.colorScheme.primary,
+        (preserve ? modern : legacy).colorScheme.primary,
+      );
+      expect(preview.textTheme.bodyMedium!.fontFamily, 'Noto Sans SC');
+      expect(
+        preview.textTheme.bodyMedium!.fontSize,
+        before.textTheme.bodyMedium!.fontSize,
+      );
+      expect(
+        tester
+            .widget<Text>(find.text(WindowsMusicStrings.fontSample))
+            .style!
+            .fontFamily,
+        'Noto Sans SC',
+      );
+      expect(preferences.value.font, isNull);
+      await tester.tap(find.text('取消'));
+      await tester.pumpAndSettle();
+      expect(appearance.fontFamily, 'Microsoft YaHei UI');
+    });
+  }
 
   for (final scale in [1.0, 1.25, 1.5]) {
     testWidgets('W05/W09：900×600，缩放$scale，字体预览和关闭选项无溢出', (tester) async {
