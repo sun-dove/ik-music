@@ -1,20 +1,23 @@
 # IK Music
 
-面向用户的产品在 Windows、Android 和应用内统一叫 **IK Music**。支持 QQ 音乐、网易云与酷狗音乐接入，提供账号收藏、内置音源自动准备、多音源管理和播放设置。GitHub 仓库地址与既有安装身份保持，Dingjian 是此前使用的项目归属名称。
+面向用户的产品在 Windows、Android 和应用内统一叫 **IK Music**。支持 QQ 音乐、网易云与酷狗音乐接入，提供账号收藏、内置音源自动准备、多音源管理和播放设置。GitHub仓库统一为 **sun-dove/ik-music**，原仓库地址由GitHub重定向；包名、签名和既有安装身份保持兼容。
 
-当前公开发行版仍为 **0.5.0**。**IK Music 0.6.0 / build 11 正在最终验收，尚未发布**，下方下载链接仍指向历史 0.5.0。此前 DJ Music 0.5.1 品牌候选没有单独发布，其图标与升级适配已纳入本版。历史 [0.5.0 发行页](https://github.com/sun-dove/yueyin-music/releases/tag/yueyin-v0.5.0)继续保留；更新版沿用原包名、签名、安装身份与用户数据目录。
+当前公开发行版为 **[IK Music 0.6.0 / build 11](https://github.com/sun-dove/ik-music/releases/tag/ik-v0.6.0)**。Windows安装器、便携ZIP与Android三ABI分包均已完成构建、校验并发布。此前DJ Music 0.5.1品牌候选的图标与升级适配已纳入本版。历史[0.5.0发行页](https://github.com/sun-dove/ik-music/releases/tag/yueyin-v0.5.0)继续保留；更新版沿用原包名、签名、安装身份与用户数据目录。
+
+0.6.0 的最终 Android 三 ABI 签名包已构建并校验，在专用 API30 x86_64 模拟器通过安装、启动、导航、新图标及静音切换检查。Windows 最终构建、安装迁移和公开发布仍待实际成功。Android 物理设备与全部音源可用性不在上述结论内，具体结果见下文。
 
 0.6.0 已实现发现、搜索、音乐库、最近播放、设置五个主区，设置集中为七个分区；队列按需打开。真实界面、内置目录、3D 音效运行时和共享歌词动作已进入产品代码。版本清单为 `ik-version.json`。使用入口与备份范围见 [IK Music 使用与构建](docs/交付文档/ik%20060%20使用与构建.md)，最终构建和设备边界见 [0.6.0 验收记录](docs/交付文档/ik-060验收记录.md)。
 
 <img src="assets/branding/dj-music/source/windows/yangyin-256.png" width="100" alt="IK Music 渐变音符图标">
 
-## 0.6.0 候选功能
+## 0.6.0 功能
 
 - **五个主区**：发现、搜索、音乐库、最近播放、设置；推荐、新歌、榜单以及专辑、歌手、歌单详情继续可达。
 - **七个设置分区**：播放与音效、外观、桌面歌词、音源、下载与缓存、账号、备份与恢复；常用选项行内调整，字体和背景先预览再应用。
 - **聚合搜索与曲库**：本地、QQ、网易云、酷狗独立加载、分页、失败重试；按来源筛选收藏。
 - **个人工具**：听歌统计、智能歌单、备份恢复、音效和睡眠定时、桌面歌词。
 - **Windows 配套**：托盘控制、单实例唤醒、窗口记忆和系统媒体控制；播放栏按钮按需打开队列。
+- **播放栏音量**：音量与淡入淡出独立计算，静音不会被播放恢复机制取消，切歌和播放器重建继续沿用；当前音量只在本次应用会话内保留。
 - **账号与收藏**：QQ、网易云及酷狗入口；酷狗增加歌单浏览，分页失败保留已获取内容并明确提示未完整。
 - **内置音源目录**：固定 20 项来源及版本、原始字节哈希，首次后台自动获取和受限初始化，无需逐项粘贴链接；完整显示准备、失败、限制与待生效状态，支持逐项重试。
 - **高级自定义音源**：继续支持通过 HTTPS 链接导入兼容的洛雪音源脚本，保留已有手动源和 HTTP 配置。
@@ -27,22 +30,22 @@
 - **Windows 个性化**：预览和保存本机背景，选择实际安装的字体或导入 TTF/OTF，使用三平台真实图标。
 - **Windows 完整歌词**：宽屏左封面、右歌词，支持同步跟随、手动浏览和恢复。
 - **共享桌面歌词动作**：设置页、底部播放栏与完整播放器使用同一开关流程；原生操作成功后才保存并显示开启，失败原因和平台能力可见。
-- **真实 3D 音效接入**：HRTF 原生处理与均衡器接入同一播放链；区分待播放、应用中、实际处理、不支持和失败，开关亮起不能代替处理帧验证。设备验证范围见 [3D 音效实施记录](docs/IK-Music-3D音效实施记录.md)。
+- **真实 3D 音效接入**：KEMAR HRTF 与均衡器接入同一播放链；Windows 已验证实际 libmpv PCM 输出，Android 已在 API30 x86_64 模拟器验证 just_audio → Media3 → JNI 的真实双耳卷积。界面按当前请求和处理帧区分待播放、应用中、实际处理、不支持和失败。ARM 实机耳机听感、蓝牙与持续功耗待验，详情见 [3D 音效实施记录](docs/IK-Music-3D音效实施记录.md)。
 - **Windows 关闭设置**：默认最小化并继续播放，也可设置真正退出，提供独立退出入口。
 
 ## 安装
 
-以下是已发布的 **0.5.0 历史安装包**，不包含本页所述 0.6.0 新界面。按系统和设备架构选择：
+以下是 **0.6.0 / build 11** 正式安装包，按系统和设备架构选择：
 
 | 安装包 | 适用设备 |
 | --- | --- |
-| [Android arm64-v8a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-arm64-v8a.apk) | 大多数安卓手机，推荐 |
-| [Android armeabi-v7a](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-armeabi-v7a.apk) | 支持的旧款 32 位设备 |
-| [Android x86_64](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-x86_64.apk) | x86_64 安卓模拟器或设备 |
-| [Windows x64 安装器](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-Setup-0.5.0-x64.exe) | Windows 10/11，可选择安装目录 |
-| [Windows x64 免安装 ZIP](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/YueyinMusic-0.5.0-windows-x64.zip) | 完整解压后运行 yueyin_music.exe |
+| [Android arm64-v8a](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-arm64-v8a.apk) | 大多数安卓手机，推荐，28.59MiB |
+| [Android armeabi-v7a](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-armeabi-v7a.apk) | 支持的旧款32位设备，26.64MiB |
+| [Android x86_64](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-x86_64.apk) | x86_64安卓模拟器或设备，30.10MiB |
+| [Windows x64 安装器](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-Setup-0.6.0-x64.exe) | Windows 10/11，可选择安装目录，16.59MiB |
+| [Windows x64 免安装 ZIP](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-windows-x64.zip) | 完整解压后运行yueyin_music.exe，20.19MiB |
 
-文件校验值见发行页的 [SHA256SUMS](https://github.com/sun-dove/yueyin-music/releases/download/yueyin-v0.5.0/SHA256SUMS)。Windows 完整包包含 EXE、DLL、data 与运行时许可，详见[Windows 说明](docs/交付文档/乐音音乐050Windows说明.md)。iOS 和 Linux 图标资源为平台适配源文件，本仓库没有对应的发行构建和安装包。
+文件校验值见发行页的[SHA256SUMS](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/SHA256SUMS)。Windows完整包包含EXE、DLL、data、图标与运行时许可；[最新版使用说明](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/IK-Music-0.6.0-guide.md)、[文件清单](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-windows-manifest.json)和[对应音频源码](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-audio-sources.tar.gz)一并提供。Windows新安装默认目录为ik-music；跨目录迁移使用随包脚本，普通升级保持已有目录。iOS和Linux没有对应发行包。
 
 ## 0.6.0 使用音源
 
@@ -58,7 +61,11 @@
 
 ## 兼容范围与问题反馈
 
-音源准备或导入成功不等于每首歌曲都能播放。新自动目录的 Windows 实测完整覆盖 20 项：当次 14 项准备并发布，1 项超时，4 项历史不支持，1 项使用范围受限，见[逐项设备记录](docs/IK-Music-U08Windows设备记录.md)。Android 自动目录尚未完成设备验收；本轮未验证第三方曲目的完整播放和实际音质。历史固定源诊断见[兼容矩阵](docs/交付文档/悦音音乐040音源兼容矩阵.md)，不能替代本机当前结果。
+音源准备或导入成功不等于每首歌曲都能播放。新自动目录的Windows早期设备门完整覆盖20项：当次14项准备并发布，1项超时，4项历史不支持，1项使用范围受限，见[逐项设备记录](docs/IK-Music-U08Windows设备记录.md)。最终安装版在本机自动准备15项，重启后界面确认**15/20项已准备**；非常道这次成功，其他4项不支持、1项受限，见[最终安装记录](docs/IK-Music-安装迁移实施记录.md)。
+
+最终 Android 包在专用 API30 x86_64 模拟器自动显示全部20项并运行准备流程，无需贴链接；当次结果为 **0/20 本机已准备**：15项准备失败、1项等待联网/校验、3项暂不支持、1项使用范围受限。已展开的失败分别涉及网络和旧版 WebView 的隔离运行能力，不能把目录可见当成20项可用，也不能把这台模拟器的结果泛化到所有设备。该环境的 Impeller 渐变渲染亦有 OpenGL ES 2 限制。完整设备与包校验结果见[安装及 Android 验收](docs/IK-Music-安装迁移实施记录.md)。
+
+本轮未验证第三方曲目的完整播放和实际音质，也未完成 Android 物理设备验收。历史固定源诊断见[兼容矩阵](docs/交付文档/悦音音乐040音源兼容矩阵.md)，实际使用以本机当前状态为准。
 
 反馈问题时，请提供应用版本、设备系统、音源名称及版本、歌曲与歌手、操作步骤和页面错误提示。请勿附带账号 Cookie、访问令牌或签名口令。
 
