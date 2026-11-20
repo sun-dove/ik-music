@@ -88,7 +88,12 @@ void main() {
     final captureFont = Platform.environment['IK_CAPTURE_UI_FONT'];
     if (captureFont != null) {
       final data = ByteData.sublistView(await File(captureFont).readAsBytes());
-      for (final family in ['sans-serif', 'Roboto', 'Microsoft YaHei UI']) {
+      for (final family in [
+        'sans-serif',
+        'Roboto',
+        'Microsoft YaHei UI',
+        'Ahem',
+      ]) {
         await (FontLoader(family)..addFont(Future.value(data))).load();
       }
       await (FontLoader(

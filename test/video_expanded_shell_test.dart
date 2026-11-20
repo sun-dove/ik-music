@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mconnect/video_app/ui/video_shell.dart';
 
 void main() {
-  testWidgets('独立版宽屏导航显示 ik 和新图标', (tester) async {
+  testWidgets('独立版宽屏导航显示 IK Music 和新图标', (tester) async {
     tester.view.physicalSize = const Size(1200, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -26,7 +26,7 @@ void main() {
         ),
       ),
     );
-    expect(find.text('ik'), findsOneWidget);
+    expect(find.text('IK Music'), findsOneWidget);
     expect(
       find.image(
         const AssetImage(

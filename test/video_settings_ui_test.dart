@@ -47,7 +47,7 @@ void main() {
     await tester.ensureVisible(find.text('12 MB / 10240 MB'));
     await tester.tap(find.text('12 MB / 10240 MB'));
     expect(cache, 1);
-    await tester.scrollUntilVisible(find.text('ik · 0.6.0'), 200);
-    expect(find.text('ik · 0.6.0'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('IK Music · 0.6.0'), 200);
+    expect(find.text('IK Music · 0.6.0'), findsOneWidget);
   });
 }
