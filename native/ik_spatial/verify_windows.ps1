@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory=$true)][string]$LibraryPath,
     [string]$Python = 'python',
     [string]$OutputDirectory
