@@ -2,6 +2,9 @@ name: ik Windows 原生验收
 on:
   workflow_dispatch:
   workflow_call:
+  push:
+    branches: [feature/ik-complete]
+    paths: ['windows/**', '.github/workflows/ik-native.yml']
 permissions:
   contents: read
 jobs:
