@@ -123,6 +123,17 @@ class IkDesktopWorkspace extends StatelessWidget {
     ],
   );
 
+  List<Widget> _pageChildren() => alignToDesign
+      ? [
+          for (final page in pages.indexed)
+            Overlay.wrap(
+              key: ValueKey('ik-workspace-page-overlay-${page.$1}'),
+              clipBehavior: Clip.none,
+              child: page.$2,
+            ),
+        ]
+      : pages;
+
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 720;
@@ -260,12 +271,12 @@ class IkDesktopWorkspace extends StatelessWidget {
                               Expanded(
                                 child: IndexedStack(
                                   index: index,
-                                  children: pages,
+                                  children: _pageChildren(),
                                 ),
                               ),
                             ],
                           )
-                        : IndexedStack(index: index, children: pages),
+                        : IndexedStack(index: index, children: _pageChildren()),
                   ),
                 ],
               ),

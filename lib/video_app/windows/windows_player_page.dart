@@ -638,21 +638,24 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                     Expanded(
                       child: Tooltip(
                         message: IkPlayerAlignmentStrings.lyricsSize,
-                        child: Slider(
-                          key: const ValueKey('ik-player-lyrics-size'),
-                          value: _lyricsFontSize,
-                          min: 16,
-                          max: 30,
-                          divisions: 7,
-                          label: '${_lyricsFontSize.round()}',
-                          semanticFormatterCallback: (value) =>
-                              '${IkPlayerAlignmentStrings.lyricsSize} ${value.round()}',
-                          onChanged: widget.lyrics.isEmpty
-                              ? null
-                              : (value) {
-                                  setState(() => _lyricsFontSize = value);
-                                  _follow();
-                                },
+                        child: Semantics(
+                          container: true,
+                          child: Slider(
+                            key: const ValueKey('ik-player-lyrics-size'),
+                            value: _lyricsFontSize,
+                            min: 16,
+                            max: 30,
+                            divisions: 7,
+                            label: '${_lyricsFontSize.round()}',
+                            semanticFormatterCallback: (value) =>
+                                '${IkPlayerAlignmentStrings.lyricsSize} ${value.round()}',
+                            onChanged: widget.lyrics.isEmpty
+                                ? null
+                                : (value) {
+                                    setState(() => _lyricsFontSize = value);
+                                    _follow();
+                                  },
+                          ),
                         ),
                       ),
                     ),

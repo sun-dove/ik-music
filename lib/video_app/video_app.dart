@@ -117,8 +117,10 @@ class VideoMusicApp extends StatefulWidget {
 class _VideoMusicAppState extends State<VideoMusicApp> {
   final _homeKey = GlobalKey<_VideoHomeState>();
   late final _router = createIkRouter(
-    home: (_) => _home(),
-    player: (_) => _homeKey.currentState?._playerPage() ?? const IkRouteError(),
+    home: (_) => _routeContent(_home()),
+    player: (_) => _routeContent(
+      _homeKey.currentState?._playerPage() ?? const IkRouteError(),
+    ),
     downloads: widget.alignToDesign && widget.workspace
         ? (_) =>
               _homeKey.currentState?._alignedDownloadsPage() ??
@@ -132,37 +134,44 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
                 const IkRouteError(),
           )
         : null,
-    detailShell: (context, page) => Scaffold(
-      body: Column(
-        children: [
-          Expanded(child: page),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Consumer(
-              builder: (context, ref, _) {
-                if (widget.workspace) {
-                  return IkPlaybackBar(
+    detailShell: (context, page) => _routeContent(
+      Scaffold(
+        body: Column(
+          children: [
+            Expanded(child: page),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Consumer(
+                builder: (context, ref, _) {
+                  if (widget.workspace) {
+                    return IkPlaybackBar(
+                      onOpen: () => context.push('/player'),
+                      onAudio: () => context.push('/settings/audio'),
+                    );
+                  }
+                  final player = ref.watch(playerProvider);
+                  return VideoMiniPlayer(
+                    song: player.currentSong,
+                    isPlaying: player.isPlaying,
+                    isLoading: player.isTransitioning,
+                    error: player.error,
                     onOpen: () => context.push('/player'),
-                    onAudio: () => context.push('/settings/audio'),
+                    onToggle: ref.read(playerProvider.notifier).togglePlay,
+                    onQueue: () => context.push('/queue'),
                   );
-                }
-                final player = ref.watch(playerProvider);
-                return VideoMiniPlayer(
-                  song: player.currentSong,
-                  isPlaying: player.isPlaying,
-                  isLoading: player.isTransitioning,
-                  error: player.error,
-                  onOpen: () => context.push('/player'),
-                  onToggle: ref.read(playerProvider.notifier).togglePlay,
-                  onQueue: () => context.push('/queue'),
-                );
-              },
+                },
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
+
+  Widget _routeContent(Widget page) => widget.workspace && widget.alignToDesign
+      ? Overlay.wrap(clipBehavior: Clip.none, child: page)
+      : page;
+
   @override
   void dispose() {
     if (widget.redesign) _router.dispose();
