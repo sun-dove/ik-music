@@ -367,6 +367,7 @@ Future<void> main() async {
       child: VideoMusicApp(
         redesign: true,
         workspace: true,
+        alignToDesign: true,
         expandedPlatforms: true,
         catalog: catalog,
         preferences: preferences,

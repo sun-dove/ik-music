@@ -20,6 +20,9 @@ import 'package:mconnect/features/auth/presentation/providers/auth_provider.dart
 import 'package:mconnect/features/backup/presentation/pages/backup_page.dart';
 import 'package:mconnect/features/discovery/presentation/pages/recommendations_page.dart';
 import 'package:mconnect/features/download/presentation/providers/download_provider.dart';
+import 'package:mconnect/features/download/domain/entities/download_task.dart';
+import 'package:mconnect/features/download/domain/entities/download_failure.dart';
+import 'package:mconnect/features/library/presentation/providers/likes_provider.dart';
 import 'package:mconnect/features/download/presentation/providers/download_quality_provider.dart';
 import 'package:mconnect/features/download/presentation/screens/download_page.dart';
 import 'package:mconnect/features/library/presentation/pages/history_page.dart';
@@ -60,6 +63,7 @@ import 'package:mconnect/video_app/ik/ik_settings_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_playback_bar.dart';
 import 'package:mconnect/video_app/ik/ik_controls.dart';
 import 'package:mconnect/video_app/ik/ik_search_workspace.dart';
+import 'package:mconnect/video_app/ik/ik_downloads_workspace.dart';
 import 'package:mconnect/video_app/multi_source/multi_source_player.dart';
 import 'package:mconnect/video_app/playback/video_platforms.dart';
 import 'package:mconnect/video_app/playback/video_stream_state.dart';
@@ -145,6 +149,8 @@ void main() {
     double width = 1200,
     bool desktopAppearance = false,
     bool workspace = false,
+    bool alignToDesign = false,
+    DownloadState? downloads,
     double textScale = 1,
     PlayerAudioController? audioController,
   }) async {
@@ -201,7 +207,9 @@ void main() {
           ),
         ),
         downloadProvider.overrideWith(
-          (ref) => DownloadNotifier(initialState: const DownloadState()),
+          (ref) => DownloadNotifier(
+            initialState: downloads ?? const DownloadState(),
+          ),
         ),
         downloadQualityProvider.overrideWithValue(
           (platform) => unified.quality(platform, download: true),
@@ -234,6 +242,7 @@ void main() {
           child: VideoMusicApp(
             redesign: true,
             workspace: workspace,
+            alignToDesign: alignToDesign,
             expandedPlatforms: true,
             preferences: preferences,
             unifiedPreferences: unified,
@@ -327,6 +336,61 @@ void main() {
     expect(find.byType(NewSongsPage), findsOneWidget);
     expect(find.text('内容歌曲qq'), findsWidgets);
     await back(tester);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('A01/A04 原稿对齐真实共用搜索、来源和专辑歌手路由', (tester) async {
+    final app = await mount(tester, workspace: true, alignToDesign: true);
+    final shell = find.byType(IkDesktopWorkspace);
+    final shellWidget = tester.widget<IkDesktopWorkspace>(shell);
+    expect(shellWidget.alignToDesign, isTrue);
+    expect(shellWidget.onSearch, isNotNull);
+    shellWidget.onSearch!('对齐验收');
+    await drain(tester);
+    expect(app.catalog.searches.map((c) => c.$2).toSet(), {'对齐验收'});
+    expect(find.byType(IkSearchWorkspace).hitTestable(), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(IkSearchWorkspace),
+        matching: find.byType(TextField),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.text('搜索歌曲qq').first);
+    await drain(tester);
+    final player = tester.widget<WindowsPlayerPage>(
+      find.byType(WindowsPlayerPage),
+    );
+    expect(player.alignToDesign, isTrue);
+    expect(player.onArtist, isNotNull);
+    expect(player.onAlbum, isNotNull);
+    player.onAlbum!();
+    await drain(tester);
+    expect(find.byType(AlbumPage).hitTestable(), findsOneWidget);
+    await back(tester);
+    tester
+        .widget<WindowsPlayerPage>(find.byType(WindowsPlayerPage))
+        .onArtist!();
+    await drain(tester);
+    expect(find.byType(ArtistPage).hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('A06 新下载路由与曲库入口共用新工作页和播放栏', (tester) async {
+    await mount(tester, workspace: true, alignToDesign: true);
+    final router = GoRouter.of(tester.element(find.byType(IkDesktopWorkspace)));
+    unawaited(router.push<void>('/downloads'));
+    await drain(tester);
+    expect(find.byType(IkDownloadsWorkspace).hitTestable(), findsOneWidget);
+    expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+    expect(find.text(VideoStrings.downloadManagement), findsOneWidget);
+    await back(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    await tester.tap(find.text(VideoStrings.download).hitTestable());
+    await drain(tester);
+    expect(find.byType(IkDownloadsWorkspace).hitTestable(), findsOneWidget);
+    expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -873,6 +937,133 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'player width=$width');
       if (width == 320) await captureIkUi(tester, 'player-narrow');
     });
+  }
+
+  for (final dark in [false, true]) {
+    for (final width in [320.0, 390.0, 720.0, 900.0, 1200.0, 1440.0]) {
+      for (final scale in [1.0, 1.25, 1.5]) {
+        testWidgets('A07 对齐版实际装配 ${dark ? '深' : '浅'} ${width.toInt()}/$scale', (
+          tester,
+        ) async {
+          await tester.runAsync(
+            () => settings.put('video.theme', dark ? 'dark' : 'light'),
+          );
+          final app = await mount(
+            tester,
+            workspace: true,
+            alignToDesign: true,
+            width: width,
+            textScale: scale,
+            downloads: DownloadState(
+              tasks: [
+                for (final status in [
+                  DownloadStatus.downloading,
+                  DownloadStatus.completed,
+                  DownloadStatus.failed,
+                ])
+                  DownloadTask(
+                    id: 'capture-${status.name}',
+                    song: _song(PlatformType.qq, name: '验收${status.name}歌曲'),
+                    quality: AudioLevel.high,
+                    status: status,
+                    createdAt: DateTime(2026, 11, 21),
+                    progress: .42,
+                    downloadedBytes: 4200000,
+                    totalBytes: 10000000,
+                    filePath: status == DownloadStatus.completed
+                        ? 'D:/音乐/验收歌曲.mp3'
+                        : null,
+                    error: status == DownloadStatus.failed
+                        ? '该来源连接失败，请稍后重试'
+                        : null,
+                    failureKind: status == DownloadStatus.failed
+                        ? DownloadFailureKind.network
+                        : null,
+                  ),
+              ],
+            ),
+          );
+          final suffix = '${dark ? 'dark' : 'light'}-${width.toInt()}-$scale';
+          Future<void> check(String page) async {
+            expect(tester.takeException(), isNull, reason: '$page $suffix');
+            if ((width == 1200 && scale == 1) ||
+                (width == 390 && scale == 1.5)) {
+              await captureIkUi(tester, 'aligned-$page-$suffix');
+            }
+          }
+
+          await check('home');
+          await tester.enterText(
+            find.byKey(const ValueKey('ik-workspace-search')),
+            '验收搜索',
+          );
+          await tester.testTextInput.receiveAction(TextInputAction.search);
+          await drain(tester);
+          await check('search');
+          await tester.runAsync(
+            () => app.container
+                .read(likesProvider.notifier)
+                .toggleLike(_song(PlatformType.qq)),
+          );
+          await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+          await drain(tester);
+          await check('library');
+          await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-3')));
+          await drain(tester);
+          await check('recent');
+          await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+          await drain(tester);
+          await check('audio');
+          await tester.tap(
+            find.byKey(const ValueKey('ik-settings-appearance')),
+          );
+          await drain(tester);
+          await check('appearance');
+          final router = GoRouter.of(
+            tester.element(find.byType(IkDesktopWorkspace)),
+          );
+          unawaited(router.push<void>('/downloads'));
+          await drain(tester);
+          await check('downloads');
+          for (final group in ['completed', 'failed']) {
+            final tab = find.byKey(ValueKey('ik-downloads-group-$group'));
+            await tester.ensureVisible(tab);
+            await tester.pump();
+            await tester.tap(tab);
+            await drain(tester);
+            await check('downloads-$group');
+          }
+          await back(tester);
+          await app.container
+              .read(playerProvider.notifier)
+              .playSong(_song(PlatformType.qq));
+          await drain(tester);
+          app.container
+              .read(sourcePlaybackViewProvider.notifier)
+              .state = const SourcePlaybackView(
+            message: '当前音源已返回音频',
+            details: '主来源已连接\n备用来源未请求\n实际格式与码率由响应确认',
+            sourceName: '验收来源',
+            format: 'mp3',
+            bitrate: 320000,
+          );
+          unawaited(router.push<void>('/player'));
+          await drain(tester);
+          await check('player');
+          final expand = find.byKey(const ValueKey('ik-player-source-expand'));
+          await tester.ensureVisible(expand);
+          await tester.pump();
+          await tester.tap(expand);
+          await drain(tester);
+          expect(
+            find.byKey(const ValueKey('ik-inline-source-status')),
+            findsOneWidget,
+          );
+          expect(find.byType(AlertDialog), findsNothing);
+          await check('player-source');
+        });
+      }
+    }
   }
 
   testWidgets('U05 切歌装载中禁止拖动进度，装载完成后恢复', (tester) async {

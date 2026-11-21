@@ -88,7 +88,7 @@ try {
     foreach ($license in @('LICENSE', 'NOTICE.md')) {
         if (Test-Path -LiteralPath (Join-Path $projectRoot $license)) { Copy-Item -LiteralPath (Join-Path $projectRoot $license) -Destination $bundle -Force }
     }
-    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/交付文档/ik 060 使用与构建.md') -Destination (Join-Path $bundle 'ik 060 使用与构建.md') -Force
+    Copy-Item -LiteralPath (Join-Path $projectRoot 'docs/交付文档/ik 061 使用与构建.md') -Destination (Join-Path $bundle 'ik 061 使用与构建.md') -Force
     Copy-Item -LiteralPath (Join-Path $projectRoot 'design/platform-icons-010/来源说明.md') -Destination (Join-Path $bundle '平台图标来源说明.md') -Force
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'ik_install_migration.ps1') -Destination $bundle
     foreach ($dll in @('Microsoft.Web.WebView2.Core.dll','Microsoft.Web.WebView2.WinForms.dll','WebView2Loader.dll')) {

@@ -10,12 +10,14 @@ class IkSelect<T> extends StatefulWidget {
     required this.items,
     required this.onChanged,
     this.enabled = true,
+    this.alignToDesign = false,
   });
   final String label;
   final T value;
   final Map<T, String> items;
   final ValueChanged<T> onChanged;
   final bool enabled;
+  final bool alignToDesign;
   @override
   State<IkSelect<T>> createState() => _IkSelectState<T>();
 }
@@ -73,7 +75,15 @@ class _IkSelectState<T> extends State<IkSelect<T>> {
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(7)),
               ),
             ),
-            child: Text(item.value, style: const TextStyle(fontSize: 13)),
+            child: Text(
+              item.value,
+              style: widget.alignToDesign
+                  ? theme.textTheme.labelLarge?.copyWith(
+                      fontSize: 13,
+                      inherit: true,
+                    )
+                  : const TextStyle(fontSize: 13),
+            ),
           ),
       ],
       builder: (context, controller, _) => Semantics(
@@ -97,7 +107,12 @@ class _IkSelectState<T> extends State<IkSelect<T>> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
-            textStyle: const TextStyle(fontSize: 13),
+            textStyle: widget.alignToDesign
+                ? theme.textTheme.labelLarge?.copyWith(
+                    fontSize: 13,
+                    inherit: true,
+                  )
+                : const TextStyle(fontSize: 13),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -131,17 +146,20 @@ class IkSettingRow extends StatelessWidget {
     required this.control,
     this.description,
     this.status,
+    this.alignToDesign = false,
   });
   final String title;
   final String? description, status;
   final Widget control;
+  final bool alignToDesign;
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, size) {
       final compact =
-          size.maxWidth < 560 ||
+          size.maxWidth < (alignToDesign ? 460 : 560) ||
           MediaQuery.textScalerOf(context).scale(14) > 19;
       final label = Column(
+        mainAxisSize: alignToDesign ? MainAxisSize.min : MainAxisSize.max,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
@@ -176,7 +194,10 @@ class IkSettingRow extends StatelessWidget {
         ],
       );
       return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 17),
+        padding: EdgeInsets.symmetric(
+          horizontal: 20,
+          vertical: alignToDesign ? 15 : 17,
+        ),
         child: compact
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +212,15 @@ class IkSettingRow extends StatelessWidget {
                 children: [
                   Expanded(child: label),
                   const SizedBox(width: 22),
-                  control,
+                  if (alignToDesign)
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: (size.maxWidth - 40) * .52,
+                      ),
+                      child: control,
+                    )
+                  else
+                    control,
                 ],
               ),
       );

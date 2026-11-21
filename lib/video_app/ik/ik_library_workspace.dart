@@ -9,6 +9,7 @@ import '../data/video_catalog.dart';
 import '../ui/catalog_pages.dart';
 import '../ui/video_shell.dart';
 import 'ik_controls.dart';
+import 'ik_song_table.dart';
 
 class IkLibraryWorkspace extends StatefulWidget {
   const IkLibraryWorkspace({
@@ -27,6 +28,7 @@ class IkLibraryWorkspace extends StatefulWidget {
     this.localError,
     required this.onRetryLocal,
     this.currentSong,
+    this.alignToDesign = false,
   });
   final Map<PlatformType, VideoLibrary> libraries;
   final Set<PlatformType> syncing, loggedIn;
@@ -39,6 +41,7 @@ class IkLibraryWorkspace extends StatefulWidget {
   final bool localLoading;
   final String? localError;
   final Song? currentSong;
+  final bool alignToDesign;
   @override
   State<IkLibraryWorkspace> createState() => _IkLibraryWorkspaceState();
 }
@@ -93,10 +96,37 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                   spacing: 10,
                   runSpacing: 8,
                   children: [
-                    TextButton(
-                      onPressed: () {},
-                      child: const Text(IkWorkspaceStrings.likes),
-                    ),
+                    if (widget.alignToDesign)
+                      Semantics(
+                        selected: true,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Theme.of(context).colorScheme.primary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            IkWorkspaceStrings.likes,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      TextButton(
+                        onPressed: () {},
+                        child: const Text(IkWorkspaceStrings.likes),
+                      ),
                     TextButton(
                       onPressed: () => widget.onNavigate('/platform-playlists'),
                       child: const Text(IkStrings.playlists),
@@ -126,6 +156,7 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                     IkSelect<String>(
+                      alignToDesign: widget.alignToDesign,
                       label: IkWorkspaceStrings.source,
                       value: _source,
                       items: {
@@ -190,10 +221,29 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
             ),
           ),
         ),
+        if (widget.alignToDesign && songs.isNotEmpty)
+          const SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            sliver: SliverToBoxAdapter(child: IkSongTableHeader()),
+          ),
         SliverList.builder(
           itemCount: songs.length,
           itemBuilder: (context, index) {
             final song = songs[index];
+            if (widget.alignToDesign) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: IkSongTableRow(
+                  song: song,
+                  index: index,
+                  onPlay: () => widget.onPlay(song, songs),
+                  onMore: () => widget.onMore(song),
+                  playing:
+                      widget.currentSong != null &&
+                      videoSongKey(widget.currentSong!) == videoSongKey(song),
+                ),
+              );
+            }
             final playing = widget.currentSong?.dedupeKey == song.dedupeKey;
             return Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24),

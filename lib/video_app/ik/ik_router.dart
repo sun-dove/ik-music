@@ -30,6 +30,7 @@ GoRouter createIkRouter({
   required WidgetBuilder player,
   Widget Function(BuildContext, Widget)? detailShell,
   Widget Function(BuildContext, String)? settings,
+  WidgetBuilder? downloads,
 }) {
   Widget detail(BuildContext context, Widget page) =>
       detailShell?.call(context, page) ?? page;
@@ -84,7 +85,7 @@ GoRouter createIkRouter({
           localImportFailure: IkStrings.importPlaylistFailed,
         ),
       ),
-      page('/downloads', (_) => const DownloadPage()),
+      page('/downloads', downloads ?? (_) => const DownloadPage()),
       page('/offline-cache', (_) => const OfflineCachePage()),
       page(
         '/listening-stats',

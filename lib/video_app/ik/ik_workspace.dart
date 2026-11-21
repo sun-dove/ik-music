@@ -14,12 +14,16 @@ class IkDesktopWorkspace extends StatelessWidget {
     required this.pages,
     required this.playbackBar,
     required this.onAccount,
+    this.alignToDesign = false,
+    this.onSearch,
   });
   final int index;
   final ValueChanged<int> onSelect;
   final List<Widget> pages;
   final Widget playbackBar;
   final VoidCallback onAccount;
+  final bool alignToDesign;
+  final ValueChanged<String>? onSearch;
   static const labels = [
     IkWorkspaceStrings.discovery,
     VideoStrings.search,
@@ -246,7 +250,22 @@ class IkDesktopWorkspace extends StatelessWidget {
                       ),
                     ),
                   Expanded(
-                    child: IndexedStack(index: index, children: pages),
+                    child: alignToDesign && onSearch != null
+                        ? Column(
+                            children: [
+                              _WorkspaceTopBar(
+                                location: labels[index],
+                                onSearch: onSearch!,
+                              ),
+                              Expanded(
+                                child: IndexedStack(
+                                  index: index,
+                                  children: pages,
+                                ),
+                              ),
+                            ],
+                          )
+                        : IndexedStack(index: index, children: pages),
                   ),
                 ],
               ),
@@ -255,6 +274,115 @@ class IkDesktopWorkspace extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _WorkspaceTopBar extends StatefulWidget {
+  const _WorkspaceTopBar({required this.location, required this.onSearch});
+  final String location;
+  final ValueChanged<String> onSearch;
+
+  @override
+  State<_WorkspaceTopBar> createState() => _WorkspaceTopBarState();
+}
+
+class _WorkspaceTopBarState extends State<_WorkspaceTopBar> {
+  final _query = TextEditingController();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(context).scale(13) / 13;
+        final stacked = constraints.maxWidth < 480 * scale;
+        final location = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: colors.onSurfaceVariant,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              widget.location,
+              key: const ValueKey('ik-workspace-location'),
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+          ],
+        );
+        final search = TextField(
+          key: const ValueKey('ik-workspace-search'),
+          controller: _query,
+          textInputAction: TextInputAction.search,
+          onSubmitted: widget.onSearch,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            hintText: IkStrings.searchHint,
+            hintMaxLines: 1,
+            prefixIcon: const Icon(Icons.search_rounded, size: 18),
+            prefixIconConstraints: const BoxConstraints(minWidth: 38),
+            filled: true,
+            fillColor: colors.surface,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: colors.outlineVariant.withValues(alpha: .55),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: colors.outlineVariant.withValues(alpha: .55),
+              ),
+            ),
+          ),
+        );
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            padding: EdgeInsets.symmetric(vertical: stacked ? 14 : 20),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: .45),
+                ),
+              ),
+            ),
+            child: stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [location, const SizedBox(height: 10), search],
+                  )
+                : Row(
+                    children: [
+                      location,
+                      const Spacer(),
+                      SizedBox(
+                        width: (300 * scale).clamp(
+                          0,
+                          constraints.maxWidth * .64,
+                        ),
+                        child: search,
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      },
     );
   }
 }

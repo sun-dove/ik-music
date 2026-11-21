@@ -4,18 +4,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/library/presentation/providers/history_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../l10n/ik_strings.dart';
+import '../../l10n/ik_alignment_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../models/song.dart';
 import 'ik_catalog_pages.dart';
+import 'ik_song_table.dart';
 
 class IkRecentPage extends ConsumerWidget {
   const IkRecentPage({
     super.key,
     required this.onNavigate,
     required this.onMore,
+    this.alignToDesign = false,
   });
   final ValueChanged<String> onNavigate;
   final ValueChanged<Song> onMore;
+  final bool alignToDesign;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(historyProvider),
@@ -71,16 +75,40 @@ class IkRecentPage extends ConsumerWidget {
             ),
           ),
         ),
+        if (alignToDesign && songs.isNotEmpty)
+          const SliverPadding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            sliver: SliverToBoxAdapter(child: IkSongTableHeader()),
+          ),
         SliverList.builder(
           itemCount: songs.length,
-          itemBuilder: (context, index) => IkSongTile(
-            song: songs[index],
-            onTap: () => ref
-                .read(playerProvider.notifier)
-                .playPlaylist(songs, startIndex: index),
-            onMore: () => onMore(songs[index]),
-            playing: player.currentSong?.dedupeKey == songs[index].dedupeKey,
-          ),
+          itemBuilder: (context, index) => alignToDesign
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: IkSongTableRow(
+                    song: songs[index],
+                    index: index,
+                    onPlay: () => ref
+                        .read(playerProvider.notifier)
+                        .playPlaylist(songs, startIndex: index),
+                    onMore: () => onMore(songs[index]),
+                    playing:
+                        player.currentSong?.id == songs[index].id &&
+                        player.currentSong?.platform == songs[index].platform,
+                    detail: IkAlignmentStrings.listenedAt(
+                      history.entries[index].listenedAt,
+                    ),
+                  ),
+                )
+              : IkSongTile(
+                  song: songs[index],
+                  onTap: () => ref
+                      .read(playerProvider.notifier)
+                      .playPlaylist(songs, startIndex: index),
+                  onMore: () => onMore(songs[index]),
+                  playing:
+                      player.currentSong?.dedupeKey == songs[index].dedupeKey,
+                ),
         ),
         const SliverPadding(padding: EdgeInsets.only(bottom: 20)),
       ],
