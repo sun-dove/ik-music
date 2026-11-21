@@ -342,10 +342,10 @@ void main() {
     );
   });
 
-  test('品牌：GitHub仓库归属保持原地址，独立产品显示ik', () {
+  test('品牌：GitHub仓库统一ik-music，独立产品显示IK Music', () {
     expect(
       File('README.md').readAsStringSync(),
-      contains('https://github.com/sun-dove/yueyin-music'),
+      contains('https://github.com/sun-dove/ik-music'),
     );
     final labels = File('lib/l10n/video_strings.dart').readAsStringSync();
     expect(labels, contains("static const appName = IkVersion.name;"));
@@ -356,9 +356,9 @@ void main() {
       ),
     );
     final readme = File('README.md').readAsStringSync();
-    expect(readme, contains('Dingjian'));
-    expect(readme, contains('ik'));
-    expect(readme, contains('https://github.com/sun-dove/yueyin-music'));
+    expect(readme, contains('sun-dove/ik-music'));
+    expect(readme, contains('IK Music'));
+    expect(readme, contains('https://github.com/sun-dove/ik-music'));
     expect(
       File('pubspec.yaml').readAsStringSync(),
       contains('assets/branding/dj-music/source/windows/yangyin-256.png'),

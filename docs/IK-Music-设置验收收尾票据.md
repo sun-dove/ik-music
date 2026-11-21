@@ -49,4 +49,4 @@ dart format test/settings_page_test.dart test/settings_persistence_test.dart
 
 红门日志 SHA-256：`DE9374E52D0ADA54C34B8CFA0E6C114AFAF465702D6B87DCAE2C5E967D285A58`。绿色相关门日志 SHA-256：`D234A8DA2FBDE7D250053E3AD9EDE376103BDE485EE8D1BCDE9A59279B4CCA08`。七份本轮日志与结果已逐文件核对原件和正式归档的长度、SHA-256 完全相同；正式位置为聊天 `outputs/IK-Music-0.6.0-build11/验收证据/设置验收收尾-20261121`，归档清单长期保留。
 
-临时文件全部由本轮新建于聊天 `work/ik-settings-test-close-20261121`。执行前记录旧 Temp 目录清单、执行后取精确差集，唯一红门残留为 `C:/Users/Sun/AppData/Local/Temp/mconnect_settings_test_552d1443`（2026-11-21 16:06:38 创建，内为样例背景、临时 Hive 和诊断日志，四文件共 277 字节）；绿色用例正常自行清理。收口任务的临时文件批量清理及缩小到单个旧下载副本的删除均被自动审批拒绝，只返回 `blocked by policy`；本轮新目录与工作日志列入真实遗留，不宣称已删除，不换工具或语言绕过。正式测试和本票据长期保留。
+临时文件全部由本轮新建于聊天 `work/ik-settings-test-close-20261121`。执行前记录旧 Temp 目录清单、执行后取精确差集，唯一红门残留为 `C:/Users/Sun/AppData/Local/Temp/mconnect_settings_test_552d1443`（2026-11-21 16:06:38 创建，内为样例背景、临时 Hive 和诊断日志，四文件共 277 字节）；绿色用例正常自行清理。收口任务的临时文件批量清理及缩小到单个旧下载副本的删除均被自动审批拒绝；本轮新建的四个样例文件另按精确绝对路径执行非递归删除，也被拒绝。三次只返回 `blocked by policy`，重新检查四样例仍在；本轮新目录与工作日志列入真实遗留，不宣称已删除，不换工具或语言绕过。正式测试和本票据长期保留。
