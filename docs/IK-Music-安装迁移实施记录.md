@@ -132,9 +132,11 @@ Android 早期冻结副本三 ABI 正式 release 构建已退出 0。副本包�
   -ToolchainsRoot 'D:/Applications/AndroidDev' `
   -SigningProperties 'C:/Users/Sun/Documents/Codex/2026-10-29/xiang/work/signing/video-music-signing.properties' `
   -Compact -EnableSpatialAudio -Python 'D:/Applications/Python/python.exe' `
-  -SqliteBinaryDirectory 'C:/Users/Sun/Documents/Codex/2026-11-17/c-users-sun-documents-codex-2026/work/ik-native-binaries/sqlite3-3.3.2' `
+  -SqliteBinaryDirectory 'C:/Users/Sun/Documents/Codex/2026-11-17/c-users-sun-documents-codex-2026/outputs/IK-Music-构建输入/sqlite3-3.3.2' `
   -BuildDirectory '<尚不存在的正式构建副本绝对路径>'
 ```
+
+2026-11-21 收尾时，本例的离线 SQLite 输入地址已从临时 work 更新为上方正式构建输入目录；四个平台文件均与固定 sqlite3 3.3.2 包内 SHA-256 一致。原临时副本可以清理，后续构建继续使用正式输入；也可指定新的缓存目录，由原准备脚本下载官方同版本并双重校验。
 
 脚本沿用签名配置文件，不输出口令；发行复制到主项目 `build/yueyin-release`，不会把别的 ABI 混进单包。Windows CI 调用添加 `-Compact -SpatialAudioDll <已通过门的单DLL> -SpatialAudioSha256 <固定哈希>`；`-Python` 默认 CI 的 python。只有存在 Inno 编译器才执行真实隔离红绿门和安装器编译，本机没此工具不能算门绿。
 
@@ -176,4 +178,4 @@ Windows HRTF 包增加必须显式提供的 `-SpatialAudioLicenses`：`copy_ik_a
 
 Android系统查询确认该专用AVD当前WebView为 `com.android.webview 83.0.4103.120`。具体获取与受限初始化错误已经由自动链产生并在页面可展开查看，证明自动处理运行过；当前设备的网络与旧WebView限制仍使可用数为0。不能据此宣称Android20项全部就绪，也不能把目录可见当成歌曲可播放。
 
-逐项机器证据在会话 `work/ik-final-catalog-device-status.json`，包含20个名称、实际状态、所在截图页与空的遗漏列表。UI语义原文和图像为 `ik-final-catalog-page-01` 至 `06` 的 `.xml/.png`；汇总 `ik-final-catalog-summary.png`、初始化失败详情 `ik-final-catalog-first-status.png`、网络详情 `ik-final-catalog-changqing.png`。检查没有修改产品源码、重建APK、安装WebView或写入用户真实环境。
+逐项机器证据已于 2026-11-21 正式归档至会话 `outputs/IK-Music-0.6.0-build11/验收截图/Android音源目录设备状态.json`，包含20个名称、实际状态、所在截图页与空的遗漏列表。六页 UI 语义原文和图像为同一正式交付目录 `验收证据/ik-final-catalog-page-01` 至 `06` 的 `.xml/.png`；汇总为 `验收截图/ik-android-catalog.png`，初始化失败详情和网络详情分别为 `验收证据/ik-final-catalog-first-status.png`、`ik-final-catalog-changqing.png`。归档清单逐文件记录原件、正式位置、字节数和 SHA-256，原件与归档全量匹配。检查没有修改产品源码、重建APK、安装WebView或写入用户真实环境。

@@ -27,8 +27,8 @@ import 'package:mconnect/features/settings/presentation/pages/settings_page.dart
 /// 2. **widget 测试用内存 store 覆盖后，点击不再卡 teardown**，并且**断言 store 收到了
 ///    写入请求**（证明点击确实要求落盘了，只是落到了内存）。
 ///
-/// 第 2 组与 `test/settings_page_test.dart` 的 A-6a 用例**只差一个 provider override**
-/// （同样的 Hive setUp、同样的页面、同样的两次 tap），所以它就是那条用例的红→绿形态。
+/// `test/settings_page_test.dart` 的 A-6a 用例也使用同一存储注入点，完整验双向点击与保存请求。
+/// 本文件的真实 Hive 单测关闭重开文件后读取，保证跨启动持久化，而非仅检查已打开 Box 的缓存。
 
 /// 滚到某段文字可见，然后点它所在的 SwitchListTile。
 Future<bool> _tapSwitch(WidgetTester tester, String label) async {
@@ -72,17 +72,21 @@ void main() {
       }
     });
 
-    test('AutoSourceSwitch：写进去、新实例读回来', () async {
+    test('AutoSourceSwitch：写进去、关闭重开后新实例读回来', () async {
       const store = HiveAutoSourceSwitchStore();
       expect(store.read(), isNull, reason: '空 box = 没存过 ⇒ 调用方用默认值 true');
 
       await store.write(false);
       expect(store.read(), isFalse);
 
-      // 新实例（模拟"下次启动"）也读得到 ⇒ 确实落到了 Hive，不是内存
+      await Hive.close();
+      await Hive.openBox('settings');
+      // 关闭重开后由新实例读取，确认字节落盘，而不是只读已打开 Box 的缓存。
       expect(const HiveAutoSourceSwitchStore().read(), isFalse);
 
       await store.write(true);
+      await Hive.close();
+      await Hive.openBox('settings');
       expect(const HiveAutoSourceSwitchStore().read(), isTrue);
     });
 

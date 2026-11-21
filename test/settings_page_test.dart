@@ -36,34 +36,19 @@ void main() {
     }
   });
 
-  // The 「自动换源」 switch had a provider-level test (`source_match_test.dart`)
-  // but nothing that ever *tapped the row*: deleting the `onChanged` wiring in
-  // the settings page would have left every existing test green.
-  // ⚠️ SKIPPED, and the reason is a real open item rather than flake.
-  //
-  // BISECTED — do not redo this: the body **completes**. Six `print('STEP n')`
-  // markers (before/after pumpWidget, before/after the drag, before/after each
-  // tap) all fire — twice for the two taps — and the test still dies on its own
-  // timeout (`TimeoutException after 0:00:30` with `timeout: Timeout(30s)`).
-  // So the stall is NOT an awaited step in the body, and NOT `pumpAndSettle`
-  // waiting on this page's always-on animation either: every `pumpAndSettle` in
-  // this test *and* in `_dragUntilTextVisible` was already replaced with bounded
-  // pumps before the bisect.
-  // What is left is the **teardown / pending-async** phase — something started
-  // during the test (a provider's unawaited work, or a timer this page schedules)
-  // never settles and the binding waits for it after the body returns.
-  // NEXT INCREMENT: `addTearDown` probes plus `binding.transientCallbackCount` /
-  // the pending-timer list at the end of the body. The answer is there, not in
-  // the steps.
-  //
-  // The gap A-6a exists to close (the 自动换源 switch is asserted nowhere at widget
-  // level) therefore remains OPEN. A skipped test beats a hanging one: the hang
-  // eats the full timeout and stalls the whole suite.
+  // 用真实点击验开关接线，既有内存存储注入点避免真实 Hive I/O 留在假时钟。
+  // 断言每次保存请求；真实 Hive 关闭重开后的读取由 settings_persistence_test.dart 验证。
   testWidgets('the 自动换源 switch is wired to the provider and flips it', (
     tester,
   ) async {
+    final switchStore = MemoryAutoSourceSwitchStore();
     await tester.pumpWidget(
-      const ProviderScope(child: MaterialApp(home: SettingsAudioPage())),
+      ProviderScope(
+        overrides: [
+          autoSourceSwitchStoreProvider.overrideWithValue(switchStore),
+        ],
+        child: const MaterialApp(home: SettingsAudioPage()),
+      ),
     );
     // NOT `pumpAndSettle`: this page carries an always-on animation, so settling
     // blocks until the framework's 10-minute timeout (this test did exactly that,
@@ -94,41 +79,23 @@ void main() {
     for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
-    // The tap starts REAL file I/O: `AutoSourceSwitchNotifier.setEnabled` flips
-    // its state synchronously and then does `unawaited(Hive.box(...).put(...))`.
-    // Inside a testWidgets body that write's continuation sits on the FAKE clock,
-    // which nobody drains once the body returns - so tearDown's Hive.close() waited
-    // forever and this case died on its own timeout even though every step had run
-    // (six STEP probes all printed). `runAsync` gives the real event loop a turn so
-    // the write can complete.
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 100)),
-    );
-
     expect(container.read(autoSourceSwitchProvider).enabled, isFalse);
     expect(
       tester.widget<SwitchListTile>(row).value,
       isFalse,
       reason: '开关本体必须跟着 provider 走，不能只是 provider 变了',
     );
+    expect(switchStore.writes, <bool>[false]);
 
     // …and back, so the wiring is proven in both directions.
     await tester.tap(find.text('自动换源'));
     for (var i = 0; i < 60; i++) {
       await tester.pump(const Duration(milliseconds: 16));
     }
-    // The tap starts REAL file I/O: `AutoSourceSwitchNotifier.setEnabled` flips
-    // its state synchronously and then does `unawaited(Hive.box(...).put(...))`.
-    // Inside a testWidgets body that write's continuation sits on the FAKE clock,
-    // which nobody drains once the body returns - so tearDown's Hive.close() waited
-    // forever and this case died on its own timeout even though every step had run
-    // (six STEP probes all printed). `runAsync` gives the real event loop a turn so
-    // the write can complete.
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 100)),
-    );
     expect(container.read(autoSourceSwitchProvider).enabled, isTrue);
-  }, skip: true);
+    expect(tester.widget<SwitchListTile>(row).value, isTrue);
+    expect(switchStore.writes, <bool>[false, true]);
+  }, timeout: const Timeout(Duration(seconds: 30)));
 
   testWidgets('settings page exposes diagnostics log path', (tester) async {
     await tester.pumpWidget(
