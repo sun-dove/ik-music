@@ -24,6 +24,7 @@ import '../../models/platform_type.dart';
 import 'ik_audio_page.dart';
 import 'ik_backup_page.dart';
 import 'ik_floating_lyrics.dart';
+import 'ik_personal_daily_page.dart';
 
 GoRouter createIkRouter({
   required WidgetBuilder home,
@@ -71,6 +72,23 @@ GoRouter createIkRouter({
         '/recommendations',
         (_) => RecommendationsPage(alignToDesign: alignToDesign),
       ),
+      if (alignToDesign)
+        GoRoute(
+          path: '/daily',
+          builder: (context, state) {
+            final name = state.uri.queryParameters['platform'];
+            final platform = name == null
+                ? PlatformType.netease
+                : PlatformType.tryParse(name);
+            if (platform == null || !platform.isMusicService) {
+              return const IkRouteError();
+            }
+            return detail(
+              context,
+              IkPersonalDailyPage(initialPlatform: platform),
+            );
+          },
+        ),
       page('/toplists', (_) => ToplistsPage(alignToDesign: alignToDesign)),
       page('/new-songs', (_) => NewSongsPage(alignToDesign: alignToDesign)),
       page('/history', (_) => const HistoryPage(allEntries: true)),

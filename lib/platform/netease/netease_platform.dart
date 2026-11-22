@@ -1,5 +1,7 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../core/network/api_exception.dart';
@@ -14,6 +16,7 @@ import '../../models/user.dart';
 import '../../models/playlist.dart';
 import '../../models/audio_quality.dart';
 import '../../models/platform_type.dart';
+import '../../models/personal_daily_result.dart';
 import '../../models/recommendation_source.dart';
 import '../base/music_platform.dart';
 import '../../core/storage/session_storage.dart';
@@ -45,6 +48,13 @@ class NeteasePlatform extends MusicPlatform {
 
   @override
   bool get supportsDailyRecommendations => true;
+
+  @override
+  bool get supportsPersonalDailyRecommendations => true;
+
+  @override
+  ValueListenable<int> get personalDailySessionChanges =>
+      _api.personalDailySessionChanges;
 
   /// 网易云的三类内容接口（艺人页 / 专辑页 / 新歌速递）都已在 Wave 1 实测可用，
   /// 见 `docs/netease-wave-b-probe.md`（18 个端点全部 HTTP 200）。
@@ -164,11 +174,13 @@ class NeteasePlatform extends MusicPlatform {
       final res = await _api.getUserInfo();
       final profile = res['profile'];
       if (profile != null) {
-        _currentUser = User(
-          id: profile['userId'].toString(),
-          nickname: profile['nickname'] ?? '',
-          avatarUrl: profile['avatarUrl'],
-          platform: PlatformType.netease,
+        _setCurrentUser(
+          User(
+            id: profile['userId'].toString(),
+            nickname: profile['nickname'] ?? '',
+            avatarUrl: profile['avatarUrl'],
+            platform: PlatformType.netease,
+          ),
         );
       }
     } catch (e) {
@@ -184,7 +196,7 @@ class NeteasePlatform extends MusicPlatform {
 
   @override
   Future<void> logout() async {
-    _currentUser = null;
+    _setCurrentUser(null);
     _api.setCookie('');
   }
 
@@ -207,8 +219,14 @@ class NeteasePlatform extends MusicPlatform {
     }
     final user = await storage.loadUser(platformType);
     if (user != null) {
-      _currentUser = user;
+      _setCurrentUser(user);
     }
+  }
+
+  void _setCurrentUser(User? user) {
+    final oldId = _currentUser?.id;
+    _currentUser = user;
+    if (user?.id != oldId) _api.markPersonalDailySessionChanged();
   }
 
   // --- Search ---
@@ -700,6 +718,180 @@ class NeteasePlatform extends MusicPlatform {
   }
 
   // --- Recommendations ---
+
+  @override
+  Future<PersonalDailyResult> getPersonalDailyRecommendations({
+    int limit = 30,
+    String? expectedAccountId,
+  }) async {
+    PersonalDailyResult result(
+      PersonalDailyStatus status, {
+      String? errorCode,
+      List<Song> songs = const [],
+      int rawCount = 0,
+      int validCount = 0,
+    }) => PersonalDailyResult(
+      platform: platformType,
+      status: status,
+      fetchedAt: DateTime.now(),
+      errorCode: errorCode,
+      songs: songs,
+      rawCount: rawCount,
+      validCount: validCount,
+    );
+
+    final user = _currentUser;
+    if (user == null) return result(PersonalDailyStatus.signedOut);
+    final userId = _personalDailyId(user.id);
+    final cookie = _api.cookie;
+    if (userId == null ||
+        user.platform != platformType ||
+        cookie == null ||
+        !_api.hasPersonalDailyCredential ||
+        (expectedAccountId != null &&
+            _personalDailyId(expectedAccountId) != userId)) {
+      return result(PersonalDailyStatus.identityIncomplete);
+    }
+
+    final revision = personalDailySessionRevision;
+    bool changed() => personalDailySessionRevision != revision;
+
+    try {
+      final account = await _api.getPersonalDailyAccount(cookie);
+      if (changed()) return result(PersonalDailyStatus.sessionChanged);
+      final accountData = _decodePersonalDailyReply(account);
+      if (accountData.failure case final failure?) {
+        return result(failure, errorCode: accountData.code);
+      }
+
+      final body = accountData.body!;
+      final profile = body['profile'];
+      final accountInfo = body['account'];
+      final profileId = profile is Map
+          ? _personalDailyId(profile['userId'])
+          : null;
+      final accountId = accountInfo is Map
+          ? _personalDailyId(accountInfo['id'])
+          : null;
+      if ((profileId ?? accountId) != userId ||
+          (accountId != null && accountId != userId)) {
+        return result(PersonalDailyStatus.identityIncomplete);
+      }
+
+      final response = await _api.getPersonalDailySongs(cookie);
+      if (changed()) return result(PersonalDailyStatus.sessionChanged);
+      final dailyData = _decodePersonalDailyReply(response);
+      if (dailyData.failure case final failure?) {
+        return result(failure, errorCode: dailyData.code);
+      }
+      final data = dailyData.body!['data'];
+      final rows = data is Map ? data['dailySongs'] : null;
+      if (rows is! List) return result(PersonalDailyStatus.invalidResponse);
+
+      final byId = <String, Song>{};
+      for (final row in rows) {
+        if (row is! Map) continue;
+        final id = _personalDailyId(row['id']);
+        final name = row['name'];
+        final artists = row['ar'] ?? row['artists'];
+        if (id == null ||
+            name is! String ||
+            name.trim().isEmpty ||
+            (artists != null && artists is! List) ||
+            (row['artists'] != null && row['artists'] is! List)) {
+          continue;
+        }
+        byId.putIfAbsent(id, () => _parseSong({...row, 'id': id}));
+      }
+      return result(
+        rows.isEmpty
+            ? PersonalDailyStatus.empty
+            : byId.isEmpty
+            ? PersonalDailyStatus.invalidResponse
+            : PersonalDailyStatus.success,
+        songs: List.unmodifiable(byId.values.take(limit.clamp(1, 30))),
+        rawCount: rows.length,
+        validCount: byId.length,
+      );
+    } on DioException catch (error) {
+      if (changed()) return result(PersonalDailyStatus.sessionChanged);
+      final statusCode = error.response?.statusCode;
+      return result(
+        statusCode == null
+            ? PersonalDailyStatus.networkFailure
+            : PersonalDailyStatus.serviceUnavailable,
+        errorCode: apiExceptionOf(error).code == ApiErrorCode.requestTimeout
+            ? ApiErrorCode.requestTimeout.name
+            : statusCode?.toString(),
+      );
+    } on FormatException {
+      return result(PersonalDailyStatus.invalidResponse);
+    }
+  }
+
+  static String? _personalDailyId(Object? value) {
+    if (value is! int && value is! String) return null;
+    final text = value.toString().trim();
+    if (!RegExp(r'^\d+$').hasMatch(text)) return null;
+    final number = BigInt.tryParse(text);
+    return number == null || number <= BigInt.zero ? null : number.toString();
+  }
+
+  ({Map<String, dynamic>? body, PersonalDailyStatus? failure, String? code})
+  _decodePersonalDailyReply(Response<String> response) {
+    final status = response.statusCode;
+    final text = response.data ?? '';
+    if (status == 401) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.sessionExpired,
+        code: '401',
+      );
+    }
+    if (status == 403) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.serviceUnavailable,
+        code: status?.toString(),
+      );
+    }
+    final Object? body;
+    try {
+      body = jsonDecode(text);
+    } on FormatException {
+      if (!text.trimLeft().toLowerCase().startsWith('access deny')) rethrow;
+      return (
+        body: null,
+        failure: PersonalDailyStatus.serviceUnavailable,
+        code: status?.toString(),
+      );
+    }
+    final code = body is Map<String, dynamic>
+        ? int.tryParse(body['code']?.toString() ?? '')
+        : null;
+    if (body is! Map<String, dynamic> || code == null) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.invalidResponse,
+        code: null,
+      );
+    }
+    if (code == 301 || code == 401) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.sessionExpired,
+        code: '$code',
+      );
+    }
+    if (code != 200) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.serviceUnavailable,
+        code: '$code',
+      );
+    }
+    return (body: body, failure: null, code: null);
+  }
 
   @override
   Future<List<Song>> getDailyRecommendations() async {

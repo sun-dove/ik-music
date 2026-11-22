@@ -13,6 +13,8 @@ class NeteaseApi {
   String? _cookie;
   String? _csrf;
   String? _musicA;
+  String? _personalDailyCredential;
+  final _personalDailySession = ValueNotifier<int>(0);
 
   NeteaseApi({Dio? dio})
     : _dio =
@@ -69,6 +71,7 @@ class NeteaseApi {
     if (cookie.isEmpty) {
       _cookie = '';
       _dio.options.headers['cookie'] = '';
+      _syncPersonalDailyCredential();
       return;
     }
     // Merge new cookie into existing
@@ -76,6 +79,7 @@ class NeteaseApi {
     existing.addAll(_parseCookieMap(cookie));
     _cookie = existing.entries.map((e) => '${e.key}=${e.value}').join('; ');
     _dio.options.headers['cookie'] = _cookie;
+    _syncPersonalDailyCredential();
   }
 
   Map<String, String> _parseCookieMap(String cookieStr) {
@@ -93,6 +97,22 @@ class NeteaseApi {
   String? get cookie => _cookie;
   String? get csrf => _csrf;
 
+  ValueListenable<int> get personalDailySessionChanges => _personalDailySession;
+
+  bool get hasPersonalDailyCredential => _personalDailyCredential != null;
+
+  void markPersonalDailySessionChanged() => _personalDailySession.value++;
+
+  void _syncPersonalDailyCredential() {
+    final token = _parseCookieMap(_cookie ?? '')['MUSIC_U']?.trim();
+    final credential = token == null || token.isEmpty || token == 'null'
+        ? null
+        : token;
+    if (credential == _personalDailyCredential) return;
+    _personalDailyCredential = credential;
+    markPersonalDailySessionChanged();
+  }
+
   void restoreCookie(String cookie) {
     // Merge stored cookie into current (preserving fresh NMTID/_ntes_nuid/__csrf)
     final existing = _parseCookieMap(_cookie ?? '');
@@ -100,6 +120,7 @@ class NeteaseApi {
     _cookie = existing.entries.map((e) => '${e.key}=${e.value}').join('; ');
     _dio.options.headers['cookie'] = _cookie;
     _csrf = _extractCookie('__csrf');
+    _syncPersonalDailyCredential();
   }
 
   /// Capture ALL cookies from Set-Cookie headers (merge, don't replace).
@@ -123,6 +144,7 @@ class NeteaseApi {
     }
     _cookie = existing.entries.map((e) => '${e.key}=${e.value}').join('; ');
     _dio.options.headers['cookie'] = _cookie;
+    _syncPersonalDailyCredential();
   }
 
   /// Capture anonymous token (MUSIC_A) if server provides it.
@@ -318,6 +340,30 @@ class NeteaseApi {
   Future<Map<String, dynamic>> getRecommendSongs() async {
     return get(NeteaseEndpoints.recommendSongs);
   }
+
+  Future<Response<String>> getPersonalDailyAccount(String cookie) =>
+      _dio.post<String>(
+        NeteaseEndpoints.userInfo,
+        data: const <String, String>{},
+        options: _personalDailyOptions(cookie)
+          ..contentType = Headers.formUrlEncodedContentType,
+      );
+
+  Future<Response<String>> getPersonalDailySongs(String cookie) =>
+      _dio.get<String>(
+        NeteaseEndpoints.recommendSongs,
+        options: _personalDailyOptions(cookie),
+      );
+
+  // 个人请求只读取快照，不能合并迟到响应的 Cookie 或触发旧全局失效广播。
+  Options _personalDailyOptions(String cookie) => Options(
+    headers: {'cookie': cookie},
+    responseType: ResponseType.plain,
+    followRedirects: false,
+    validateStatus: (code) =>
+        code != null &&
+        ((code >= 200 && code < 300) || code == 401 || code == 403),
+  );
 
   /// Like a song (POST, form-encoded)
   Future<Map<String, dynamic>> likeSong(

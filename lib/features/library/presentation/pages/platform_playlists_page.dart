@@ -15,20 +15,28 @@ import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../core/widgets/async_state_view.dart';
 import '../../../../l10n/l10n.dart';
 import '../../../../l10n/ik_strings.dart';
+import '../../../../l10n/ik_library_revision_strings.dart';
 import '../../../../models/platform_type.dart';
 import '../../../../models/playlist.dart';
 import '../../../../models/song.dart';
 import '../../../../platform/base/platform_registry.dart';
+import '../../../../video_app/ik/ik_controls.dart';
 import '../providers/my_playlists_provider.dart';
 import '../providers/platform_playlists_provider.dart';
 
 class PlatformPlaylistsPage extends ConsumerStatefulWidget {
   const PlatformPlaylistsPage({super.key, this.jsonFormatLabel})
-    : _embedded = false;
+    : _embedded = false,
+      _compactSources = false;
   const PlatformPlaylistsPage.embedded({super.key, this.jsonFormatLabel})
-    : _embedded = true;
+    : _embedded = true,
+      _compactSources = false;
+  const PlatformPlaylistsPage.compactEmbedded({super.key, this.jsonFormatLabel})
+    : _embedded = true,
+      _compactSources = true;
   final String? jsonFormatLabel;
   final bool _embedded;
+  final bool _compactSources;
 
   @override
   ConsumerState<PlatformPlaylistsPage> createState() =>
@@ -696,6 +704,40 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
         );
       }).toList(),
     );
+    if (widget._compactSources) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: IkSelect<PlatformType>(
+                      alignToDesign: true,
+                      label: IkLibraryRevisionStrings.playlistSource,
+                      value: activeTab,
+                      items: {
+                        for (final platform in _tabs)
+                          platform: platform == PlatformType.local
+                              ? IkLibraryRevisionStrings.localPlaylists
+                              : platform.displayName,
+                      },
+                      onChanged: (platform) =>
+                          _tabController.animateTo(_tabs.indexOf(platform)),
+                    ),
+                  ),
+                ),
+                ...actions,
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(child: body),
+        ],
+      );
+    }
     if (widget._embedded) {
       return Column(
         children: [

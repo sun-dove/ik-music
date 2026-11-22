@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../models/song.dart';
@@ -11,6 +12,7 @@ import '../../models/user.dart';
 import '../../models/playlist.dart';
 import '../../models/audio_quality.dart';
 import '../../models/platform_type.dart';
+import '../../models/personal_daily_result.dart';
 import '../base/music_platform.dart';
 import '../../core/diagnostics/diagnostics_service.dart';
 import '../../core/network/api_exception.dart';
@@ -21,6 +23,7 @@ import 'kugou_api.dart';
 class KugouPlatform extends MusicPlatform {
   final KugouApi _api;
   User? _currentUser;
+  bool _personalDailyUserIdInferred = false;
 
   KugouPlatform({KugouApi? api}) : _api = api ?? KugouApi();
 
@@ -47,6 +50,13 @@ class KugouPlatform extends MusicPlatform {
   /// is a personalised daily playlist.
   @override
   bool get supportsDailyRecommendations => true;
+
+  @override
+  bool get supportsPersonalDailyRecommendations => true;
+
+  @override
+  ValueListenable<int> get personalDailySessionChanges =>
+      _api.personalDailySessionChanges;
 
   /// Kugou is **QR-code login only** since v1.4.1.
   ///
@@ -132,15 +142,16 @@ class KugouPlatform extends MusicPlatform {
                 final userData = userRes['data'];
                 if (userData is Map) {
                   _syncApiSessionFields(userData);
-                  _currentUser = _userFromData(
-                    userData,
-                    fallbackUserId: userid,
+                  _setCurrentUser(
+                    _userFromData(userData, fallbackUserId: userid),
                   );
                 }
               } catch (e) {
                 debugPrint('Kugou QR profile fetch error: $e');
               }
-              _currentUser ??= _fallbackQrUser(res['data'], userid: userid);
+              if (_currentUser == null) {
+                _setCurrentUser(_fallbackQrUser(res['data'], userid: userid));
+              }
               _syncApiUserIdFromCurrentUser();
             }
             if (_currentUser != null) {
@@ -278,9 +289,10 @@ class KugouPlatform extends MusicPlatform {
   }
 
   void _syncApiSessionFields(dynamic data) {
+    final userid = _extractUserId(data);
     _api.setSessionFields(
       token: _extractToken(data),
-      userid: _extractUserId(data),
+      userid: userid,
       vipToken: _extractStringDeep(data, const [
         'vip_token',
         'vipToken',
@@ -296,6 +308,9 @@ class KugouPlatform extends MusicPlatform {
       mid: _extractStringDeep(data, const ['mid', 'KUGOU_API_MID', 'kg_mid']),
       uuid: _extractStringDeep(data, const ['uuid', 'KUGOU_API_GUID', 'guid']),
     );
+    if (_personalDailyId(userid) != null) {
+      _setPersonalDailyUserIdInferred(false);
+    }
   }
 
   void _syncApiUserIdFromCurrentUser() {
@@ -303,8 +318,15 @@ class KugouPlatform extends MusicPlatform {
     if ((_api.userid == null || _api.userid!.isEmpty) &&
         id != null &&
         id.isNotEmpty) {
+      _setPersonalDailyUserIdInferred(true);
       _api.setUserId(id);
     }
+  }
+
+  void _setPersonalDailyUserIdInferred(bool inferred) {
+    if (_personalDailyUserIdInferred == inferred) return;
+    _personalDailyUserIdInferred = inferred;
+    _api.markPersonalDailySessionChanged();
   }
 
   bool _isSuccessResponse(Map<String, dynamic> res) {
@@ -338,7 +360,7 @@ class KugouPlatform extends MusicPlatform {
 
   @override
   Future<void> logout() async {
-    _currentUser = null;
+    _setCurrentUser(null);
     // Clearing only `_currentUser` used to leave `token`/`userid`/`vipToken` in
     // the API client, where `_signedAndroidParams` kept injecting them into
     // every subsequent request until the process restarted.
@@ -376,18 +398,26 @@ class KugouPlatform extends MusicPlatform {
     }
     final user = await storage.loadUser(platformType);
     if (user != null) {
-      _currentUser = user;
+      _setCurrentUser(user);
       _syncApiUserIdFromCurrentUser();
     }
+  }
+
+  void _setCurrentUser(User? user) {
+    final oldId = _currentUser?.id;
+    _currentUser = user;
+    if (user?.id != oldId) _api.markPersonalDailySessionChanged();
   }
 
   void _restoreApiSessionCookie(String cookie) {
     if (cookie.trimLeft().startsWith('{')) {
       try {
         final data = jsonDecode(cookie) as Map<String, dynamic>;
+        final userid = data['userid']?.toString();
+        _setPersonalDailyUserIdInferred(_personalDailyId(userid) == null);
         _api.setSessionFields(
           token: data['token']?.toString(),
-          userid: data['userid']?.toString(),
+          userid: userid,
           vipToken: data['vip_token']?.toString(),
           vipType: data['vip_type']?.toString(),
           dfid: data['dfid']?.toString(),
@@ -401,8 +431,10 @@ class KugouPlatform extends MusicPlatform {
       }
     }
     final parts = cookie.split('|');
+    final userid = parts.length > 1 ? parts[1] : null;
+    _setPersonalDailyUserIdInferred(_personalDailyId(userid) == null);
     _api.restoreToken(parts.first);
-    if (parts.length > 1) _api.setUserId(parts[1]);
+    if (userid != null) _api.setUserId(userid);
   }
 
   // --- Search ---
@@ -1122,6 +1154,198 @@ class KugouPlatform extends MusicPlatform {
   Future<List<Song>> getDailyRecommendations() async {
     final result = await getDailyRecommendation();
     return result.songs;
+  }
+
+  @override
+  Future<PersonalDailyResult> getPersonalDailyRecommendations({
+    int limit = 30,
+    String? expectedAccountId,
+  }) async {
+    PersonalDailyResult result(
+      PersonalDailyStatus status, {
+      String? errorCode,
+      List<Song> songs = const [],
+      int rawCount = 0,
+      int validCount = 0,
+    }) => PersonalDailyResult(
+      platform: platformType,
+      status: status,
+      fetchedAt: DateTime.now(),
+      errorCode: errorCode,
+      songs: songs,
+      rawCount: rawCount,
+      validCount: validCount,
+    );
+
+    final user = _currentUser;
+    if (user == null) return result(PersonalDailyStatus.signedOut);
+    final id = _personalDailyId(user.id);
+    if (id == null ||
+        user.platform != platformType ||
+        _personalDailyUserIdInferred ||
+        _personalDailyId(_api.userid) != id ||
+        !_isPersonalDailyField(_api.token) ||
+        !_isPersonalDailyField(_api.dfid) ||
+        !_isPersonalDailyField(_api.mid) ||
+        _api.mid == 'mid' ||
+        (expectedAccountId != null &&
+            _personalDailyId(expectedAccountId) != id)) {
+      return result(PersonalDailyStatus.identityIncomplete);
+    }
+
+    final revision = personalDailySessionRevision;
+    bool changed() => personalDailySessionRevision != revision;
+
+    try {
+      // 旧会话兼容逻辑可能补填 userid。向平台核对凭证归属后才请求个人曲目。
+      final account = await _api.getPersonalDailyAccount();
+      if (changed()) return result(PersonalDailyStatus.sessionChanged);
+      final accountData = _decodePersonalDailyReply(account);
+      if (accountData.failure case final failure?) {
+        return result(failure, errorCode: accountData.code);
+      }
+      final profileId = _personalDailyId(
+        _extractUserId(accountData.body!['data']),
+      );
+      if (profileId != id) {
+        return result(PersonalDailyStatus.identityIncomplete);
+      }
+
+      final response = await _api.getPersonalDailySongs();
+      if (changed()) return result(PersonalDailyStatus.sessionChanged);
+      final dailyData = _decodePersonalDailyReply(response);
+      if (dailyData.failure case final failure?) {
+        return result(failure, errorCode: dailyData.code);
+      }
+      final data = dailyData.body!['data'];
+      final rows = data is Map ? data['song_list'] : null;
+      if (rows is! List) return result(PersonalDailyStatus.invalidResponse);
+
+      final byId = <String, Song>{};
+      for (final row in rows) {
+        if (row is! Map) continue;
+        final hash = row['hash'];
+        final name = row['ori_audio_name'];
+        if (hash is! String ||
+            !_personalDailyHash.hasMatch(hash.trim()) ||
+            name is! String ||
+            name.trim().isEmpty) {
+          continue;
+        }
+        final key = hash.trim().toLowerCase();
+        if (key == '00000000000000000000000000000000') continue;
+        byId.putIfAbsent(
+          key,
+          () => Song(
+            id: key,
+            platform: platformType,
+            name: name.trim(),
+            artists: _artistsFromSong(
+              row,
+              fallbackName: row['author_name']?.toString().trim() ?? '',
+            ),
+            coverUrl: _normalizeSizeTemplate(row['sizable_cover']?.toString()),
+          ),
+        );
+      }
+      return result(
+        rows.isEmpty
+            ? PersonalDailyStatus.empty
+            : byId.isEmpty
+            ? PersonalDailyStatus.invalidResponse
+            : PersonalDailyStatus.success,
+        songs: List.unmodifiable(byId.values.take(limit.clamp(1, 30))),
+        rawCount: rows.length,
+        validCount: byId.length,
+      );
+    } on DioException catch (error) {
+      if (changed()) return result(PersonalDailyStatus.sessionChanged);
+      final statusCode = error.response?.statusCode;
+      return result(
+        statusCode == null
+            ? PersonalDailyStatus.networkFailure
+            : PersonalDailyStatus.serviceUnavailable,
+        errorCode: apiExceptionOf(error).code == ApiErrorCode.requestTimeout
+            ? ApiErrorCode.requestTimeout.name
+            : statusCode?.toString(),
+      );
+    } on FormatException {
+      return result(PersonalDailyStatus.invalidResponse);
+    }
+  }
+
+  static final _personalDailyHash = RegExp(r'^[a-fA-F0-9]{32}$');
+
+  static String? _personalDailyId(String? value) {
+    if (value == null || !RegExp(r'^\d+$').hasMatch(value.trim())) return null;
+    final number = BigInt.tryParse(value.trim());
+    return number == null || number <= BigInt.zero ? null : number.toString();
+  }
+
+  static bool _isPersonalDailyField(String? value) =>
+      value != null &&
+      value.isNotEmpty &&
+      !const {'-', '0', 'null', 'undefined'}.contains(value);
+
+  ({Map<String, dynamic>? body, PersonalDailyStatus? failure, String? code})
+  _decodePersonalDailyReply(Response<String> response) {
+    final status = response.statusCode;
+    final text = response.data ?? '';
+    final ssa = response.headers['ssa-code'];
+    if (ssa?.any((value) => value.trim().isNotEmpty) ?? false) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.verificationRequired,
+        code: 'SSA',
+      );
+    }
+    Map<String, dynamic>? body;
+    try {
+      body = _api.decodePersonalDailyReply(text);
+    } on FormatException {
+      if (text.trimLeft().toLowerCase().startsWith('access deny')) {
+        return (
+          body: null,
+          failure: PersonalDailyStatus.serviceUnavailable,
+          code: status?.toString(),
+        );
+      }
+      // 401/403 也可能没有提供可读 JSON。
+      if (status != 401 && status != 403) rethrow;
+    }
+    final code = int.tryParse(body?['error_code']?.toString() ?? '');
+    if (code == 20028) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.verificationRequired,
+        code: '20028',
+      );
+    }
+    if (status == 401) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.sessionExpired,
+        code: '401',
+      );
+    }
+    if (status == 403 || (code != null && code != 0)) {
+      return (
+        body: null,
+        failure: PersonalDailyStatus.serviceUnavailable,
+        code: code?.toString() ?? status?.toString(),
+      );
+    }
+    final business = body?['status']?.toString();
+    if (business == '1' || business == 'true') {
+      return (body: body, failure: null, code: null);
+    }
+    return (
+      body: null,
+      failure: business == null
+          ? PersonalDailyStatus.invalidResponse
+          : PersonalDailyStatus.serviceUnavailable,
+      code: null,
+    );
   }
 
   /// Songs from the mobile homepage module: `data` (10 songs) plus the songs

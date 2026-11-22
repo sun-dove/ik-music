@@ -8,6 +8,7 @@ import '../../features/discovery/presentation/providers/recommendations_provider
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../l10n/ik_alignment_shell_strings.dart';
 import '../../l10n/ik_discovery_revision_strings.dart';
+import '../../l10n/ik_personal_daily_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
@@ -438,6 +439,12 @@ class _DiscoveryHeading extends StatelessWidget {
       spacing: 10,
       runSpacing: 8,
       children: [
+        FilledButton.tonalIcon(
+          key: const Key('ik-personal-daily-entry'),
+          onPressed: () => onNavigate('/daily'),
+          icon: const Icon(Icons.wb_sunny_outlined, size: 17),
+          label: const Text(IkPersonalDailyStrings.title),
+        ),
         OutlinedButton.icon(
           onPressed: () => onNavigate('/new-songs'),
           icon: const Icon(Icons.new_releases_outlined, size: 17),
@@ -463,7 +470,7 @@ class _DiscoveryHeading extends StatelessWidget {
               )
             : Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: [title, const SizedBox(height: 14), actions],
+                children: [title, const SizedBox(height: 12), actions],
               );
       },
     );

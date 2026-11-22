@@ -33,6 +33,7 @@ class IkLibraryWorkspace extends StatefulWidget {
     required this.onRetryLocal,
     this.currentSong,
     this.alignToDesign = false,
+    this.simplifySources = false,
     this.downloadsBuilder,
   });
   final Map<PlatformType, VideoLibrary> libraries;
@@ -48,6 +49,7 @@ class IkLibraryWorkspace extends StatefulWidget {
   final String? localError;
   final Song? currentSong;
   final bool alignToDesign;
+  final bool simplifySources;
   final WidgetBuilder? downloadsBuilder;
   @override
   State<IkLibraryWorkspace> createState() => _IkLibraryWorkspaceState();
@@ -202,9 +204,15 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                                 key: ValueKey('ik-library-content-$category'),
                                 child: switch (category) {
                                   'playlists' =>
-                                    const PlatformPlaylistsPage.embedded(
-                                      jsonFormatLabel: IkStrings.playlistJson,
-                                    ),
+                                    widget.simplifySources
+                                        ? const PlatformPlaylistsPage.compactEmbedded(
+                                            jsonFormatLabel:
+                                                IkStrings.playlistJson,
+                                          )
+                                        : const PlatformPlaylistsPage.embedded(
+                                            jsonFormatLabel:
+                                                IkStrings.playlistJson,
+                                          ),
                                   'local' => const LocalMusicPage.embedded(),
                                   'downloads' => widget.downloadsBuilder!(
                                     context,

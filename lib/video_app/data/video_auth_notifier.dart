@@ -28,6 +28,8 @@ class VideoAuthNotifier extends AuthNotifier {
   final List<PlatformType>? _platforms;
   final Duration _restoreTimeout;
   final _epochs = <PlatformType, int>{};
+  final _personalDailyTransitions = <PlatformType, int>{};
+  final _personalDailyChanges = ValueNotifier(0);
   Future<void>? _initialization;
 
   int sessionEpoch(PlatformType platform) => _epochs[platform] ?? 0;
@@ -37,6 +39,33 @@ class VideoAuthNotifier extends AuthNotifier {
 
   void _advance(PlatformType platform) =>
       _epochs[platform] = sessionEpoch(platform) + 1;
+
+  Listenable get personalDailyAuthChanges => _personalDailyChanges;
+
+  bool isPersonalDailyAuthChanging(PlatformType platform) =>
+      _personalDailyTransitions.containsKey(platform);
+
+  Future<T> _trackPersonalDailyChange<T>(
+    PlatformType platform,
+    Future<T> Function() run,
+  ) async {
+    _advance(platform);
+    _personalDailyTransitions.update(platform, (n) => n + 1, ifAbsent: () => 1);
+    _personalDailyChanges.value++;
+    try {
+      return await run();
+    } finally {
+      if (mounted) {
+        final count = _personalDailyTransitions[platform]! - 1;
+        if (count == 0) {
+          _personalDailyTransitions.remove(platform);
+        } else {
+          _personalDailyTransitions[platform] = count;
+        }
+        _personalDailyChanges.value++;
+      }
+    }
+  }
 
   @override
   Future<void> init() => _initialization ??= _initialize();
@@ -84,22 +113,22 @@ class VideoAuthNotifier extends AuthNotifier {
   }
 
   @override
-  Future<User?> onQrLoginSuccess(PlatformType platform) {
-    _advance(platform);
-    return super.onQrLoginSuccess(platform);
-  }
+  Future<User?> onQrLoginSuccess(PlatformType platform) =>
+      _trackPersonalDailyChange(
+        platform,
+        () => super.onQrLoginSuccess(platform),
+      );
 
   @override
-  Future<void> logout(PlatformType platform) {
-    _advance(platform);
-    return super.logout(platform);
-  }
+  Future<void> logout(PlatformType platform) =>
+      _trackPersonalDailyChange(platform, () => super.logout(platform));
 
   @override
-  Future<void> handleSessionExpired(PlatformType platform) {
-    _advance(platform);
-    return super.handleSessionExpired(platform);
-  }
+  Future<void> handleSessionExpired(PlatformType platform) =>
+      _trackPersonalDailyChange(
+        platform,
+        () => super.handleSessionExpired(platform),
+      );
 
   /// 调用方在发起请求时捕获纪元，才能拒绝旧会话的迟到 401。
   ///
@@ -111,5 +140,11 @@ class VideoAuthNotifier extends AuthNotifier {
   }) async {
     if (!_isCurrent(platform, epoch) || !state.isLoggedIn(platform)) return;
     await handleSessionExpired(platform);
+  }
+
+  @override
+  void dispose() {
+    _personalDailyChanges.dispose();
+    super.dispose();
   }
 }

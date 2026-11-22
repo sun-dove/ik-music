@@ -6,6 +6,15 @@ abstract final class IkLibraryRevisionStrings {
   static const recommendationSelection = '推荐精选';
   static const recommendationHint = '来自各平台当前推荐，点击即可播放';
   static const browseRecommendations = '查看全部推荐';
+  static const playlistSource = '歌单来源';
+  static const localPlaylists = '本机歌单';
+  static const recommendationPlatform = '推荐平台';
+  static const expandHotSearch = '展开全部';
+  static const collapseHotSearch = '收起';
+  static const compactRecommendationHint = '选择平台查看推荐，点击歌曲即可播放';
+  static const recommendationTimeout = '推荐加载超时，请重试';
+  static String hotSearchPreview(int count) => '前 10 个，共 $count 个热词';
+  static String hotSearchTotal(int count) => '共 $count 个热词';
   static const retry = '重试';
   static const localMusic = '本地音乐';
   static const smartPlaylists = '智能歌单';

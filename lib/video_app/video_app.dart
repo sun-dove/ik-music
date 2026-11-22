@@ -2650,6 +2650,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (widget.workspace)
           IkSearchWorkspace(
             alignToDesign: widget.alignToDesign,
+            compactDiscovery: widget.alignToDesign,
             useSharedSearch: widget.alignToDesign,
             search: _ikSearch,
             onPlay: _play,
@@ -2701,6 +2702,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (widget.workspace)
           IkLibraryWorkspace(
             alignToDesign: widget.alignToDesign,
+            simplifySources: widget.alignToDesign,
             libraries: _libraries,
             syncing: _syncing,
             loggedIn: {

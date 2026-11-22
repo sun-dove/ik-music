@@ -29,6 +29,7 @@ class IkSearchWorkspace extends StatefulWidget {
     this.currentSong,
     this.onAccount,
     this.alignToDesign = false,
+    this.compactDiscovery = false,
     this.useSharedSearch = false,
     this.hotTerms = const [],
     this.hotLoading = false,
@@ -47,6 +48,7 @@ class IkSearchWorkspace extends StatefulWidget {
   final Song? currentSong;
   final ValueChanged<PlatformType>? onAccount;
   final bool alignToDesign, useSharedSearch;
+  final bool compactDiscovery;
   final List<String> hotTerms;
   final bool hotLoading;
   final String? hotError;
@@ -61,6 +63,8 @@ class IkSearchWorkspace extends StatefulWidget {
 class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
   final _text = TextEditingController();
   PlatformType? _filter;
+  bool _expandedHotTerms = false;
+  PlatformType _recommendationPlatform = PlatformType.netease;
   @override
   void dispose() {
     _text.dispose();
@@ -214,12 +218,15 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                widget.search.query.isEmpty
-                    ? VideoStrings.search
-                    : IkAlignmentStrings.searchResults(widget.search.query),
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+              if (widget.compactDiscovery)
+                _compactSearchHeader(context)
+              else
+                Text(
+                  widget.search.query.isEmpty
+                      ? VideoStrings.search
+                      : IkAlignmentStrings.searchResults(widget.search.query),
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
               if (!widget.useSharedSearch) ...[
                 const SizedBox(height: 16),
                 TextField(
@@ -237,22 +244,24 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                   ),
                 ),
               ],
-              const SizedBox(height: 18),
-              IkSelect<String>(
-                alignToDesign: true,
-                label: IkWorkspaceStrings.source,
-                value: _filter?.name ?? 'all',
-                items: {
-                  'all': IkWorkspaceStrings.allSources,
-                  for (final p in widget.search.platforms)
-                    p.name: videoPlatformLabel(p),
-                },
-                onChanged: (value) => setState(
-                  () => _filter = PlatformType.values
-                      .where((p) => p.name == value)
-                      .firstOrNull,
+              if (!widget.compactDiscovery) ...[
+                const SizedBox(height: 18),
+                IkSelect<String>(
+                  alignToDesign: true,
+                  label: IkWorkspaceStrings.source,
+                  value: _filter?.name ?? 'all',
+                  items: {
+                    'all': IkWorkspaceStrings.allSources,
+                    for (final p in widget.search.platforms)
+                      p.name: videoPlatformLabel(p),
+                  },
+                  onChanged: (value) => setState(
+                    () => _filter = PlatformType.values
+                        .where((p) => p.name == value)
+                        .firstOrNull,
+                  ),
                 ),
-              ),
+              ],
               if (widget.search.query.isEmpty &&
                   widget.onRetryHot == null &&
                   widget.recommendations == null)
@@ -362,9 +371,51 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
     ],
   );
 
+  Widget _compactSearchHeader(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) => Row(
+      children: [
+        Expanded(
+          child: Text(
+            widget.search.query.isEmpty
+                ? VideoStrings.search
+                : IkAlignmentStrings.searchResults(widget.search.query),
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+        ),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: constraints.maxWidth < 460 ? 140 : 180,
+          child: IkSelect<String>(
+            alignToDesign: true,
+            label: IkWorkspaceStrings.source,
+            value: _filter?.name ?? 'all',
+            items: {
+              'all': IkWorkspaceStrings.allSources,
+              for (final platform in widget.search.platforms)
+                platform.name: videoPlatformLabel(platform),
+            },
+            onChanged: (value) => setState(
+              () => _filter = PlatformType.values
+                  .where((platform) => platform.name == value)
+                  .firstOrNull,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+
   List<Widget> _discoverySlivers(BuildContext context) {
     final recommendations = widget.recommendations;
     final colors = Theme.of(context).colorScheme;
+    final globalError =
+        widget.compactDiscovery &&
+            recommendations != null &&
+            !recommendations.isLoading &&
+            recommendations.totalCount == 0 &&
+            recommendations.errorsByPlatform.isEmpty
+        ? recommendations.error
+        : null;
     return [
       if (widget.onRetryHot != null ||
           widget.hotTerms.isNotEmpty ||
@@ -376,15 +427,55 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  IkLibraryRevisionStrings.hotSearch,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  IkLibraryRevisionStrings.hotSearchSource,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                if (widget.compactDiscovery)
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(
+                        IkLibraryRevisionStrings.hotSearch,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      Text(
+                        IkLibraryRevisionStrings.hotSearchSource,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      if (widget.hotTerms.length > 10) ...[
+                        Text(
+                          _expandedHotTerms
+                              ? IkLibraryRevisionStrings.hotSearchTotal(
+                                  widget.hotTerms.length,
+                                )
+                              : IkLibraryRevisionStrings.hotSearchPreview(
+                                  widget.hotTerms.length,
+                                ),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        TextButton(
+                          onPressed: () => setState(
+                            () => _expandedHotTerms = !_expandedHotTerms,
+                          ),
+                          child: Text(
+                            _expandedHotTerms
+                                ? IkLibraryRevisionStrings.collapseHotSearch
+                                : IkLibraryRevisionStrings.expandHotSearch,
+                          ),
+                        ),
+                      ],
+                    ],
+                  )
+                else ...[
+                  Text(
+                    IkLibraryRevisionStrings.hotSearch,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    IkLibraryRevisionStrings.hotSearchSource,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
                 const SizedBox(height: 12),
                 if (widget.hotLoading) const LinearProgressIndicator(),
                 if (widget.hotError != null) ...[
@@ -400,9 +491,24 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final term in widget.hotTerms)
+                    for (final term
+                        in widget.compactDiscovery && !_expandedHotTerms
+                            ? widget.hotTerms.take(10)
+                            : widget.hotTerms)
                       ActionChip(
-                        label: Text(term),
+                        side: widget.compactDiscovery ? BorderSide.none : null,
+                        backgroundColor: widget.compactDiscovery
+                            ? colors.surfaceContainerHighest.withValues(
+                                alpha: .35,
+                              )
+                            : null,
+                        label: widget.compactDiscovery
+                            ? Text(
+                                term,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              )
+                            : Text(term),
                         onPressed: () => widget.search.submit(term),
                       ),
                   ],
@@ -426,6 +532,18 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                       IkLibraryRevisionStrings.recommendationSelection,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
+                    if (widget.compactDiscovery)
+                      IkSelect<PlatformType>(
+                        alignToDesign: true,
+                        label: IkLibraryRevisionStrings.recommendationPlatform,
+                        value: _recommendationPlatform,
+                        items: {
+                          for (final platform in PlatformType.musicServices)
+                            platform: videoPlatformLabel(platform),
+                        },
+                        onChanged: (platform) =>
+                            setState(() => _recommendationPlatform = platform),
+                      ),
                     if (widget.onBrowseRecommendations != null)
                       TextButton(
                         onPressed: widget.onBrowseRecommendations,
@@ -436,7 +554,9 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                   ],
                 ),
                 Text(
-                  IkLibraryRevisionStrings.recommendationHint,
+                  widget.compactDiscovery
+                      ? IkLibraryRevisionStrings.compactRecommendationHint
+                      : IkLibraryRevisionStrings.recommendationHint,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 if (recommendations.isLoading) const LinearProgressIndicator(),
@@ -445,7 +565,9 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
           ),
         ),
         for (final platform in PlatformType.musicServices)
-          if (_filter == null || _filter == platform) ...[
+          if (widget.compactDiscovery
+              ? _recommendationPlatform == platform
+              : _filter == null || _filter == platform) ...[
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(24, 16, 24, 6),
               sliver: SliverToBoxAdapter(
@@ -472,9 +594,36 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                         ),
                       ],
                     ),
-                    if (recommendations.errorsByPlatform[platform]
+                    if (widget.compactDiscovery)
+                      if (IkDiscoveryRevisionStrings.sourceNote(
+                            recommendations.sourceForPlatform(platform),
+                            platform: platform,
+                          )
+                          case final note?)
+                        Text(
+                          note,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                    if (globalError != null) ...[
+                      Text(globalError, style: TextStyle(color: colors.error)),
+                      if (!widget.loggedIn.contains(platform) &&
+                          widget.onAccount != null)
+                        TextButton(
+                          onPressed: () => widget.onAccount!(platform),
+                          child: Text(
+                            VideoStrings.loginPlatform(
+                              videoPlatformLabel(platform),
+                            ),
+                          ),
+                        ),
+                    ] else if (recommendations.errorsByPlatform[platform]
                         case final error?) ...[
-                      Text(error, style: TextStyle(color: colors.error)),
+                      Text(
+                        widget.compactDiscovery && error == 'timeout'
+                            ? IkLibraryRevisionStrings.recommendationTimeout
+                            : error,
+                        style: TextStyle(color: colors.error),
+                      ),
                       if (widget.onRetryRecommendation != null)
                         TextButton(
                           onPressed: recommendations.isLoading

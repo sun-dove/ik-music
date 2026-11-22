@@ -11,6 +11,7 @@ import '../../models/user.dart';
 import '../../models/playlist.dart';
 import '../../models/audio_quality.dart';
 import '../../models/platform_type.dart';
+import '../../models/personal_daily_result.dart';
 import '../../models/recommendation_source.dart';
 import '../../models/toplist.dart';
 import '../base/music_platform.dart';
@@ -25,6 +26,7 @@ import 'qq_toplist_ids.dart';
 class QqPlatform extends MusicPlatform {
   final QqApi _api;
   User? _currentUser;
+  ({String accountId, String musicId})? _personalDailyIdentity;
 
   QqPlatform({QqApi? api}) : _api = api ?? QqApi();
 
@@ -48,6 +50,13 @@ class QqPlatform extends MusicPlatform {
 
   @override
   bool get supportsDailyRecommendations => true;
+
+  @override
+  bool get supportsPersonalDailyRecommendations => true;
+
+  @override
+  ValueListenable<int> get personalDailySessionChanges =>
+      _api.personalDailySessionChanges;
 
   @override
   bool get supportsArtistPage => true;
@@ -163,8 +172,13 @@ class QqPlatform extends MusicPlatform {
             debugPrint('QQ getUserInfo after login error: $e');
           }
           if (_currentUser != null) {
+            final revision = personalDailySessionRevision;
             final freshUser = await _fetchUserInfo();
             if (freshUser != null) _currentUser = freshUser;
+            if (musicLoginCompleted &&
+                revision == personalDailySessionRevision) {
+              _capturePersonalDailyIdentity();
+            }
           }
           if (_currentUser != null) {
             yield QrLoginStatus.success;
@@ -351,6 +365,7 @@ class QqPlatform extends MusicPlatform {
   @override
   Future<void> logout() async {
     _currentUser = null;
+    _personalDailyIdentity = null;
     _api.setCookie('');
   }
 
@@ -371,10 +386,52 @@ class QqPlatform extends MusicPlatform {
     if (cookie != null && cookie.isNotEmpty) {
       _api.restoreCookie(cookie);
     }
+    final revision = personalDailySessionRevision;
     final user = await storage.loadUser(platformType);
     if (user != null) {
       _currentUser = user;
+      if (cookie != null &&
+          cookie.isNotEmpty &&
+          revision == personalDailySessionRevision) {
+        _capturePersonalDailyIdentity();
+      }
     }
+  }
+
+  void _capturePersonalDailyIdentity() {
+    final current = _currentUser;
+    final cookie = _api.cookie;
+    final musicId = _api.personalDailyMusicId;
+    _personalDailyIdentity =
+        current != null &&
+            cookie != null &&
+            musicId != null &&
+            _matchesPersonalDailyIdentity(current, cookie, musicId)
+        ? (accountId: current.id, musicId: musicId)
+        : null;
+    _api.markPersonalDailySessionChanged();
+  }
+
+  static bool _matchesPersonalDailyIdentity(
+    User user,
+    String cookie,
+    String musicId,
+  ) {
+    final accountId = int.tryParse(user.id);
+    if (user.platform != PlatformType.qq ||
+        accountId == null ||
+        accountId <= 0) {
+      return false;
+    }
+    // Web OAuth 的 uin 和音乐会话的 qqmusic_uin 可以不同。
+    final oauth = RegExp(r'(?:^|;\s*)(?:uin|loginUin)=o?(\d+)(?=\s*(?:;|$))');
+    final oauthIds = oauth
+        .allMatches(cookie)
+        .map((match) => int.tryParse(match[1]!))
+        .whereType<int>()
+        .toSet();
+    return oauthIds.length <= 1 &&
+        (accountId.toString() == musicId || oauthIds.contains(accountId));
   }
 
   // --- Search ---
@@ -771,6 +828,212 @@ class QqPlatform extends MusicPlatform {
   }
 
   // --- Recommendations ---
+
+  @override
+  Future<PersonalDailyResult> getPersonalDailyRecommendations({
+    int limit = 30,
+    String? expectedAccountId,
+  }) async {
+    PersonalDailyResult outcome(
+      PersonalDailyStatus status, {
+      String? code,
+      int rawCount = 0,
+    }) => PersonalDailyResult(
+      platform: platformType,
+      status: status,
+      fetchedAt: DateTime.now(),
+      errorCode: code,
+      rawCount: rawCount,
+    );
+
+    final user = _currentUser;
+    if (user == null) return outcome(PersonalDailyStatus.signedOut);
+    final cookie = _api.cookie;
+    final musicId = _api.personalDailyMusicId;
+    if (cookie == null ||
+        musicId == null ||
+        _personalDailyIdentity != (accountId: user.id, musicId: musicId) ||
+        (expectedAccountId != null && expectedAccountId != user.id) ||
+        !_matchesPersonalDailyIdentity(user, cookie, musicId)) {
+      return outcome(PersonalDailyStatus.identityIncomplete);
+    }
+    final revision = personalDailySessionRevision;
+    bool sessionIsCurrent() =>
+        revision == personalDailySessionRevision && _currentUser?.id == user.id;
+
+    PersonalDailyResult? httpFailure(int? status) {
+      if (status == 200) return null;
+      return outcome(
+        status == 401
+            ? PersonalDailyStatus.sessionExpired
+            : PersonalDailyStatus.serviceUnavailable,
+        code: status?.toString(),
+      );
+    }
+
+    try {
+      final page = await _api.getPersonalDailyPlaylist(cookie);
+      if (!sessionIsCurrent()) {
+        return outcome(PersonalDailyStatus.sessionChanged);
+      }
+      final pageFailure = httpFailure(page.status);
+      if (pageFailure != null) return pageFailure;
+      final playlistId = page.playlistId;
+      if (playlistId == null) {
+        return outcome(PersonalDailyStatus.serviceUnavailable);
+      }
+
+      const pageSize = 200;
+      final uniqueSongs = <String, Song>{};
+      var fetched = 0;
+      int? total;
+      do {
+        final detail = await _api.getPersonalDailyPlaylistPage(
+          playlistId,
+          cookieSnapshot: cookie,
+          songBegin: fetched,
+          songNum: pageSize,
+        );
+        if (!sessionIsCurrent()) {
+          return outcome(PersonalDailyStatus.sessionChanged);
+        }
+        final detailFailure = httpFailure(detail.status);
+        if (detailFailure != null) return detailFailure;
+        if (detail.accessDenied) {
+          return outcome(PersonalDailyStatus.serviceUnavailable);
+        }
+        final body = detail.body;
+        final rootCode = _personalDailyInt(body['code']);
+        if (rootCode == null) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        if (rootCode != 0) {
+          return outcome(
+            PersonalDailyStatus.serviceUnavailable,
+            code: '$rootCode',
+          );
+        }
+        final module = QqApi.moduleOf(body, 'req_0');
+        final moduleCode = _personalDailyInt(module['code']);
+        if (moduleCode == null) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        if (moduleCode != 0) {
+          return outcome(
+            PersonalDailyStatus.serviceUnavailable,
+            code: '$moduleCode',
+          );
+        }
+        final data = module['data'];
+        if (data is! Map || data['songlist'] is! List) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        final metadata = data['dirinfo'];
+        final playlistData = [data, if (metadata is Map) metadata];
+        final responseIds = {
+          for (final fields in playlistData)
+            for (final key in const ['disstid', 'dissid', 'tid'])
+              if (fields.containsKey(key)) _personalDailyInt(fields[key]),
+        };
+        if (responseIds.isNotEmpty &&
+            (responseIds.length != 1 ||
+                '${responseIds.single}' != playlistId)) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        final counts = {
+          for (final fields in playlistData)
+            for (final key in const [
+              'songnum',
+              'song_cnt',
+              'song_count',
+              'total_song_num',
+              'total_song_count',
+            ])
+              if (fields.containsKey(key)) _personalDailyInt(fields[key]),
+        };
+        if (counts.length > 1 || (counts.isNotEmpty && counts.single == null)) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        final songs = data['songlist'] as List;
+        final pageTotal = counts.isEmpty ? null : counts.single;
+        if (total != null && pageTotal != null && pageTotal != total) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        total ??= pageTotal;
+        if (total == null) {
+          // 满页又没有总数时无法确认是完整歌单。
+          if (songs.length >= pageSize) {
+            return outcome(PersonalDailyStatus.invalidResponse);
+          }
+          total = fetched + songs.length;
+        }
+        fetched += songs.length;
+        if (fetched > total || (songs.isEmpty && fetched < total)) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        for (final row in songs) {
+          final song = _parsePersonalDailySong(row);
+          if (song != null) uniqueSongs.putIfAbsent(song.id, () => song);
+        }
+      } while (fetched < total);
+
+      if (fetched == 0) return outcome(PersonalDailyStatus.empty);
+      if (uniqueSongs.isEmpty) {
+        return outcome(PersonalDailyStatus.invalidResponse, rawCount: fetched);
+      }
+      return PersonalDailyResult(
+        platform: platformType,
+        status: PersonalDailyStatus.success,
+        songs: List.unmodifiable(uniqueSongs.values.take(limit.clamp(1, 30))),
+        fetchedAt: DateTime.now(),
+        rawCount: fetched,
+        validCount: uniqueSongs.length,
+      );
+    } catch (error) {
+      if (!sessionIsCurrent()) {
+        return outcome(PersonalDailyStatus.sessionChanged);
+      }
+      final translated = apiExceptionOf(error);
+      if (translated is NetworkException) {
+        return outcome(
+          PersonalDailyStatus.networkFailure,
+          code: translated.code.name,
+        );
+      }
+      return outcome(PersonalDailyStatus.serviceUnavailable);
+    }
+  }
+
+  static int? _personalDailyInt(Object? value) {
+    if (value is int) return value;
+    if (value is String && RegExp(r'^\d+$').hasMatch(value)) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+
+  Song? _parsePersonalDailySong(dynamic row) {
+    final data = _songPayload(row);
+    if (data is! Map) return null;
+    for (final key in const [
+      'mid',
+      'songmid',
+      'songMid',
+      'strMediaMid',
+      'id',
+      'songid',
+    ]) {
+      final id = data[key];
+      if (id is String &&
+              RegExp(r'^(?!0+$)[a-zA-Z0-9_-]+$').hasMatch(id) &&
+              id != 'null' ||
+          id is int && id > 0) {
+        final song = _parseSong({...data, 'mid': id});
+        if (song.name.isNotEmpty) return song;
+      }
+    }
+    return null;
+  }
 
   @override
   Future<List<Song>> getDailyRecommendations() async {
