@@ -50,17 +50,21 @@ class IkSongTableRow extends StatelessWidget {
     required this.index,
     required this.onPlay,
     required this.onMore,
+    this.onMoreWithContext,
     this.onLike,
     this.playing = false,
     this.liked = false,
     this.detail,
+    this.cover,
   });
   final Song song;
   final int index;
   final VoidCallback onPlay, onMore;
+  final ValueChanged<BuildContext>? onMoreWithContext;
   final VoidCallback? onLike;
   final bool playing, liked;
   final String? detail;
+  final Widget? cover;
 
   @override
   Widget build(BuildContext context) => _SongColumns(
@@ -100,7 +104,8 @@ class IkSongTableRow extends StatelessWidget {
                   flex: 5,
                   child: Row(
                     children: [
-                      VideoCover(url: song.coverUrl, size: 40, radius: 7),
+                      cover ??
+                          VideoCover(url: song.coverUrl, size: 40, radius: 7),
                       SizedBox(width: layout.compact ? 8 : 12),
                       Expanded(
                         child: Column(
@@ -203,11 +208,15 @@ class IkSongTableRow extends StatelessWidget {
                             size: 21,
                           ),
                         ),
-                      IconButton(
-                        style: layout.actionStyle,
-                        tooltip: IkStrings.more,
-                        onPressed: onMore,
-                        icon: const Icon(Icons.more_horiz, size: 20),
+                      Builder(
+                        builder: (buttonContext) => IconButton(
+                          style: layout.actionStyle,
+                          tooltip: IkStrings.more,
+                          onPressed: onMoreWithContext == null
+                              ? onMore
+                              : () => onMoreWithContext!(buttonContext),
+                          icon: const Icon(Icons.more_horiz, size: 20),
+                        ),
                       ),
                     ],
                   ),

@@ -4,10 +4,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../../video_app/ui/video_theme.dart';
+import '../../../../video_app/ik/ik_song_table.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/share/song_actions.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/song_actions_sheet.dart';
+import '../../../../l10n/ik_strings.dart';
+import '../../../../l10n/ik_library_revision_strings.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../core/widgets/async_state_view.dart';
@@ -21,45 +26,89 @@ import '../../domain/local_library_query.dart';
 import '../providers/local_music_provider.dart';
 
 class LocalMusicPage extends ConsumerWidget {
-  const LocalMusicPage({super.key});
+  const LocalMusicPage({super.key}) : _embedded = false;
+  const LocalMusicPage.embedded({super.key}) : _embedded = true;
+  final bool _embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(localMusicProvider);
     final notifier = ref.read(localMusicProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('本地音乐'),
-        actions: [
-          if (state.songs.isNotEmpty)
-            IconButton(
-              key: const Key('local-music-select-toggle'),
-              tooltip: state.selectionMode ? '退出多选' : '多选',
-              icon: Icon(
-                state.selectionMode
-                    ? Icons.check_circle
-                    : Icons.check_circle_outline,
-              ),
-              onPressed: () => notifier.setSelectionMode(!state.selectionMode),
-            ),
-          IconButton(
-            tooltip: '重新扫描（仅读取变化的文件）',
-            icon: const Icon(Icons.refresh),
-            onPressed: state.isScanning || state.songs.isEmpty
-                ? null
-                : notifier.rescan,
+    final actions = <Widget>[
+      if (state.songs.isNotEmpty)
+        IconButton(
+          key: const Key('local-music-select-toggle'),
+          tooltip: state.selectionMode ? '退出多选' : '多选',
+          icon: Icon(
+            state.selectionMode
+                ? Icons.check_circle
+                : Icons.check_circle_outline,
           ),
-          IconButton(
-            tooltip: '选择文件夹',
-            icon: const Icon(Icons.folder_open),
-            onPressed: state.isScanning ? null : notifier.pickAndScanDirectory,
-          ),
-        ],
+          onPressed: () => notifier.setSelectionMode(!state.selectionMode),
+        ),
+      IconButton(
+        tooltip: '重新扫描（仅读取变化的文件）',
+        icon: const Icon(Icons.refresh),
+        onPressed: state.isScanning || state.songs.isEmpty
+            ? null
+            : notifier.rescan,
       ),
-      body: Column(
-        children: [
-          _Header(state: state, notifier: notifier),
+      IconButton(
+        tooltip: '选择文件夹',
+        icon: const Icon(Icons.folder_open),
+        onPressed: state.isScanning ? null : notifier.pickAndScanDirectory,
+      ),
+    ];
+    final body = Column(
+      children: [
+        _embedded
+            ? Expanded(
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Row(
+                        children: [
+                          const SizedBox(width: 24),
+                          Expanded(
+                            child: Text(
+                              IkLibraryRevisionStrings.localMusic,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          ...actions,
+                          const SizedBox(width: 16),
+                        ],
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: _Header(state: state, notifier: notifier),
+                    ),
+                    if (state.isScanning)
+                      const SliverToBoxAdapter(
+                        child: LinearProgressIndicator(minHeight: 2),
+                      ),
+                    if (state.error != null && state.songs.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: _ErrorBanner(message: state.error!),
+                      ),
+                    if (state.skippedFiles.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: _SkippedFilesBanner(files: state.skippedFiles),
+                      ),
+                    SliverFillRemaining(
+                      hasScrollBody: true,
+                      child: _LocalLibraryBody(
+                        state: state,
+                        notifier: notifier,
+                        embedded: true,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : _Header(state: state, notifier: notifier),
+        if (!_embedded) ...[
           if (state.isScanning) const LinearProgressIndicator(minHeight: 2),
           // An inline notice, only while there is still a library behind it. With
           // nothing to show, the failure belongs in the full-page state below
@@ -71,11 +120,17 @@ class LocalMusicPage extends ConsumerWidget {
           Expanded(
             child: _LocalLibraryBody(state: state, notifier: notifier),
           ),
-          if (state.isSelecting)
-            _SelectionBar(state: state, notifier: notifier),
         ],
-      ),
+        if (state.isSelecting)
+          _SelectionBar(state: state, notifier: notifier, embedded: _embedded),
+      ],
     );
+    return _embedded
+        ? body
+        : Scaffold(
+            appBar: AppBar(title: const Text('本地音乐'), actions: actions),
+            body: body,
+          );
   }
 }
 
@@ -422,10 +477,15 @@ class _SkippedFilesBanner extends StatelessWidget {
 }
 
 class _LocalLibraryBody extends StatelessWidget {
-  const _LocalLibraryBody({required this.state, required this.notifier});
+  const _LocalLibraryBody({
+    required this.state,
+    required this.notifier,
+    this.embedded = false,
+  });
 
   final LocalMusicState state;
   final LocalMusicNotifier notifier;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
@@ -465,33 +525,37 @@ class _LocalLibraryBody extends StatelessWidget {
     }
     switch (state.view) {
       case LocalLibraryView.songs:
-        return _SongList(state: state);
+        return _SongList(state: state, embedded: embedded);
       case LocalLibraryView.albums:
         return _GroupList(
           groups: state.albumGroups,
           keyPrefix: 'album',
           emptyLabel: '没有可用的专辑信息',
+          embedded: embedded,
         );
       case LocalLibraryView.artists:
         return _GroupList(
           groups: state.artistGroups,
           keyPrefix: 'artist',
           emptyLabel: '没有可用的歌手信息',
+          embedded: embedded,
         );
       case LocalLibraryView.folders:
         return _GroupList(
           groups: state.folderGroups,
           keyPrefix: 'folder',
           emptyLabel: '没有可用的文件夹',
+          embedded: embedded,
         );
     }
   }
 }
 
 class _SongList extends ConsumerWidget {
-  const _SongList({required this.state});
+  const _SongList({required this.state, this.embedded = false});
 
   final LocalMusicState state;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -503,18 +567,65 @@ class _SongList extends ConsumerWidget {
       for (final track in state.tracks) track.path: track,
     };
     final onlineKeys = state.onlineKeys;
+    final current = embedded
+        ? ref.watch(playerProvider.select((s) => s.currentSong))
+        : null;
+    final headerCount = embedded && !state.isSelecting ? 1 : 0;
     return AppScrollbar(
       builder: (controller) => ListView.builder(
         controller: controller,
         padding: const EdgeInsets.only(bottom: 8),
-        itemCount: songs.length,
-        itemBuilder: (context, index) {
+        itemCount: songs.length + headerCount,
+        itemBuilder: (context, itemIndex) {
+          if (headerCount == 1 && itemIndex == 0) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: IkSongTableHeader(),
+            );
+          }
+          final index = itemIndex - headerCount;
           final song = songs[index];
           final track = tracksByPath[song.id];
           final path = track?.path;
           // A row without a local index entry (an online song merged in) has no
           // path to tick, so it simply cannot be selected.
           final selectable = path != null;
+          if (embedded && !state.isSelecting) {
+            final details = <String>[
+              if (state.lyricsBySongId.containsKey(song.id))
+                IkLibraryRevisionStrings.matchedLyrics,
+              if (onlineKeys.contains(song.dedupeKey))
+                IkLibraryRevisionStrings.alsoOnline,
+            ];
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: IkSongTableRow(
+                song: song,
+                index: index,
+                cover: _Cover(path: track?.coverPath),
+                detail: details.isEmpty
+                    ? track?.folderName
+                    : details.join(' · '),
+                playing:
+                    current?.id == song.id &&
+                    current?.platform == song.platform,
+                onPlay: () => ref
+                    .read(playerProvider.notifier)
+                    .playPlaylist(songs, startIndex: index),
+                onMore: () => unawaited(
+                  showSongActionsMenu(context, ref, song: song, isLocal: true),
+                ),
+                onMoreWithContext: (buttonContext) => unawaited(
+                  showSongActionsMenu(
+                    buttonContext,
+                    ref,
+                    song: song,
+                    isLocal: true,
+                  ),
+                ),
+              ),
+            );
+          }
           return _SongTile(
             song: song,
             track: track,
@@ -556,11 +667,13 @@ class _GroupList extends ConsumerWidget {
     required this.groups,
     required this.keyPrefix,
     required this.emptyLabel,
+    this.embedded = false,
   });
 
   final List<LocalTrackGroup> groups;
   final String keyPrefix;
   final String emptyLabel;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -591,26 +704,57 @@ class _GroupList extends ConsumerWidget {
             ),
             children: [
               for (var i = 0; i < group.tracks.length; i++)
-                _SongTile(
-                  song: group.tracks[i].toSong(),
-                  track: group.tracks[i],
-                  hasLyrics: false,
-                  alsoOnline: false,
-                  onTap: () => ref.read(playerProvider.notifier).playPlaylist([
-                    for (final track in group.tracks) track.toSong(),
-                  ], startIndex: i),
-                  onLongPress: () {
-                    final song = group.tracks[i].toSong();
-                    unawaited(
-                      showSongActionsMenu(
-                        context,
-                        ref,
-                        song: song,
-                        isLocal: true,
+                if (embedded)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: IkSongTableRow(
+                      song: group.tracks[i].toSong(),
+                      index: i,
+                      cover: _Cover(path: group.tracks[i].coverPath),
+                      onPlay: () =>
+                          ref.read(playerProvider.notifier).playPlaylist([
+                            for (final track in group.tracks) track.toSong(),
+                          ], startIndex: i),
+                      onMore: () => unawaited(
+                        showSongActionsMenu(
+                          context,
+                          ref,
+                          song: group.tracks[i].toSong(),
+                          isLocal: true,
+                        ),
                       ),
-                    );
-                  },
-                ),
+                      onMoreWithContext: (buttonContext) => unawaited(
+                        showSongActionsMenu(
+                          buttonContext,
+                          ref,
+                          song: group.tracks[i].toSong(),
+                          isLocal: true,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  _SongTile(
+                    song: group.tracks[i].toSong(),
+                    track: group.tracks[i],
+                    hasLyrics: false,
+                    alsoOnline: false,
+                    onTap: () => ref.read(playerProvider.notifier).playPlaylist(
+                      [for (final track in group.tracks) track.toSong()],
+                      startIndex: i,
+                    ),
+                    onLongPress: () {
+                      final song = group.tracks[i].toSong();
+                      unawaited(
+                        showSongActionsMenu(
+                          context,
+                          ref,
+                          song: song,
+                          isLocal: true,
+                        ),
+                      );
+                    },
+                  ),
             ],
           );
         },
@@ -788,15 +932,101 @@ class _Cover extends ConsumerWidget {
 /// confirmation dialog says exactly that, because "移出曲库" has to be
 /// distinguishable from "删除文件".
 class _SelectionBar extends ConsumerWidget {
-  const _SelectionBar({required this.state, required this.notifier});
+  const _SelectionBar({
+    required this.state,
+    required this.notifier,
+    this.embedded = false,
+  });
 
   final LocalMusicState state;
   final LocalMusicNotifier notifier;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final hasSelection = state.selectedCount > 0;
+    if (embedded) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth <
+              MediaQuery.textScalerOf(context).scale(420)) {
+            return Material(
+              color: theme.colorScheme.surfaceContainerHighest,
+              child: SafeArea(
+                top: false,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          TextButton(
+                            key: const Key('local-music-selection-cancel'),
+                            onPressed: () => notifier.setSelectionMode(false),
+                            child: const Text(IkLibraryRevisionStrings.cancel),
+                          ),
+                          Expanded(
+                            child: Text(
+                              IkLibraryRevisionStrings.selectedTracks(
+                                state.selectedCount,
+                              ),
+                              key: const Key('local-music-selection-count'),
+                              textAlign: TextAlign.end,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            TextButton(
+                              key: const Key('local-music-select-all'),
+                              onPressed: notifier.selectAllVisible,
+                              child: const Text(
+                                IkLibraryRevisionStrings.selectAll,
+                              ),
+                            ),
+                            TextButton(
+                              key: const Key('local-music-batch-add'),
+                              onPressed: hasSelection
+                                  ? () => _addToPlaylist(context, ref)
+                                  : null,
+                              child: const Text(
+                                IkLibraryRevisionStrings.batchAdd,
+                              ),
+                            ),
+                            TextButton(
+                              key: const Key('local-music-batch-remove'),
+                              onPressed: hasSelection
+                                  ? () => _removeFromLibrary(context, ref)
+                                  : null,
+                              child: Text(
+                                IkLibraryRevisionStrings.removeFromLibrary,
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+          return _SelectionBar(state: state, notifier: notifier);
+        },
+      );
+    }
     return Material(
       color: theme.colorScheme.surfaceContainerHighest,
       child: SafeArea(
@@ -859,23 +1089,52 @@ class _SelectionBar extends ConsumerWidget {
       showInfoSnackBar(context, '还没有自建歌单，先在「我的歌单」里创建一个');
       return;
     }
-    final target = await showModalBottomSheet<Playlist>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final playlist in playlists)
-              ListTile(
-                key: Key('local-music-pick-playlist-${playlist.id}'),
-                leading: const Icon(Icons.queue_music),
-                title: Text(playlist.name),
-                onTap: () => Navigator.of(sheetContext).pop(playlist),
+    final target = ContextualActionTheme.isEnabled(context)
+        ? await showContextualDialog<Playlist>(
+            context,
+            builder: (dialogContext) => SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ListTile(
+                      title: const Text(IkLibraryRevisionStrings.addToPlaylist),
+                      trailing: IconButton(
+                        tooltip: IkStrings.close,
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ),
+                    for (final playlist in playlists)
+                      ListTile(
+                        key: Key('local-music-pick-playlist-${playlist.id}'),
+                        leading: const Icon(Icons.queue_music),
+                        title: Text(playlist.name),
+                        onTap: () => Navigator.of(dialogContext).pop(playlist),
+                      ),
+                  ],
+                ),
               ),
-          ],
-        ),
-      ),
-    );
+            ),
+          )
+        : await showModalBottomSheet<Playlist>(
+            context: context,
+            builder: (sheetContext) => SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final playlist in playlists)
+                    ListTile(
+                      key: Key('local-music-pick-playlist-${playlist.id}'),
+                      leading: const Icon(Icons.queue_music),
+                      title: Text(playlist.name),
+                      onTap: () => Navigator.of(sheetContext).pop(playlist),
+                    ),
+                ],
+              ),
+            ),
+          );
     if (target == null) return;
 
     final playlistsNotifier = ref.read(myPlaylistsProvider.notifier);

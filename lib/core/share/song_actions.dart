@@ -9,6 +9,7 @@ import '../../features/player/presentation/providers/player_provider.dart';
 import '../../features/player/presentation/widgets/playlist_picker_sheet.dart';
 import '../../models/audio_quality.dart';
 import '../../models/song.dart';
+import '../theme/app_theme.dart';
 import '../utils/snackbar_helper.dart';
 import '../widgets/song_actions_sheet.dart';
 import 'share_links.dart';
@@ -74,12 +75,17 @@ SongActionDeps liveSongActionDeps(WidgetRef ref, {BuildContext? context}) {
     },
     pickPlaylist: (song) async {
       if (context == null || !context.mounted) return false;
-      final added = await showModalBottomSheet<bool>(
-        context: context,
-        useRootNavigator: true,
-        isScrollControlled: true,
-        builder: (_) => PlaylistPickerSheet(song: song),
-      );
+      final added = ContextualActionTheme.isEnabled(context)
+          ? await showContextualDialog<bool>(
+              context,
+              builder: (_) => PlaylistPickerSheet.contextual(song: song),
+            )
+          : await showModalBottomSheet<bool>(
+              context: context,
+              useRootNavigator: true,
+              isScrollControlled: true,
+              builder: (_) => PlaylistPickerSheet(song: song),
+            );
       return added ?? false;
     },
     download: (song) async {

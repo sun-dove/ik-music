@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/share/share_service.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/song_actions_sheet.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/transfer/playlist_export.dart';
 import '../../../../core/transfer/transfer_format.dart';
@@ -12,6 +14,7 @@ import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../core/widgets/async_state_view.dart';
 import '../../../../l10n/l10n.dart';
+import '../../../../l10n/ik_strings.dart';
 import '../../../../models/platform_type.dart';
 import '../../../../models/playlist.dart';
 import '../../../../models/song.dart';
@@ -20,8 +23,12 @@ import '../providers/my_playlists_provider.dart';
 import '../providers/platform_playlists_provider.dart';
 
 class PlatformPlaylistsPage extends ConsumerStatefulWidget {
-  const PlatformPlaylistsPage({super.key, this.jsonFormatLabel});
+  const PlatformPlaylistsPage({super.key, this.jsonFormatLabel})
+    : _embedded = false;
+  const PlatformPlaylistsPage.embedded({super.key, this.jsonFormatLabel})
+    : _embedded = true;
   final String? jsonFormatLabel;
+  final bool _embedded;
 
   @override
   ConsumerState<PlatformPlaylistsPage> createState() =>
@@ -278,6 +285,42 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
   /// this app reads its own JSON), so they belong on one screen where the user
   /// can see what the options are.
   Future<void> _exportMyPlaylist(Playlist playlist) async {
+    if (ContextualActionTheme.isEnabled(context)) {
+      final choice = await showContextualDialog<PlaylistExportChoice>(
+        context,
+        builder: (dialogContext) => SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text(
+                    context.l10n.libraryExportPlaylistNamed(playlist.name),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  trailing: IconButton(
+                    tooltip: IkStrings.close,
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ),
+                const Divider(height: 1),
+                for (final option in PlaylistExportChoice.values)
+                  ListTile(
+                    leading: Icon(_exportIcon(option)),
+                    title: Text(_exportLabel(option)),
+                    onTap: () => Navigator.of(dialogContext).pop(option),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (choice != null && mounted) await _runExport(playlist, choice);
+      return;
+    }
     final choice = await showModalBottomSheet<PlaylistExportChoice>(
       context: context,
       // The shell's nested navigator would paint this under the floating chrome
@@ -402,6 +445,52 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
   /// limit, so a long playlist falls back to pointing at 「分享链接」.
   Future<void> _showPlaylistQr(Playlist playlist, String link) async {
     final payload = qrPayloadForPlaylistLink(link);
+    if (ContextualActionTheme.isEnabled(context)) {
+      await showContextualDialog<void>(
+        context,
+        builder: (dialogContext) => SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        context.l10n.libraryScanImportNamed(playlist.name),
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: IkStrings.close,
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                if (payload == null)
+                  Text(
+                    context.l10n.libraryQrTooLong,
+                    textAlign: TextAlign.center,
+                  )
+                else
+                  LayoutBuilder(
+                    builder: (context, size) => QrImageView(
+                      data: payload,
+                      size: size.maxWidth.clamp(0, 220).toDouble(),
+                      backgroundColor: AppColors.qrBackground,
+                      semanticsLabel: payload,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+      return;
+    }
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
@@ -451,167 +540,191 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
     final isCreating = activeTab == PlatformType.local
         ? myState.isSaving
         : state.isCreatingFor(activeTab);
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(l.commonPlaylist),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: l.libraryRefreshCurrentPlaylist,
-            onPressed: () {
-              final platform = _tabs[_tabController.index];
-              if (platform == PlatformType.local) {
-                ref.read(myPlaylistsProvider.notifier).load();
-              } else {
-                ref
-                    .read(platformPlaylistsProvider.notifier)
-                    .loadPlatform(platform);
-              }
-            },
-          ),
-          IconButton(
-            icon: isCreating
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.add),
-            tooltip: l.libraryNewPlaylist,
-            onPressed: isCreating ? null : _createPlaylist,
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: _tabs
-              .map(
-                (p) => Tab(
-                  text: p == PlatformType.local
-                      ? l.libraryMyPlaylists
-                      : p.displayName,
-                ),
-              )
-              .toList(),
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: _tabs.map((platform) {
+    final actions = <Widget>[
+      IconButton(
+        icon: const Icon(Icons.refresh),
+        tooltip: l.libraryRefreshCurrentPlaylist,
+        onPressed: () {
+          final platform = _tabs[_tabController.index];
           if (platform == PlatformType.local) {
-            return _MyPlaylistsTab(
-              state: myState,
-              onRetry: () => ref.read(myPlaylistsProvider.notifier).load(),
-              playlistRoute: _playlistRoute,
-              onOpenPlaylist: _openPlaylist,
-              onDeletePlaylist: _deleteMyPlaylist,
-              onExportPlaylist: _exportMyPlaylist,
-            );
+            ref.read(myPlaylistsProvider.notifier).load();
+          } else {
+            ref.read(platformPlaylistsProvider.notifier).loadPlatform(platform);
           }
-          final playlists = state.playlistsFor(platform);
-          final error = state.errorsByPlatform[platform];
-          final isLoading = state.isLoadingFor(platform);
+        },
+      ),
+      IconButton(
+        icon: isCreating
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.add),
+        tooltip: l.libraryNewPlaylist,
+        onPressed: isCreating ? null : _createPlaylist,
+      ),
+    ];
+    final tabs = TabBar(
+      controller: _tabController,
+      isScrollable: widget._embedded,
+      tabs: _tabs
+          .map(
+            (p) => Tab(
+              text: p == PlatformType.local
+                  ? l.libraryMyPlaylists
+                  : p.displayName,
+            ),
+          )
+          .toList(),
+    );
+    final body = TabBarView(
+      controller: _tabController,
+      children: _tabs.map((platform) {
+        if (platform == PlatformType.local) {
+          return _MyPlaylistsTab(
+            state: myState,
+            onRetry: () => ref.read(myPlaylistsProvider.notifier).load(),
+            playlistRoute: _playlistRoute,
+            onOpenPlaylist: _openPlaylist,
+            onDeletePlaylist: _deleteMyPlaylist,
+            onExportPlaylist: _exportMyPlaylist,
+          );
+        }
+        final playlists = state.playlistsFor(platform);
+        final error = state.errorsByPlatform[platform];
+        final isLoading = state.isLoadingFor(platform);
 
-          if (isLoading && playlists.isEmpty) {
-            return const AsyncStateView.loading();
-          }
-          if (error != null && playlists.isEmpty) {
-            return AsyncStateView.error(
-              title: l.libraryPlaylistLoadFailed,
-              message: error,
-              onRetry: () => ref
-                  .read(platformPlaylistsProvider.notifier)
-                  .loadPlatform(platform),
-            );
-          }
-          if (playlists.isEmpty) {
-            return AsyncStateView.empty(title: l.libraryPlaylistsEmpty);
-          }
-          return Column(
-            children: [
-              if (isLoading) const LinearProgressIndicator(minHeight: 2),
-              if (error != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Text(
-                    error,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-              Expanded(
-                child: AppScrollbar(
-                  builder: (controller) => ListView.builder(
-                    controller: controller,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    itemCount: playlists.length,
-                    itemBuilder: (context, index) {
-                      final playlist = playlists[index];
-                      return ListTile(
-                        leading: _PlaylistCover(url: playlist.coverUrl),
-                        title: Text(
-                          playlist.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          context.l10n.librarySongCount(playlist.songCount),
-                        ),
-                        trailing: PopupMenuButton<String>(
-                          tooltip: context.l10n.libraryPlaylistActions,
-                          onSelected: (value) {
-                            switch (value) {
-                              case 'rename':
-                                _renamePlatformPlaylist(playlist);
-                                break;
-                              case 'delete':
-                                _deletePlatformPlaylist(playlist);
-                                break;
-                              case 'copyLocal':
-                                _copyPlatformPlaylistToLocal(playlist);
-                                break;
-                            }
-                          },
-                          itemBuilder: (context) {
-                            final l = context.l10n;
-                            return [
-                              PopupMenuItem(
-                                value: 'rename',
-                                child: ListTile(
-                                  leading: const Icon(
-                                    Icons.drive_file_rename_outline,
-                                  ),
-                                  title: Text(l.libraryRenamePlaylist),
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'copyLocal',
-                                child: ListTile(
-                                  leading: const Icon(Icons.copy_all_outlined),
-                                  title: Text(l.libraryCopyToLocal),
-                                ),
-                              ),
-                              PopupMenuItem(
-                                value: 'delete',
-                                child: ListTile(
-                                  leading: const Icon(Icons.delete_outline),
-                                  title: Text(l.libraryDeletePlaylist),
-                                ),
-                              ),
-                            ];
-                          },
-                        ),
-                        onTap: () => _openPlaylist(playlist),
-                      );
-                    },
+        if (isLoading && playlists.isEmpty) {
+          return const AsyncStateView.loading();
+        }
+        if (error != null && playlists.isEmpty) {
+          return AsyncStateView.error(
+            title: l.libraryPlaylistLoadFailed,
+            message: error,
+            onRetry: () => ref
+                .read(platformPlaylistsProvider.notifier)
+                .loadPlatform(platform),
+          );
+        }
+        if (playlists.isEmpty) {
+          return AsyncStateView.empty(title: l.libraryPlaylistsEmpty);
+        }
+        return Column(
+          children: [
+            if (isLoading) const LinearProgressIndicator(minHeight: 2),
+            if (error != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                child: Text(
+                  error,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: 13,
                   ),
                 ),
               ),
-            ],
-          );
-        }).toList(),
+            Expanded(
+              child: AppScrollbar(
+                builder: (controller) => ListView.builder(
+                  controller: controller,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  itemCount: playlists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = playlists[index];
+                    return ListTile(
+                      leading: _PlaylistCover(url: playlist.coverUrl),
+                      title: Text(
+                        playlist.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        context.l10n.librarySongCount(playlist.songCount),
+                      ),
+                      trailing: PopupMenuButton<String>(
+                        tooltip: context.l10n.libraryPlaylistActions,
+                        onSelected: (value) {
+                          switch (value) {
+                            case 'rename':
+                              _renamePlatformPlaylist(playlist);
+                              break;
+                            case 'delete':
+                              _deletePlatformPlaylist(playlist);
+                              break;
+                            case 'copyLocal':
+                              _copyPlatformPlaylistToLocal(playlist);
+                              break;
+                          }
+                        },
+                        itemBuilder: (context) {
+                          final l = context.l10n;
+                          return [
+                            PopupMenuItem(
+                              value: 'rename',
+                              child: ListTile(
+                                leading: const Icon(
+                                  Icons.drive_file_rename_outline,
+                                ),
+                                title: Text(l.libraryRenamePlaylist),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'copyLocal',
+                              child: ListTile(
+                                leading: const Icon(Icons.copy_all_outlined),
+                                title: Text(l.libraryCopyToLocal),
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: ListTile(
+                                leading: const Icon(Icons.delete_outline),
+                                title: Text(l.libraryDeletePlaylist),
+                              ),
+                            ),
+                          ];
+                        },
+                      ),
+                      onTap: () => _openPlaylist(playlist),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+    if (widget._embedded) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l.libraryMyPlaylists,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                ...actions,
+              ],
+            ),
+          ),
+          tabs,
+          Expanded(child: body),
+        ],
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(l.commonPlaylist),
+        actions: actions,
+        bottom: tabs,
       ),
+      body: body,
     );
   }
 }

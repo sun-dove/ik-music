@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'dart:ui' show Tristate;
 
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
@@ -14,39 +15,66 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mconnect/core/database/app_database.dart';
+import 'package:mconnect/core/network/api_exception.dart';
 import 'package:mconnect/core/platform/platform_utils.dart';
+import 'package:mconnect/core/widgets/song_actions_sheet.dart';
 import 'package:mconnect/features/audio_effects/presentation/providers/audio_effects_provider.dart';
 import 'package:mconnect/features/auth/presentation/providers/auth_provider.dart';
+import 'package:mconnect/features/discovery/presentation/pages/recommendations_page.dart';
 import 'package:mconnect/features/discovery/presentation/providers/recommendations_provider.dart';
 import 'package:mconnect/features/download/data/download_directory_service.dart';
 import 'package:mconnect/features/download/data/repositories/download_manager.dart';
 import 'package:mconnect/features/download/presentation/providers/download_provider.dart';
 import 'package:mconnect/features/download/presentation/providers/download_quality_provider.dart';
+import 'package:mconnect/features/floating_lyrics/data/floating_lyrics_models.dart';
+import 'package:mconnect/features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import 'package:mconnect/features/library/data/my_playlists_repository.dart';
+import 'package:mconnect/features/library/presentation/pages/platform_playlists_page.dart';
 import 'package:mconnect/features/library/presentation/providers/history_provider.dart';
 import 'package:mconnect/features/library/presentation/providers/likes_provider.dart';
 import 'package:mconnect/features/library/presentation/providers/my_playlists_provider.dart';
+import 'package:mconnect/features/local_music/presentation/pages/local_music_page.dart';
+import 'package:mconnect/features/local_music/presentation/providers/local_music_provider.dart';
+import 'package:mconnect/features/local_music/data/local_lyrics_store.dart';
+import 'package:mconnect/features/local_music/data/local_scan_root_store.dart';
+import 'package:mconnect/features/local_music/data/local_track_store.dart';
+import 'package:mconnect/features/local_music/data/online_library_snapshot.dart';
+import 'package:mconnect/features/local_music/data/track_ratings_store.dart';
+import 'package:mconnect/features/new_songs/presentation/pages/new_songs_page.dart';
+import 'package:mconnect/features/new_songs/presentation/providers/new_songs_provider.dart';
 import 'package:mconnect/features/player/data/playback_keep_alive_service.dart';
 import 'package:mconnect/features/player/data/playback_notification_service.dart';
 import 'package:mconnect/features/player/presentation/providers/player_provider.dart';
+import 'package:mconnect/features/smart_playlists/presentation/pages/smart_playlists_page.dart';
+import 'package:mconnect/features/toplist/presentation/pages/toplists_page.dart';
+import 'package:mconnect/features/toplist/presentation/providers/toplists_provider.dart';
+import 'package:mconnect/l10n/ik_discovery_revision_strings.dart';
 import 'package:mconnect/l10n/ik_player_alignment_strings.dart';
 import 'package:mconnect/l10n/ik_strings.dart';
 import 'package:mconnect/l10n/video_strings.dart';
+import 'package:mconnect/l10n/windows_music_strings.dart';
 import 'package:mconnect/models/album.dart';
 import 'package:mconnect/models/artist.dart';
 import 'package:mconnect/models/platform_type.dart';
+import 'package:mconnect/models/playlist.dart';
+import 'package:mconnect/models/recommendation_source.dart';
 import 'package:mconnect/models/song.dart';
+import 'package:mconnect/models/toplist.dart';
+import 'package:mconnect/platform/base/music_platform.dart';
 import 'package:mconnect/platform/base/platform_registry.dart';
 import 'package:mconnect/video_app/data/video_catalog.dart';
 import 'package:mconnect/video_app/data/video_kugou_catalog.dart';
 import 'package:mconnect/video_app/ik/ik_home_page.dart';
+import 'package:mconnect/video_app/ik/ik_lyrics_action.dart';
 import 'package:mconnect/video_app/ik/ik_playback_bar.dart';
 import 'package:mconnect/video_app/ik/ik_theme.dart';
 import 'package:mconnect/video_app/ik/ik_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_controls.dart';
 import 'package:mconnect/video_app/ik/ik_search_workspace.dart';
+import 'package:mconnect/video_app/ik/ik_song_table.dart';
 import 'package:mconnect/video_app/ik/ik_settings_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_spatial_runtime.dart';
+import 'package:mconnect/video_app/ik/ik_strict_settings.dart';
 import 'package:mconnect/video_app/multi_source/multi_source_player.dart';
 import 'package:mconnect/video_app/video_app.dart';
 import 'package:mconnect/video_app/video_preferences.dart';
@@ -54,6 +82,7 @@ import 'package:mconnect/video_app/windows/windows_appearance.dart';
 import 'package:mconnect/video_app/windows/windows_music_preferences.dart';
 import 'package:mconnect/video_app/windows/windows_player_page.dart';
 import 'package:mconnect/video_app/windows/windows_window_controller.dart';
+import 'package:mconnect/video_app/ui/catalog_pages.dart' show videoSongKey;
 import 'package:mconnect/video_app/ui/video_theme.dart';
 
 import 'support/content_page_fakes.dart';
@@ -73,6 +102,7 @@ void main() {
   late AppDatabase suiteDb;
   late Box<dynamic> settings;
   late Zone ioZone;
+  final lyricsCalls = <MethodCall>[];
 
   setUpAll(() async {
     ioZone = Zone.current;
@@ -97,12 +127,16 @@ void main() {
     );
     messenger.setMockMethodCallHandler(
       const MethodChannel('com.mconnect.mconnect/floating_lyrics'),
-      (_) async => true,
+      (call) async {
+        lyricsCalls.add(call);
+        return true;
+      },
     );
   });
 
   setUp(() async {
     binding.trace.clear();
+    lyricsCalls.clear();
     await settings.clear();
     for (final name in ['local_music', 'listening_stats', 'smart_playlists']) {
       await Hive.box<dynamic>(name).clear();
@@ -143,12 +177,94 @@ void main() {
     debugPrint('IK_SEMANTICS 已清理本门临时存储：$target');
   });
 
+  test('W-A11Y-06 Windows AX重挂必须初始化被销毁的后代', () {
+    final trace = _TreeTrace();
+    var completed = false;
+    try {
+      trace.commit([
+        _axGoldenNode(0, [1, 2]),
+        _axGoldenNode(1, [3]),
+        _axGoldenNode(2, []),
+        _axGoldenNode(3, [4]),
+        _axGoldenNode(4, []),
+      ]);
+      expect(trace.issues, isEmpty);
+      trace.step = '黄金场景：3从1移到2，后代4未收到初始化';
+      trace.commit([
+        _axGoldenNode(1, []),
+        _axGoldenNode(2, [3]),
+        _axGoldenNode(3, [4]),
+      ]);
+      // 最终缓存图0→2→3→4完整，AX却已在第一阶段销毁3与4。
+      expect(trace.nodes[3]!.traversal, [4]);
+      expect(trace.nodes.containsKey(4), isTrue);
+      expect(
+        trace.issues,
+        contains(contains('AX待初始化节点4')),
+        reason: '重挂后不能使用上批缓存替代原生已销毁后代的初始化',
+      );
+      completed = true;
+    } finally {
+      trace.finishDiagnostics(completed: completed);
+    }
+  });
+
+  test('W-A11Y-06 Windows AX完整重挂全部24种原始提交顺序均有效', () {
+    var orders = 0;
+    for (final batch in _axNodeOrders([
+      _axGoldenNode(1, []),
+      _axGoldenNode(2, [3]),
+      _axGoldenNode(3, [4]),
+      _axGoldenNode(4, []),
+    ])) {
+      final trace = _TreeTrace();
+      var completed = false;
+      try {
+        trace.commit([
+          _axGoldenNode(0, [1, 2]),
+          _axGoldenNode(1, [3]),
+          _axGoldenNode(2, []),
+          _axGoldenNode(3, [4]),
+          _axGoldenNode(4, []),
+        ]);
+        trace.step = '完整初始化重挂顺序$orders';
+        trace.commit(batch);
+        expect(trace.issues, isEmpty, reason: trace.step);
+        expect(trace.ax.deleted, unorderedEquals([3, 4]));
+        expect(trace.ax.pendingInitialization, isEmpty);
+        expect(trace.ax.nodes[3]!.parent, 2);
+        expect(trace.ax.nodes[4]!.parent, 3);
+        // 单独更新现有后代不应要求整个树重新初始化。
+        trace.commit([_axGoldenNode(4, [])]);
+        expect(trace.issues, isEmpty);
+        expect(trace.ax.deleted, isEmpty);
+        // 普通移除不重挂，也不应要求被销毁的后代继续提交。
+        trace.commit([_axGoldenNode(2, [])]);
+        expect(trace.issues, isEmpty);
+        expect(trace.ax.nodes.keys, unorderedEquals([0, 1, 2]));
+        orders++;
+        completed = true;
+      } finally {
+        trace.finishDiagnostics(completed: completed);
+      }
+    }
+    expect(orders, 24);
+    debugPrint('IK_SEMANTICS AX黄金门完整检查24种提交排列、属性更新与普通移除');
+  });
+
   Future<_RootHarness> mountRoot(
     WidgetTester tester, {
     required bool hasSong,
     bool recommendationsLoading = true,
+    PlayerState? restoredState,
+    Size? viewport,
+    Future<void> Function(Map<String, dynamic>)? audioWrite,
+    _Catalog? catalogOverride,
+    bool realDiscovery = false,
+    bool interactionIo = false,
   }) async {
     await _size(tester);
+    if (viewport != null) tester.view.physicalSize = viewport;
     final db = suiteDb;
     final preferences = VideoPreferences(settings);
     final unified = WindowsMusicPreferences(
@@ -164,7 +280,7 @@ void main() {
       window: const _Window(),
     );
     await tester.runAsync(appearance.initialize);
-    final recommendations = _Recommendations();
+    final recommendations = _Recommendations(realLoading: realDiscovery);
     if (!recommendationsLoading) {
       recommendations.show(
         RecommendationsState(
@@ -174,16 +290,24 @@ void main() {
         ),
       );
     }
-    final catalog = _Catalog();
+    final catalog = catalogOverride ?? _Catalog();
     final container = ProviderContainer(
       overrides: [
         authProvider.overrideWith((_) => _Auth()),
         playerProvider.overrideWith(
-          (_) => _Player(hasSong: hasSong, verifiedAudio: true),
+          (_) => _Player(
+            hasSong: hasSong,
+            verifiedAudio: true,
+            initialState: restoredState,
+          ),
         ),
         audioEffectsSettingsStoreProvider.overrideWithValue(
           MemoryAudioEffectsSettingsStore(),
         ),
+        if (audioWrite != null)
+          audioEffectsSettingsProvider.overrideWith(
+            (_) => IkStrictAudioSettings(write: audioWrite),
+          ),
         ikSpatialRuntimeProvider.overrideWith((ref) {
           final player = ref.read(playerProvider.notifier);
           final coordinator = IkSpatialCoordinator(
@@ -196,9 +320,42 @@ void main() {
           return coordinator;
         }),
         recommendationsProvider.overrideWith((_) => recommendations),
+        if (realDiscovery)
+          newSongsProvider.overrideWith(
+            (_) => NewSongsNotifier(supportedTypes: PlatformType.musicServices),
+          ),
+        if (realDiscovery)
+          toplistsProvider.overrideWith(
+            (_) => ToplistsNotifier(supportedTypes: PlatformType.musicServices),
+          ),
+        if (interactionIo)
+          floatingLyricsProvider.overrideWith(
+            (_) => IkStrictFloatingLyricsNotifier(
+              save: (value) => ioZone.run(
+                () => settings.put('floating_lyrics_settings', value.toJson()),
+              ),
+            ),
+          ),
+        if (interactionIo)
+          localMusicProvider.overrideWith((_) {
+            final notifier = LocalMusicNotifier(
+              trackStore: MemoryLocalTrackStore(),
+              lyricsStore: MemoryLocalLyricsStore(),
+              rootStore: MemoryLocalScanRootStore(),
+              onlineSnapshot: MemoryOnlineLibrarySnapshot(),
+              ratingsStore: MemoryTrackRatingsStore(),
+            );
+            unawaited(notifier.loadFromIndex());
+            return notifier;
+          }),
         myPlaylistsProvider.overrideWith(
           (_) => MyPlaylistsNotifier(
-            repository: MyPlaylistsRepository(storageDirectory: scratch),
+            repository: interactionIo
+                ? _IoPlaylistsRepository(
+                    Directory('${scratch.path}/r10-playlists'),
+                    ioZone,
+                  )
+                : MyPlaylistsRepository(storageDirectory: scratch),
           ),
         ),
         downloadProvider.overrideWith(
@@ -767,15 +924,1504 @@ void main() {
       });
     }
   }
+
+  _testWindows('W-A11Y-06 正式根恢复暂停长歌词经最近播放进入详情', (tester) async {
+    final longLyrics = [
+      '[00:00.00]语义验收前奏',
+      '[00:03.00]语义验收歌词',
+      for (var line = 2; line < 60; line++)
+        '[${(line * 3 ~/ 60).toString().padLeft(2, '0')}:'
+            '${(line * 3 % 60).toString().padLeft(2, '0')}.00]'
+            '语义验收长歌词第$line句',
+    ].join('\n');
+    for (final platform in PlatformType.musicServices) {
+      PlatformRegistry.register(_Content(platform, lyrics: longLyrics));
+    }
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+      restoredState: const PlayerState(
+        currentSong: _track,
+        duration: Duration(minutes: 3),
+        position: Duration(seconds: 3),
+        playlist: [_track],
+      ),
+      viewport: const Size(1186, 793),
+    );
+    await tester.runAsync(
+      () => app.container.read(historyProvider.notifier).recordListen(_track),
+    );
+    app.container
+        .read(sourcePlaybackViewProvider.notifier)
+        .state = const SourcePlaybackView(
+      message: '语义验收恢复曲目，音频格式待确认',
+      sourceName: '语义验收来源',
+    );
+    await _rootDrain(tester, binding.trace);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1180, 1));
+    binding.trace.onIssue = () => _dumpMarkers(tester, binding.trace);
+    final handle = tester.ensureSemantics();
+    try {
+      binding.trace.step = '恢复暂停曲目根启用无障碍';
+      await _rootDrain(tester, binding.trace);
+      binding.trace.expectValid();
+      binding.trace.step = '恢复暂停曲目切入最近播放';
+      await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-3')));
+      await _rootDrain(tester, binding.trace);
+      final before = app.container.read(playerProvider);
+      expect(before.isPlaying, isFalse);
+      expect(before.position, const Duration(seconds: 3));
+      final title = find
+          .descendant(
+            of: find.byType(IkPlaybackBar),
+            matching: find.text(_track.name),
+          )
+          .hitTestable();
+      expect(title, findsOneWidget);
+      binding.trace.step = '恢复暂停长歌词/player进入：来源格式未知、实际窗口尺寸';
+      await tester.tap(title);
+      await _rootDrain(tester, binding.trace);
+      binding.trace.expectValid();
+      final page = find.byType(WindowsPlayerPage);
+      expect(page, findsOneWidget);
+      final playerPage = tester.widget<WindowsPlayerPage>(page);
+      expect(playerPage.position, const Duration(seconds: 3));
+      expect(playerPage.isPlaying, isFalse);
+      expect(playerPage.lyrics, hasLength(60));
+      expect(playerPage.sourceDetails!.format, isNull);
+      await _walkPage(tester, mouse, binding.trace, '恢复暂停长歌词播放详情', owner: page);
+      await _operateLyricsSlider(tester, mouse, binding.trace);
+      binding.trace.step = '恢复暂停详情来源信息展开';
+      await tester.tap(find.byKey(const ValueKey('ik-player-source-expand')));
+      await _rootDrain(tester, binding.trace);
+      await _allTooltips(tester, mouse, binding.trace, '恢复暂停详情来源信息展开后');
+      binding.trace.step = '恢复暂停播放详情返回最近播放';
+      GoRouter.of(tester.element(page)).pop();
+      await _rootDrain(tester, binding.trace);
+      expect(find.byType(IkDesktopWorkspace), findsOneWidget);
+      final after = app.container.read(playerProvider);
+      expect(after.currentSong, before.currentSong);
+      expect(after.position, before.position);
+      expect(after.isPlaying, isFalse);
+      binding.trace.expectValid();
+    } finally {
+      handle.dispose();
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  _testWindows('W-A11Y-07 正式根七个音效滑块禁用启用和保存期间稳定语义', (tester) async {
+    final saveGate = _AudioSaveGate(
+      (values) =>
+          ioZone.run(() => settings.put('audio_effects_settings', values)),
+    );
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+      audioWrite: saveGate.write,
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1190, 1));
+    binding.trace.onIssue = () => _dumpMarkers(tester, binding.trace);
+    final handle = tester.ensureSemantics();
+    try {
+      binding.trace.step = '音效状态门正式根启用无障碍';
+      await _rootDrain(tester, binding.trace);
+      await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+      await _rootDrain(tester, binding.trace);
+      final page = find.byType(IkSettingsWorkspace);
+      final sliders = find.descendant(of: page, matching: find.byType(Slider));
+      expect(sliders, findsNWidgets(7));
+      expect(tester.widget<Slider>(sliders.at(0)).onChanged, isNull);
+      for (var band = 2; band < 7; band++) {
+        expect(tester.widget<Slider>(sliders.at(band)).onChanged, isNull);
+      }
+      await _walkPage(tester, mouse, binding.trace, '音效状态门全部原始滚动位置');
+      await _operateSettingsSliders(tester, mouse, binding.trace, app);
+      binding.trace.step = '音效状态门真实写队列挂起：保存时六个effects滑块暂时禁用';
+      await tester.ensureVisible(sliders.at(1));
+      await _pumpAndCheck(tester, binding.trace);
+      saveGate.hold();
+      await tester.drag(sliders.at(1), const Offset(30, 0));
+      await _rootDrain(tester, binding.trace);
+      expect(saveGate.waiting, isTrue);
+      for (var index = 1; index < 7; index++) {
+        expect(tester.widget<Slider>(sliders.at(index)).onChanged, isNull);
+        expect(
+          _sliderSemantics(
+            tester,
+            sliders.at(index),
+          ).getSemanticsData().hasAction(SemanticsAction.increase),
+          isFalse,
+        );
+      }
+      binding.trace.step = '音效状态门实际写入完成：六个effects滑块恢复可用';
+      saveGate.release();
+      await _rootDrain(tester, binding.trace);
+      for (var index = 1; index < 7; index++) {
+        expect(tester.widget<Slider>(sliders.at(index)).onChanged, isNotNull);
+      }
+      expect(
+        AudioEffectsSettings.fromJson(settings.get('audio_effects_settings'))
+            .fadeDuration,
+        app.container.read(audioEffectsSettingsProvider).fadeDuration,
+      );
+      binding.trace.step = '音效状态门关闭3D：空间强度恢复禁用';
+      final spatial = find.descendant(
+        of: find.byKey(const ValueKey('ik-spatial-emphasis')),
+        matching: find.byType(Switch),
+      );
+      await tester.ensureVisible(spatial);
+      await _pumpAndCheck(tester, binding.trace);
+      await tester.tap(spatial);
+      await _rootDrain(tester, binding.trace);
+      expect(tester.widget<Slider>(sliders.at(0)).onChanged, isNull);
+      binding.trace.step = '音效状态门关闭均衡器：五个频段全部恢复禁用';
+      final equalizer = find.descendant(
+        of: find.byWidgetPredicate(
+          (widget) =>
+              widget is IkSettingRow && widget.title == IkStrings.equalizer,
+        ),
+        matching: find.byType(Switch),
+      );
+      await tester.ensureVisible(equalizer);
+      await _pumpAndCheck(tester, binding.trace);
+      await tester.tap(equalizer);
+      await _rootDrain(tester, binding.trace);
+      for (var band = 2; band < 7; band++) {
+        expect(tester.widget<Slider>(sliders.at(band)).onChanged, isNull);
+      }
+      binding.trace.expectValid();
+    } finally {
+      handle.dispose();
+      saveGate.release();
+      await tester.runAsync(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 60));
+      });
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  _testWindows('W-A11Y-08 正式根播放准备与时长到达时进度保持有效语义', (tester) async {
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+    );
+    binding.trace.onIssue = () => _dumpMarkers(tester, binding.trace);
+    final handle = tester.ensureSemantics();
+    try {
+      binding.trace.step = '进度状态门已有歌曲启用无障碍';
+      await _rootDrain(tester, binding.trace);
+      final progress = find.byKey(const ValueKey('ik-bar-seek'));
+      expect(tester.widget<Slider>(progress).onChanged, isNotNull);
+      final player = app.container.read(playerProvider.notifier) as _Player;
+      binding.trace.step = '进度状态门新播放准备：暂未收到时长，进度必须禁用';
+      await player.playSong(_track);
+      await _rootDrain(tester, binding.trace);
+      expect(tester.widget<Slider>(progress).onChanged, isNull);
+      expect(
+        _sliderSemantics(
+          tester,
+          progress,
+        ).getSemanticsData().hasAction(SemanticsAction.increase),
+        isFalse,
+      );
+      binding.trace.step = '进度状态门音频时长到达：进度恢复增加和减少动作';
+      player.reportDuration(const Duration(minutes: 3));
+      await _rootDrain(tester, binding.trace);
+      expect(tester.widget<Slider>(progress).onChanged, isNotNull);
+      final data = _sliderSemantics(tester, progress).getSemanticsData();
+      expect(data.hasAction(SemanticsAction.increase), isTrue);
+      expect(data.hasAction(SemanticsAction.decrease), isTrue);
+      expect(tester.widget<Slider>(progress).max, 180000);
+      binding.trace.expectValid();
+    } finally {
+      handle.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  _testWindows('R10 新界面真实根五分类、发现三平台、搜索菜单、播放详情与桌面歌词连续AX回归', (tester) async {
+    final content = {
+      for (final platform in PlatformType.musicServices)
+        platform: _R10Content(
+          platform,
+          unsupportedRegions: platform == PlatformType.netease
+              ? const {NewSongRegion.hongKongTaiwan}
+              : const {},
+        ),
+    };
+    for (final platform in content.values) {
+      PlatformRegistry.register(platform);
+    }
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      viewport: const Size(1186, 793),
+      catalogOverride: _Catalog(
+        hotTerms: const ['R10热词一', 'R10热词二'],
+        resultDuration: Duration.zero,
+      ),
+      realDiscovery: true,
+      interactionIo: true,
+    );
+    await tester.runAsync(
+      () => app.container.read(likesProvider.notifier).toggleLike(_track),
+    );
+    final seed = await tester.runAsync(
+      () => app.container
+          .read(myPlaylistsProvider.notifier)
+          .importPlaylist(name: 'R10真实含歌歌单', songs: [_track]),
+    );
+    expect(seed, isNotNull);
+    final seedPlaylist = seed!;
+    await _rootDrain(tester, binding.trace);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1180, 1));
+    binding.trace.onIssue = () => _dumpMarkers(tester, binding.trace);
+    final handle = tester.ensureSemantics();
+    try {
+      binding.trace.step = 'R10真实根启用无障碍：真实喜欢、歌单与三平台推荐已加载';
+      await _rootDrain(tester, binding.trace);
+      expect(app.container.read(likesProvider).songs, hasLength(1));
+      expect(app.container.read(myPlaylistsProvider).playlists, hasLength(1));
+      expect(app.container.read(recommendationsProvider).totalCount, 3);
+      binding.trace.expectValid();
+
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.byKey(const ValueKey('ik-workspace-nav-2')),
+        'R10进入真实音乐库',
+      );
+      const categories = ['likes', 'playlists', 'local', 'downloads', 'smart'];
+      for (final category in categories.skip(1)) {
+        expect(
+          find.byKey(
+            ValueKey('ik-library-content-$category'),
+            skipOffstage: false,
+          ),
+          findsNothing,
+          reason: '未访问分类$category保持lazy，不要求提前构造内容',
+        );
+      }
+      final retained = <String, Element>{};
+      final retainedScrolls =
+          <String, List<({ScrollableState state, double pixels})>>{};
+      for (final category in categories) {
+        final tab = find.byKey(ValueKey('ik-library-category-$category'));
+        await _r10Tap(tester, binding.trace, tab, 'R10切换音乐库分类$category');
+        expect(tab.hitTestable(), findsOneWidget);
+        expect(
+          tester
+              .getSemantics(tab)
+              .getSemanticsData()
+              .flagsCollection
+              .isSelected,
+          Tristate.isTrue,
+        );
+        final owner = find.byKey(ValueKey('ik-library-content-$category'));
+        expect(owner, findsOneWidget);
+        if (category == 'likes') {
+          final row = find.descendant(
+            of: owner,
+            matching: find.byType(IkSongTableRow),
+          );
+          expect(row, findsOneWidget);
+          await _r10CancelSongMenu(
+            tester,
+            mouse,
+            binding.trace,
+            app,
+            row,
+            'R10喜欢歌曲更多取消',
+          );
+        } else if (category == 'playlists') {
+          expect(find.byType(PlatformPlaylistsPage), findsOneWidget);
+          expect(find.text(seedPlaylist.name), findsOneWidget);
+          final before = await _r10Snapshot(tester, app);
+          await _r10Tap(
+            tester,
+            binding.trace,
+            find.descendant(of: owner, matching: find.byTooltip('新建歌单')),
+            'R10实际打开歌单创建对话框',
+          );
+          expect(find.byType(AlertDialog), findsOneWidget);
+          await tester.enterText(
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.byType(TextField),
+            ),
+            'R10取消不应创建此歌单',
+          );
+          await _walkPage(
+            tester,
+            mouse,
+            binding.trace,
+            'R10歌单创建对话框全部滚动与提示',
+            owner: find.byType(AlertDialog),
+          );
+          await _r10Tap(
+            tester,
+            binding.trace,
+            find.descendant(
+              of: find.byType(AlertDialog),
+              matching: find.widgetWithText(TextButton, '取消'),
+            ),
+            'R10实际取消歌单创建',
+          );
+          expect(find.byType(AlertDialog), findsNothing);
+          expect(await _r10Snapshot(tester, app), equals(before));
+          await _r10Tap(
+            tester,
+            binding.trace,
+            find.descendant(
+              of: owner,
+              matching: find.byType(PopupMenuButton<String>),
+            ),
+            'R10实际打开含歌歌单菜单',
+          );
+          final export = find.byWidgetPredicate(
+            (widget) =>
+                widget is PopupMenuItem<String> && widget.value == 'export',
+          );
+          expect(export, findsOneWidget);
+          await _r10Tap(tester, binding.trace, export, 'R10实际打开歌单导出选择');
+          expect(find.byType(Dialog), findsOneWidget);
+          expect(find.text(IkStrings.playlistJson), findsOneWidget);
+          await _walkPage(
+            tester,
+            mouse,
+            binding.trace,
+            'R10导出选择全部滚动与提示',
+            owner: find.byType(Dialog),
+          );
+          await _r10Tap(
+            tester,
+            binding.trace,
+            find.descendant(
+              of: find.byType(Dialog),
+              matching: find.byTooltip(IkStrings.close),
+            ),
+            'R10实际取消歌单导出',
+          );
+          expect(find.byType(Dialog), findsNothing);
+          expect(await _r10Snapshot(tester, app), equals(before));
+        } else if (category == 'local') {
+          expect(find.byType(LocalMusicPage), findsOneWidget);
+          expect(app.container.read(localMusicProvider).tracks, isEmpty);
+          expect(
+            app.container.read(localMusicProvider).selectedDirectory,
+            isNull,
+          );
+        } else if (category == 'downloads') {
+          expect(app.container.read(downloadProvider).tasks, isEmpty);
+          expect(find.text(VideoStrings.noDownloads), findsOneWidget);
+        } else if (category == 'smart') {
+          expect(find.byType(SmartPlaylistsPage), findsOneWidget);
+        }
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10音乐库$category完整遍历',
+          owner: owner,
+        );
+        retained[category] = owner.evaluate().single;
+        retainedScrolls[category] = [
+          for (final scroll in _verticalScrolls(owner))
+            (
+              state: tester.state<ScrollableState>(scroll),
+              pixels: tester.state<ScrollableState>(scroll).position.pixels,
+            ),
+        ];
+        for (final entry in retained.entries) {
+          expect(
+            find
+                .byKey(
+                  ValueKey('ik-library-content-${entry.key}'),
+                  skipOffstage: false,
+                )
+                .evaluate()
+                .single,
+            same(entry.value),
+            reason: '已访问${entry.key}的Element必须留存',
+          );
+        }
+      }
+      for (final category in categories) {
+        await _r10Tap(
+          tester,
+          binding.trace,
+          find.byKey(ValueKey('ik-library-category-$category')),
+          'R10往返音乐库$category保留内容和滚动状态',
+        );
+        final owner = find.byKey(ValueKey('ik-library-content-$category'));
+        expect(owner.evaluate().single, same(retained[category]));
+        final scrolls = _verticalScrolls(owner);
+        expect(scrolls, hasLength(retainedScrolls[category]!.length));
+        for (var index = 0; index < scrolls.length; index++) {
+          final saved = retainedScrolls[category]![index];
+          final actual = tester.state<ScrollableState>(scrolls[index]);
+          expect(actual, same(saved.state));
+          expect(actual.position.pixels, closeTo(saved.pixels, .001));
+        }
+        await _allTooltips(tester, mouse, binding.trace, 'R10返回音乐库$category');
+      }
+      binding.trace.expectValid();
+
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.byKey(const ValueKey('ik-workspace-nav-0')),
+        'R10返回发现并操作真实入口',
+      );
+      final home = find.byType(IkHomePage);
+      final homeElement = home.evaluate().single;
+      await _walkPage(
+        tester,
+        mouse,
+        binding.trace,
+        'R10发现主页全部内容与提示',
+        owner: home,
+      );
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(of: home, matching: find.text(IkStrings.newSongs)),
+        'R10实际进入新歌速递路由',
+      );
+      final newSongs = find.byType(NewSongsPage);
+      expect(tester.widget<NewSongsPage>(newSongs).alignToDesign, isTrue);
+      for (final platform in PlatformType.musicServices) {
+        final fixture = content[platform]!;
+        await _r10SelectPlatform(
+          tester,
+          binding.trace,
+          newSongs,
+          platform,
+          '新歌',
+        );
+        expect(
+          find.descendant(
+            of: newSongs,
+            matching: find.text(fixture.newSong.name),
+          ),
+          findsOneWidget,
+        );
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10新歌${platform.name}成功',
+          owner: newSongs,
+        );
+        await _r10CancelSongMenu(
+          tester,
+          mouse,
+          binding.trace,
+          app,
+          find.descendant(of: newSongs, matching: find.byType(IkSongTableRow)),
+          'R10新歌${platform.name}更多取消',
+          contextual: true,
+        );
+        fixture.newSongsFailure = 'R10${platform.name}新歌网络失败';
+        await _r10Tap(
+          tester,
+          binding.trace,
+          find.descendant(
+            of: newSongs,
+            matching: find.byTooltip(IkDiscoveryRevisionStrings.refresh),
+          ),
+          'R10新歌${platform.name}单来源失败',
+        );
+        final failed = app.container.read(newSongsProvider);
+        expect(failed.errorForPlatform(platform), fixture.newSongsFailure);
+        expect(
+          find.descendant(
+            of: newSongs,
+            matching: find.text(fixture.newSongsFailure!),
+          ),
+          findsOneWidget,
+        );
+        for (final other in PlatformType.musicServices.where(
+          (value) => value != platform,
+        )) {
+          expect(failed.songsForPlatform(other).map(videoSongKey), [
+            videoSongKey(content[other]!.newSong),
+          ]);
+        }
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10新歌${platform.name}错误入口',
+          owner: newSongs,
+        );
+        fixture.newSongsFailure = null;
+        final calls = fixture.newSongCalls.length;
+        await _r10Tap(
+          tester,
+          binding.trace,
+          find.descendant(
+            of: newSongs,
+            matching: find.text(IkDiscoveryRevisionStrings.retry),
+          ),
+          'R10新歌${platform.name}实际重试',
+        );
+        expect(fixture.newSongCalls, hasLength(calls + 1));
+        expect(
+          app.container.read(newSongsProvider).errorForPlatform(platform),
+          isNull,
+        );
+        expect(
+          find.descendant(
+            of: newSongs,
+            matching: find.text(fixture.newSong.name),
+          ),
+          findsOneWidget,
+        );
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10新歌${platform.name}重试恢复',
+          owner: newSongs,
+        );
+      }
+      var regionViews = 0;
+      for (final region in newSongRegionLabels.keys) {
+        await _r10Tap(
+          tester,
+          binding.trace,
+          _r10Chip(newSongs, newSongRegionLabels[region]!),
+          'R10新歌实际选择地区${region.name}',
+        );
+        expect(app.container.read(newSongsProvider).region, region);
+        for (final platform in PlatformType.musicServices) {
+          final fixture = content[platform]!;
+          await _r10SelectPlatform(
+            tester,
+            binding.trace,
+            newSongs,
+            platform,
+            '新歌地区${region.name}',
+          );
+          expect(fixture.newSongCalls.last.region, region);
+          final state = app.container.read(newSongsProvider);
+          expect(state.errorForPlatform(platform), isNull);
+          if (fixture.unsupportedRegions.contains(region)) {
+            expect(
+              state.noticeForPlatform(platform),
+              contains(newSongRegionLabels[region]),
+            );
+            expect(
+              find.byKey(ValueKey('new-songs-notice-${platform.name}')),
+              findsOneWidget,
+            );
+            expect(
+              find.descendant(
+                of: newSongs,
+                matching: find.text(IkDiscoveryRevisionStrings.retry),
+              ),
+              findsNothing,
+            );
+          } else {
+            expect(state.songsForPlatform(platform), hasLength(1));
+            expect(
+              find.descendant(
+                of: newSongs,
+                matching: find.text(fixture.newSong.name),
+              ),
+              findsOneWidget,
+            );
+          }
+          await _walkPage(
+            tester,
+            mouse,
+            binding.trace,
+            'R10新歌${platform.name}/${region.name}完整遍历',
+            owner: newSongs,
+          );
+          regionViews++;
+        }
+      }
+      expect(
+        regionViews,
+        PlatformType.musicServices.length * newSongRegionLabels.length,
+      );
+      final unsupported = content[PlatformType.kugou]!;
+      unsupported.newSongsSupported = false;
+      final beforeUnsupported = unsupported.newSongCalls.length;
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(
+          of: newSongs,
+          matching: find.byTooltip(IkDiscoveryRevisionStrings.refresh),
+        ),
+        'R10酷狗能力不支持不能调用新歌API',
+      );
+      expect(unsupported.newSongCalls, hasLength(beforeUnsupported));
+      expect(
+        app.container
+            .read(newSongsProvider)
+            .noticeForPlatform(PlatformType.kugou),
+        '${PlatformType.kugou.displayName}暂不支持新歌速递',
+      );
+      expect(
+        app.container
+            .read(newSongsProvider)
+            .errorForPlatform(PlatformType.kugou),
+        isNull,
+      );
+      expect(
+        find.descendant(
+          of: newSongs,
+          matching: find.text(IkDiscoveryRevisionStrings.retry),
+        ),
+        findsNothing,
+      );
+      await _walkPage(
+        tester,
+        mouse,
+        binding.trace,
+        'R10新歌能力notice完整遍历',
+        owner: newSongs,
+      );
+      unsupported.newSongsSupported = true;
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(of: newSongs, matching: find.byType(BackButton)),
+        'R10新歌返回真实发现页',
+      );
+      expect(home.evaluate().single, same(homeElement));
+
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(of: home, matching: find.text(IkStrings.toplists)),
+        'R10实际进入榜单路由',
+      );
+      final toplists = find.byType(ToplistsPage);
+      expect(tester.widget<ToplistsPage>(toplists).alignToDesign, isTrue);
+      for (final platform in PlatformType.musicServices) {
+        final fixture = content[platform]!;
+        await _r10SelectPlatform(
+          tester,
+          binding.trace,
+          toplists,
+          platform,
+          '榜单',
+        );
+        expect(
+          find.descendant(
+            of: toplists,
+            matching: find.text(fixture.toplist.name),
+          ),
+          findsOneWidget,
+        );
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10榜单${platform.name}成功',
+          owner: toplists,
+        );
+        fixture.toplistsFailure = 'R10${platform.name}榜单网络失败';
+        await _r10Tap(
+          tester,
+          binding.trace,
+          find.descendant(
+            of: toplists,
+            matching: find.byTooltip(IkDiscoveryRevisionStrings.refresh),
+          ),
+          'R10榜单${platform.name}单来源失败并保留旧行',
+        );
+        final failed = app.container.read(toplistsProvider);
+        expect(
+          failed.errorForPlatform(platform),
+          contains(fixture.toplistsFailure),
+        );
+        expect(failed.isOffline(platform), isTrue);
+        expect(
+          find.descendant(
+            of: toplists,
+            matching: find.textContaining(fixture.toplistsFailure!),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(of: toplists, matching: find.text('离线缓存')),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: toplists,
+            matching: find.text(fixture.toplist.name),
+          ),
+          findsOneWidget,
+        );
+        for (final other in PlatformType.musicServices.where(
+          (value) => value != platform,
+        )) {
+          expect(failed.toplistsForPlatform(other).map((item) => item.id), [
+            content[other]!.toplist.id,
+          ]);
+        }
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10榜单${platform.name}错误入口',
+          owner: toplists,
+        );
+        fixture.toplistsFailure = null;
+        final calls = fixture.toplistLoads;
+        await _r10Tap(
+          tester,
+          binding.trace,
+          find.descendant(
+            of: toplists,
+            matching: find.text(IkDiscoveryRevisionStrings.retry),
+          ),
+          'R10榜单${platform.name}实际重试',
+        );
+        expect(fixture.toplistLoads, calls + 1);
+        expect(
+          app.container.read(toplistsProvider).errorForPlatform(platform),
+          isNull,
+        );
+        expect(
+          app.container.read(toplistsProvider).isOffline(platform),
+          isFalse,
+        );
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10榜单${platform.name}重试恢复',
+          owner: toplists,
+        );
+      }
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(of: toplists, matching: find.byType(BackButton)),
+        'R10榜单返回真实发现页',
+      );
+      expect(home.evaluate().single, same(homeElement));
+
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(of: home, matching: find.text(IkStrings.browse)),
+        'R10实际进入推荐路由',
+      );
+      final recommendations = find.byType(RecommendationsPage);
+      expect(
+        tester.widget<RecommendationsPage>(recommendations).alignToDesign,
+        isTrue,
+      );
+      for (final platform in PlatformType.musicServices) {
+        final fixture = content[platform]!;
+        await _r10SelectPlatform(
+          tester,
+          binding.trace,
+          recommendations,
+          platform,
+          '推荐',
+        );
+        expect(
+          find.descendant(
+            of: recommendations,
+            matching: find.text(fixture.recommendedSong.name),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: recommendations,
+            matching: find.text(
+              IkDiscoveryRevisionStrings.sourceLabel(
+                fixture.source,
+                platform: platform,
+                loggedIn: false,
+              ),
+            ),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: recommendations,
+            matching: find.text(IkDiscoveryRevisionStrings.dailyRecommendation),
+          ),
+          findsNothing,
+        );
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10推荐${platform.name}成功且来源可读',
+          owner: recommendations,
+        );
+        await _r10CancelSongMenu(
+          tester,
+          mouse,
+          binding.trace,
+          app,
+          find.descendant(
+            of: recommendations,
+            matching: find.byType(IkSongTableRow),
+          ),
+          'R10推荐${platform.name}更多取消',
+          contextual: true,
+        );
+        fixture.recommendationFailure = 'R10${platform.name}推荐网络失败';
+        await _r10Tap(
+          tester,
+          binding.trace,
+          find.descendant(
+            of: recommendations,
+            matching: find.byTooltip(IkDiscoveryRevisionStrings.refresh),
+          ),
+          'R10推荐${platform.name}单来源失败',
+        );
+        final failed = app.container.read(recommendationsProvider);
+        expect(
+          failed.errorsByPlatform[platform],
+          fixture.recommendationFailure,
+        );
+        expect(
+          find.descendant(
+            of: recommendations,
+            matching: find.text(fixture.recommendationFailure!),
+          ),
+          findsOneWidget,
+        );
+        for (final other in PlatformType.musicServices.where(
+          (value) => value != platform,
+        )) {
+          expect(failed.songsForPlatform(other).map(videoSongKey), [
+            videoSongKey(content[other]!.recommendedSong),
+          ]);
+        }
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10推荐${platform.name}错误入口',
+          owner: recommendations,
+        );
+        fixture.recommendationFailure = null;
+        final calls = fixture.recommendationLoads;
+        await _r10Tap(
+          tester,
+          binding.trace,
+          find.descendant(
+            of: recommendations,
+            matching: find.text(IkDiscoveryRevisionStrings.retry),
+          ),
+          'R10推荐${platform.name}实际重试',
+        );
+        expect(fixture.recommendationLoads, calls + 1);
+        expect(
+          app.container
+              .read(recommendationsProvider)
+              .errorsByPlatform[platform],
+          isNull,
+        );
+        expect(
+          find.descendant(
+            of: recommendations,
+            matching: find.text(fixture.recommendedSong.name),
+          ),
+          findsOneWidget,
+        );
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10推荐${platform.name}重试恢复',
+          owner: recommendations,
+        );
+      }
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(of: recommendations, matching: find.byType(BackButton)),
+        'R10推荐返回真实发现页',
+      );
+      expect(home.evaluate().single, same(homeElement));
+      binding.trace.expectValid();
+
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.byKey(const ValueKey('ik-workspace-nav-1')),
+        'R10进入共享搜索空态',
+      );
+      final searchPage = find.byType(IkSearchWorkspace);
+      final search = tester.widget<IkSearchWorkspace>(searchPage).search;
+      expect(search.query, isEmpty);
+      for (final term in app.catalog.hotTerms) {
+        expect(
+          find.descendant(
+            of: searchPage,
+            matching: find.widgetWithText(ActionChip, term),
+          ),
+          findsOneWidget,
+        );
+      }
+      await _walkPage(
+        tester,
+        mouse,
+        binding.trace,
+        'R10共享搜索空态全部热词和推荐',
+        owner: searchPage,
+      );
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(
+          of: searchPage,
+          matching: find.widgetWithText(ActionChip, app.catalog.hotTerms.first),
+        ),
+        'R10实际点击热词进入搜索结果',
+      );
+      expect(search.query, app.catalog.hotTerms.first);
+      for (final platform in PlatformType.musicServices) {
+        expect(search.groups[platform]!.songs, hasLength(3));
+        expect(
+          app.catalog.calls.where(
+            (call) => call.platform == platform && call.query == search.query,
+          ),
+          hasLength(1),
+        );
+      }
+      await _walkPage(
+        tester,
+        mouse,
+        binding.trace,
+        'R10共享搜索全部来源与结果行',
+        owner: searchPage,
+      );
+      final chosen = search.groups[PlatformType.qq]!.songs[1];
+      final chosenRow = find.descendant(
+        of: searchPage,
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is IkSongTableRow &&
+              videoSongKey(widget.song) == videoSongKey(chosen),
+        ),
+      );
+      await _r10CancelSongMenu(
+        tester,
+        mouse,
+        binding.trace,
+        app,
+        chosenRow,
+        'R10搜索结果更多取消',
+      );
+      _r10ScrollObservation(
+        tester,
+        binding.trace,
+        '行ensure之前',
+        searchPage,
+        chosenRow,
+        chosen.name,
+      );
+      await tester.ensureVisible(chosenRow);
+      _r10ScrollObservation(
+        tester,
+        binding.trace,
+        '行ensure之后',
+        searchPage,
+        chosenRow,
+        chosen.name,
+      );
+      await _rootDrain(tester, binding.trace);
+      final searchElement = searchPage.evaluate().single;
+      final searchScroll = tester.state<ScrollableState>(
+        _verticalScrolls(searchPage).single,
+      );
+      var searchPixels = searchScroll.position.pixels;
+      void observeSearch(String phase) => _r10ScrollObservation(
+        tester,
+        binding.trace,
+        phase,
+        searchPage,
+        chosenRow,
+        chosen.name,
+        capturedPage: searchElement,
+        capturedScroll: searchScroll,
+        baseline: searchPixels,
+      );
+
+      observeSearch('行drain之后原baseline');
+      final sharedText = tester
+          .widget<TextField>(find.byKey(const ValueKey('ik-workspace-search')))
+          .controller!
+          .text;
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(of: chosenRow, matching: find.text(chosen.name)),
+        'R10实际点击结果行播放并进入详情prepare',
+        onPhase: observeSearch,
+        beforeTap: () => searchPixels = searchScroll.position.pixels,
+      );
+      observeSearch('播放prepare已进入详情');
+      final playerPage = find.byType(WindowsPlayerPage);
+      expect(playerPage, findsOneWidget);
+      final progress = find.byKey(const ValueKey('ik-bar-seek'));
+      expect(app.container.read(playerProvider).currentSong, chosen);
+      expect(
+        app.container.read(playerProvider).playlist.map(videoSongKey),
+        search.groups[PlatformType.qq]!.songs.map(videoSongKey),
+      );
+      expect(tester.widget<Slider>(progress).onChanged, isNull);
+      expect(
+        _sliderSemantics(
+          tester,
+          progress,
+        ).getSemanticsData().hasAction(SemanticsAction.increase),
+        isFalse,
+      );
+      binding.trace.step = 'R10真实播放器音频时长到达ready';
+      (app.container.read(playerProvider.notifier) as _Player).reportDuration(
+        const Duration(minutes: 3),
+      );
+      await _rootDrain(tester, binding.trace);
+      observeSearch('音频时长ready之后');
+      expect(tester.widget<Slider>(progress).onChanged, isNotNull);
+      expect(tester.widget<Slider>(progress).max, 180000);
+      expect(
+        _sliderSemantics(
+          tester,
+          progress,
+        ).getSemanticsData().hasAction(SemanticsAction.increase),
+        isTrue,
+      );
+      expect(
+        _sliderSemantics(
+          tester,
+          progress,
+        ).getSemanticsData().hasAction(SemanticsAction.decrease),
+        isTrue,
+      );
+      await _walkPage(
+        tester,
+        mouse,
+        binding.trace,
+        'R10实际播放详情全部滚动区与提示',
+        owner: playerPage,
+      );
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(
+          of: playerPage,
+          matching: find.text(WindowsMusicStrings.back),
+        ),
+        'R10播放详情实际返回搜索',
+      );
+      observeSearch('详情实际返回之后');
+      expect(searchPage.evaluate().single, same(searchElement));
+      expect(
+        tester.state<ScrollableState>(_verticalScrolls(searchPage).single),
+        same(searchScroll),
+      );
+      expect(searchScroll.position.pixels, closeTo(searchPixels, .001));
+      expect(search.query, app.catalog.hotTerms.first);
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('ik-workspace-search')),
+            )
+            .controller!
+            .text,
+        sharedText,
+      );
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(
+          of: find.byType(IkPlaybackBar),
+          matching: find.text(chosen.name),
+        ),
+        'R10实际点击播放栏歌曲名再次进入详情',
+      );
+      expect(playerPage, findsOneWidget);
+      await _walkPage(
+        tester,
+        mouse,
+        binding.trace,
+        'R10播放栏进入详情完整遍历',
+        owner: playerPage,
+      );
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.descendant(
+          of: playerPage,
+          matching: find.text(WindowsMusicStrings.back),
+        ),
+        'R10播放栏详情实际返回搜索',
+      );
+      expect(searchPage.evaluate().single, same(searchElement));
+      expect(searchScroll.position.pixels, closeTo(searchPixels, .001));
+      binding.trace.expectValid();
+
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.byKey(const ValueKey('ik-workspace-nav-4')),
+        'R10进入真实设置',
+      );
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.byKey(const ValueKey('ik-settings-lyrics')),
+        'R10进入桌面歌词设置区',
+      );
+      final lyricsToggle = find.byKey(const ValueKey('ik-workspace-lyrics'));
+      expect(tester.widget<Switch>(lyricsToggle).value, isFalse);
+      lyricsCalls.clear();
+      for (final enabled in [true, false]) {
+        final calls = lyricsCalls.length;
+        await _r10Tap(
+          tester,
+          binding.trace,
+          lyricsToggle,
+          'R10实际${enabled ? '开启' : '关闭'}桌面歌词并落盘',
+        );
+        expect(tester.widget<Switch>(lyricsToggle).value, enabled);
+        expect(app.container.read(floatingLyricsProvider).enabled, enabled);
+        expect(app.container.read(ikLyricsActionProvider), isFalse);
+        expect(app.container.read(ikLyricsIssueProvider), isNull);
+        expect(
+          FloatingLyricsSettings.fromJson(
+            settings.get('floating_lyrics_settings'),
+          ).enabled,
+          enabled,
+        );
+        final actions = lyricsCalls
+            .skip(calls)
+            .where((call) => call.method == (enabled ? 'show' : 'hide'));
+        expect(actions, isNotEmpty);
+        if (enabled) {
+          expect((actions.first.arguments as Map)['enabled'], isTrue);
+        }
+        await _walkPage(
+          tester,
+          mouse,
+          binding.trace,
+          'R10桌面歌词${enabled ? '开' : '关'}完整设置区',
+          owner: find.byType(IkSettingsWorkspace),
+        );
+      }
+      await _r10Tap(
+        tester,
+        binding.trace,
+        find.byKey(const ValueKey('ik-workspace-nav-2')),
+        'R10最终返回音乐库核验五类状态',
+      );
+      for (final entry in retained.entries) {
+        expect(
+          find
+              .byKey(
+                ValueKey('ik-library-content-${entry.key}'),
+                skipOffstage: false,
+              )
+              .evaluate()
+              .single,
+          same(entry.value),
+        );
+      }
+      expect(app.container.read(likesProvider).songs, hasLength(1));
+      expect(
+        app.container
+            .read(myPlaylistsProvider)
+            .playlists
+            .map((playlist) => playlist.id),
+        [seedPlaylist.id],
+      );
+      expect(
+        await tester.runAsync(
+          () => app.container
+              .read(myPlaylistsProvider.notifier)
+              .getSongs(seedPlaylist.id),
+        ),
+        hasLength(1),
+      );
+      expect(app.container.read(downloadProvider).tasks, isEmpty);
+      debugPrint(
+        'IK_SEMANTICS R10完整执行5音乐库分类、9发现平台成功/失败/重试、$regionViews地区平台视图、能力notice、8歌曲菜单取消、创建与导出取消、2播放详情往返及2次歌词开关',
+      );
+      binding.trace.expectValid();
+    } finally {
+      handle.dispose();
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+}
+
+Future<void> _r10Tap(
+  WidgetTester tester,
+  _TreeTrace trace,
+  Finder target,
+  String stage, {
+  void Function(String)? onPhase,
+  VoidCallback? beforeTap,
+}) async {
+  trace.step = stage;
+  expect(target, findsOneWidget, reason: stage);
+  onPhase?.call('点击目标ensure之前');
+  await tester.ensureVisible(target);
+  onPhase?.call('点击目标ensure之后');
+  await _pumpAndCheck(tester, trace);
+  beforeTap?.call();
+  onPhase?.call('点击目标pump之后实际tap之前');
+  await tester.tap(target.hitTestable());
+  onPhase?.call('实际tap之后');
+  await _rootDrain(tester, trace);
+  onPhase?.call('实际tap的drain之后');
+}
+
+void _r10ScrollObservation(
+  WidgetTester tester,
+  _TreeTrace trace,
+  String phase,
+  Finder page,
+  Finder row,
+  String songName, {
+  Element? capturedPage,
+  ScrollableState? capturedScroll,
+  double? baseline,
+}) {
+  if (!trace._recordEnabled) return;
+  final pageElement = capturedPage ?? page.evaluate().single;
+  final scroll =
+      capturedScroll ??
+      tester.state<ScrollableState>(_verticalScrolls(page).single);
+  final target = find.descendant(of: row, matching: find.text(songName));
+  Map<String, Object?> geometry(Element element) {
+    final render = element.findRenderObject();
+    final ancestors = <Map<String, Object?>>[];
+    element.visitAncestorElements((ancestor) {
+      ancestors.add({
+        'element': identityHashCode(ancestor),
+        'widget': ancestor.widget.runtimeType.toString(),
+      });
+      return true;
+    });
+    return {
+      'element': identityHashCode(element),
+      'widget': element.widget.runtimeType.toString(),
+      'mounted': element.mounted,
+      'ancestors': ancestors,
+      'nearestScroll': Scrollable.maybeOf(element) == null
+          ? null
+          : identityHashCode(Scrollable.maybeOf(element)!),
+      'render': render == null ? null : identityHashCode(render),
+      'renderType': render?.runtimeType.toString(),
+      'attached': render?.attached,
+      if (render is RenderBox && render.hasSize) ...{
+        'size': [render.size.width, render.size.height],
+        'globalOrigin': [
+          render.localToGlobal(Offset.zero).dx,
+          render.localToGlobal(Offset.zero).dy,
+        ],
+      },
+    };
+  }
+
+  trace._record({
+    'kind': 'r10-scroll',
+    'phase': phase,
+    'baseline': baseline,
+    'pixels': scroll.position.pixels,
+    'minScrollExtent': scroll.position.minScrollExtent,
+    'maxScrollExtent': scroll.position.maxScrollExtent,
+    'viewportDimension': scroll.position.viewportDimension,
+    'page': geometry(pageElement),
+    'scrollState': identityHashCode(scroll),
+    'scrollContext': geometry(scroll.context as Element),
+    'row': [for (final element in row.evaluate()) geometry(element)],
+    'target': [for (final element in target.evaluate()) geometry(element)],
+  });
+}
+
+Finder _r10Chip(Finder owner, String label) => find.descendant(
+  of: owner,
+  matching: find.widgetWithText(ChoiceChip, label),
+);
+
+Future<void> _r10SelectPlatform(
+  WidgetTester tester,
+  _TreeTrace trace,
+  Finder owner,
+  PlatformType platform,
+  String page,
+) async {
+  await _r10Tap(
+    tester,
+    trace,
+    _r10Chip(owner, platform.displayName),
+    'R10$page实际切换${platform.name}',
+  );
+  for (final type in PlatformType.musicServices) {
+    final chip = _r10Chip(owner, type.displayName);
+    expect(chip.hitTestable(), findsOneWidget);
+    expect(tester.widget<ChoiceChip>(chip).selected, type == platform);
+    expect(
+      tester.getSemantics(chip).getSemanticsData().flagsCollection.isSelected,
+      type == platform ? Tristate.isTrue : Tristate.isFalse,
+    );
+  }
+}
+
+Future<Map<String, Object?>> _r10Snapshot(
+  WidgetTester tester,
+  _RootHarness app,
+) async {
+  return (await tester.runAsync<Map<String, Object?>>(() async {
+    final myPlaylists = app.container.read(myPlaylistsProvider);
+    final player = app.container.read(playerProvider);
+    final search = tester
+        .widget<IkSearchWorkspace>(
+          find.byType(IkSearchWorkspace, skipOffstage: false),
+        )
+        .search;
+    return {
+      'songs': [
+        for (final row
+            in await app.db
+                .customSelect('SELECT * FROM songs ORDER BY platform, id')
+                .get())
+          row.data,
+      ],
+      'likes': [
+        for (final row
+            in await app.db
+                .customSelect('SELECT * FROM user_likes ORDER BY id')
+                .get())
+          row.data,
+      ],
+      'localLikes': app.container
+          .read(likesProvider)
+          .songs
+          .map(videoSongKey)
+          .toList(),
+      'playlists': [
+        for (final playlist in myPlaylists.playlists)
+          {
+            'id': playlist.id,
+            'name': playlist.name,
+            'songs':
+                (await app.container
+                        .read(myPlaylistsProvider.notifier)
+                        .getSongs(playlist.id))
+                    .map(videoSongKey)
+                    .toList(),
+          },
+      ],
+      'downloads': app.container
+          .read(downloadProvider)
+          .tasks
+          .map((task) => task.toJson())
+          .toList(),
+      'player': {
+        'song': player.currentSong == null
+            ? null
+            : videoSongKey(player.currentSong!),
+        'playlist': player.playlist.map(videoSongKey).toList(),
+        'index': player.currentIndex,
+        'position': player.position.inMilliseconds,
+        'duration': player.duration.inMilliseconds,
+        'playing': player.isPlaying,
+      },
+      'search': {
+        'query': search.query,
+        'groups': {
+          for (final entry in search.groups.entries)
+            entry.key.name: entry.value.songs.map(videoSongKey).toList(),
+        },
+      },
+    };
+  }))!;
+}
+
+Future<void> _r10CancelSongMenu(
+  WidgetTester tester,
+  TestGesture mouse,
+  _TreeTrace trace,
+  _RootHarness app,
+  Finder row,
+  String stage, {
+  bool contextual = false,
+}) async {
+  final more = find.descendant(
+    of: row,
+    matching: find.byTooltip(IkStrings.more),
+  );
+  await tester.ensureVisible(more);
+  await _rootDrain(tester, trace);
+  final before = await _r10Snapshot(tester, app);
+  await _r10Tap(tester, trace, more, '$stage：实际打开更多');
+  final items = contextual
+      ? find.byType(PopupMenuItem<SongAction>)
+      : find.byType(PopupMenuItem<String>);
+  expect(items, findsWidgets);
+  await _allTooltips(tester, mouse, trace, '$stage：菜单已显示');
+  trace.step = '$stage：实际按Escape取消';
+  await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+  await _rootDrain(tester, trace);
+  expect(items, findsNothing);
+  expect(
+    await _r10Snapshot(tester, app),
+    equals(before),
+    reason: '$stage不能改歌曲、喜欢、歌单、下载、播放器或查询',
+  );
 }
 
 void _testWindows(String name, Future<void> Function(WidgetTester) body) {
   testWidgets(name, (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     PlatformUtils.setDebugOverride(AppPlatform.windows);
+    var completed = false;
     try {
       await body(tester);
+      completed = true;
     } finally {
+      (TestWidgetsFlutterBinding.instance as _SemanticsBinding).trace
+          .finishDiagnostics(completed: completed);
       // Flutter在test body返回时验不变量，tearDown清理平台变量已太迟。
       debugDefaultTargetPlatformOverride = null;
       PlatformUtils.setDebugOverride(null);
@@ -816,10 +2462,33 @@ Future<void> _pumpAndCheck(
   _TreeTrace trace, [
   Duration duration = Duration.zero,
 ]) async {
-  await tester.pump(duration);
-  final error = tester.takeException();
-  if (error != null) trace.dump('框架异常：$error');
-  expect(error, isNull, reason: trace.step);
+  final pumpId = trace.beginPump();
+  final rawStart = trace.batches.length;
+  final axStart = trace.ax.commits;
+  Object? frameworkError, thrown;
+  var completed = false;
+  try {
+    await tester.pump(duration);
+    final error = tester.takeException();
+    frameworkError = error;
+    if (error != null) trace.dump('框架异常：$error');
+    expect(error, isNull, reason: trace.step);
+    expect(trace.issues, isEmpty, reason: trace.issues.firstOrNull);
+    completed = true;
+  } catch (error) {
+    thrown = error;
+    rethrow;
+  } finally {
+    trace.recordPump(
+      pumpId,
+      rawStart: rawStart,
+      axStart: axStart,
+      duration: duration,
+      completed: completed,
+      frameworkError: frameworkError,
+      thrown: thrown,
+    );
+  }
 }
 
 Future<void> _rootDrain(WidgetTester tester, _TreeTrace trace) async {
@@ -1163,16 +2832,123 @@ class _Auth extends AuthNotifier {
 }
 
 class _Content extends FakeContentPlatform {
-  _Content(PlatformType platform) : super(type: platform);
+  _Content(PlatformType platform, {String? lyrics})
+    : _lyrics = lyrics ?? '[00:00.00]语义验收歌词\n[00:10.00]语义验收下一句',
+      super(type: platform);
+  final String _lyrics;
   @override
-  Future<String?> getLyrics(String songId) async =>
-      '[00:00.00]语义验收歌词\n[00:10.00]语义验收下一句';
+  Future<String?> getLyrics(String songId) async => _lyrics;
+}
+
+class _R10Content extends _Content {
+  _R10Content(super.platform, {this.unsupportedRegions = const {}});
+  final Set<NewSongRegion> unsupportedRegions;
+  bool newSongsSupported = true;
+  String? newSongsFailure, toplistsFailure, recommendationFailure;
+  int toplistLoads = 0, recommendationLoads = 0;
+
+  Song _song(String kind, String label) => Song(
+    id: 'r10-${type.name}-$kind',
+    name: 'R10${type.displayName}$label',
+    platform: type,
+    artists: _track.artists,
+    album: _track.album,
+    albumId: _track.albumId,
+  );
+  Song get newSong => _song('new', '新歌');
+  Song get recommendedSong => _song('recommended', '推荐歌曲');
+  Toplist get toplist => Toplist(
+    id: type == PlatformType.qq ? qqHotToplistId : 'r10-${type.name}-chart',
+    name: 'R10${type.displayName}榜单',
+    songCount: 1,
+  );
+  RecommendationSource get source => RecommendationSource(
+    platform: type,
+    kind: switch (type) {
+      PlatformType.netease => RecommendationKind.personalizedDaily,
+      PlatformType.qq => RecommendationKind.fallbackToplist,
+      _ => RecommendationKind.fallbackHomepage,
+    },
+    label: '${type.displayName}推荐',
+    note: type == PlatformType.qq ? '未登录，来源为热歌榜' : '本门按平台返回实际来源',
+  );
+
+  @override
+  bool get supportsNewSongs => newSongsSupported;
+  @override
+  bool get supportsDailyRecommendations => true;
+  @override
+  Future<List<Song>> getNewSongs({
+    int limit = 100,
+    NewSongRegion region = NewSongRegion.all,
+  }) async {
+    newSongCalls.add((limit: limit, region: region));
+    if (newSongsFailure != null) {
+      throw ApiException(message: newSongsFailure!, code: ApiErrorCode.network);
+    }
+    if (unsupportedRegions.contains(region)) {
+      throw UnsupportedActionException(
+        type.displayName,
+        details: '${newSongRegionLabels[region]}地区暂不支持',
+      );
+    }
+    return [newSong];
+  }
+
+  @override
+  Future<List<Toplist>> getToplists() async {
+    toplistLoads++;
+    if (toplistsFailure != null) {
+      throw ApiException(message: toplistsFailure!, code: ApiErrorCode.network);
+    }
+    return [toplist];
+  }
+
+  @override
+  Future<RecommendationResult> getDailyRecommendation() async {
+    recommendationLoads++;
+    return recommendationFailure == null
+        ? RecommendationResult(songs: [recommendedSong], source: source)
+        : RecommendationResult(
+            error: recommendationFailure,
+            source: RecommendationSource(
+              platform: type,
+              kind: RecommendationKind.unavailable,
+              label: '不可用',
+            ),
+          );
+  }
+}
+
+/// 真实仓库完整IO操作离开FakeAsync，仍只读写本门目录。
+class _IoPlaylistsRepository extends MyPlaylistsRepository {
+  _IoPlaylistsRepository(Directory directory, this.ioZone)
+    : super(storageDirectory: directory);
+  final Zone ioZone;
+  @override
+  Future<List<Playlist>> getPlaylists() => ioZone.run(super.getPlaylists);
+  @override
+  Future<Playlist> createPlaylist(String name) =>
+      ioZone.run(() => super.createPlaylist(name));
+  @override
+  Future<List<Song>> getSongs(String playlistId) =>
+      ioZone.run(() => super.getSongs(playlistId));
+  @override
+  Future<String?> exportPlaylistLink(String playlistId) =>
+      ioZone.run(() => super.exportPlaylistLink(playlistId));
 }
 
 class _Catalog extends ExpandedVideoCatalog {
+  _Catalog({
+    this.hotTerms = const [],
+    this.resultDuration = const Duration(minutes: 3),
+  });
+  final List<String> hotTerms;
+  final Duration resultDuration;
+  final calls = <({PlatformType platform, String query, int page})>[];
   bool fail = false;
   @override
-  Future<List<String>> hotSearch() async => const [];
+  Future<List<String>> hotSearch() async => hotTerms;
   @override
   Future<VideoPage> search(
     PlatformType platform,
@@ -1180,6 +2956,7 @@ class _Catalog extends ExpandedVideoCatalog {
     int page = 1,
     int limit = 30,
   }) async {
+    calls.add((platform: platform, query: query, page: page));
     if (fail) {
       throw const VideoFailure(
         VideoFailureKind.network,
@@ -1196,7 +2973,7 @@ class _Catalog extends ExpandedVideoCatalog {
             platform: platform,
             artists: _track.artists,
             album: _track.album,
-            duration: const Duration(minutes: 3),
+            duration: resultDuration,
           ),
       ],
       page: page,
@@ -1207,30 +2984,71 @@ class _Catalog extends ExpandedVideoCatalog {
 }
 
 class _Recommendations extends RecommendationsNotifier {
-  _Recommendations() {
+  _Recommendations({this.realLoading = false})
+    : super(supportedTypes: realLoading ? PlatformType.musicServices : null) {
     state = const RecommendationsState(isLoading: true);
   }
+  final bool realLoading;
   @override
-  Future<void> loadRecommendations() async {}
+  Future<void> loadRecommendations() async {
+    if (realLoading) await super.loadRecommendations();
+  }
+
   void show(RecommendationsState next) => state = next;
 }
 
+/// 按生产IkStrictAudioSettings的真实写队列停在落盘前，验收可见busy帧。
+class _AudioSaveGate {
+  _AudioSaveGate(this._write);
+  final Future<void> Function(Map<String, dynamic>) _write;
+  Completer<void>? _hold;
+  bool waiting = false;
+
+  void hold() => _hold = Completer<void>();
+  void release() {
+    _hold?.complete();
+    _hold = null;
+  }
+
+  Future<void> write(Map<String, dynamic> values) async {
+    final hold = _hold;
+    if (hold != null) {
+      waiting = true;
+      await hold.future;
+      waiting = false;
+    }
+    await _write(values);
+  }
+}
+
 class _Player extends PlayerNotifier {
-  _Player({bool hasSong = true, bool verifiedAudio = false})
-    : super(
-        audioController: verifiedAudio ? _Audio() : IdleAudioController(),
-        audioControllerFactory: verifiedAudio
-            ? _Audio.new
-            : IdleAudioController.new,
-        keepAliveController: const NoopPlaybackKeepAliveController(),
-        notificationController: const NoopPlaybackNotificationController(),
-        stuckWatchdogInterval: Duration.zero,
-        playbackHealthCheckInterval: Duration.zero,
-        playbackMemorySaveInterval: Duration.zero,
-      ) {
-    state = hasSong
-        ? const PlayerState(currentSong: _track, duration: Duration(minutes: 3))
-        : const PlayerState();
+  _Player({
+    bool hasSong = true,
+    bool verifiedAudio = false,
+    PlayerState? initialState,
+  }) : super(
+         audioController: verifiedAudio ? _Audio() : IdleAudioController(),
+         audioControllerFactory: verifiedAudio
+             ? _Audio.new
+             : IdleAudioController.new,
+         keepAliveController: const NoopPlaybackKeepAliveController(),
+         notificationController: const NoopPlaybackNotificationController(),
+         stuckWatchdogInterval: Duration.zero,
+         playbackHealthCheckInterval: Duration.zero,
+         playbackMemorySaveInterval: Duration.zero,
+       ) {
+    state =
+        initialState ??
+        (hasSong
+            ? const PlayerState(
+                currentSong: _track,
+                duration: Duration(minutes: 3),
+              )
+            : const PlayerState());
+  }
+
+  void reportDuration(Duration duration) {
+    state = state.copyWith(duration: duration);
   }
 }
 
@@ -1292,7 +3110,208 @@ typedef _Node = ({
   bool merged,
 });
 
+_Node _axGoldenNode(int id, List<int> children) => (
+  id: id,
+  parent: null,
+  traversal: children,
+  hit: children,
+  label: '',
+  tooltip: '',
+  button: false,
+  actions: 0,
+  flutterParent: null,
+  parentIdentity: null,
+  childIdentity: null,
+  hidden: false,
+  merged: false,
+);
+
+Iterable<List<_Node>> _axNodeOrders(List<_Node> nodes) sync* {
+  if (nodes.isEmpty) {
+    yield const [];
+    return;
+  }
+  for (var index = 0; index < nodes.length; index++) {
+    final rest = List<_Node>.of(nodes)..removeAt(index);
+    for (final order in _axNodeOrders(rest)) {
+      yield [nodes[index], ...order];
+    }
+  }
+}
+
+class _AxNode {
+  _AxNode(this.parent, [List<int> children = const []])
+    : children = List.of(children);
+  final int? parent;
+  List<int> children;
+}
+
+/// 当前Windows桥先移除重挂子树，再按父先子后的原始pending重新初始化。
+/// 只跟踪原生结构；绝不把Flutter最终缓存中的后代当作AX已初始化节点。
+class _WindowsAxDelta {
+  final nodes = <int, _AxNode>{};
+  final pendingInitialization = <int>{};
+  final deleted = <int>[];
+  final reparented = <int>[];
+  Map<int, _AxNode> before = {};
+  int commits = 0;
+  int totalReparented = 0;
+  int totalDeleted = 0;
+
+  void clear() {
+    nodes.clear();
+    pendingInitialization.clear();
+    deleted.clear();
+    reparented.clear();
+    before = {};
+    commits = 0;
+    totalReparented = 0;
+    totalDeleted = 0;
+  }
+
+  List<String> commit(
+    List<_Node> batch, {
+    required Map<int, int> parents,
+    required Set<int> live,
+  }) {
+    commits++;
+    before = {
+      for (final entry in nodes.entries)
+        entry.key: _AxNode(entry.value.parent, entry.value.children),
+    };
+    deleted.clear();
+    reparented.clear();
+    pendingInitialization.clear();
+    // Bridge对同id只保留最后一次原始更新。
+    final updates = {for (final node in batch) node.id: node};
+    final removals = <int, List<int>>{};
+    for (final node in updates.values) {
+      for (final childId in node.traversal) {
+        final child = nodes[childId];
+        if (child == null) continue;
+        final oldParent = child.parent;
+        if (oldParent == null) {
+          return ['AX原始节点${node.id}试图重挂无父根节点$childId'];
+        }
+        if (oldParent == node.id) continue;
+        // release桥的assert不会拦截漏发的重挂节点；继续模拟到pending错误。
+        removals
+            .putIfAbsent(oldParent, () => List.of(nodes[oldParent]!.children))
+            .remove(childId);
+        reparented.add(childId);
+      }
+    }
+    totalReparented += reparented.length;
+    final destroyed = <int>{};
+    void collectDestroyed(int id) {
+      if (!destroyed.add(id)) return;
+      for (final child in nodes[id]!.children) {
+        collectDestroyed(child);
+      }
+    }
+
+    for (final id in reparented) {
+      collectDestroyed(id);
+    }
+    // 第一阶段使用unordered_map。被删除子树的父更新不能依赖碰巧先执行。
+    for (final id in removals.keys) {
+      if (destroyed.contains(id)) {
+        return ['AX第一阶段更新父节点$id也位于待删除子树，不能保证独立更新顺序'];
+      }
+    }
+    for (final entry in removals.entries) {
+      final error = _update(entry.key, entry.value);
+      if (error != null) return ['AX移除阶段：$error'];
+    }
+    if (pendingInitialization.isNotEmpty) {
+      return ['AX移除阶段待初始化节点${pendingInitialization.join(',')}'];
+    }
+    // 不允许原始更新依赖已删除节点恰好早于删除父节点执行。
+    for (final id in updates.keys) {
+      if (!live.contains(id)) {
+        return ['AX原始更新节点$id在本批被移出树，不能保证独立更新顺序'];
+      }
+    }
+    final depths = <int, int>{0: 0};
+    int depth(int id) => depths.putIfAbsent(id, () => depth(parents[id]!) + 1);
+    final ordered = updates.values.toList()
+      ..sort((a, b) {
+        final order = depth(a.id).compareTo(depth(b.id));
+        return order != 0 ? order : a.id.compareTo(b.id);
+      });
+    // Bridge保证依赖中的父先子后，不假定Dart与原生哈希枚举顺序相同。
+    for (final node in ordered) {
+      final error = _update(node.id, node.traversal);
+      if (error != null) return ['AX初始化阶段：$error'];
+    }
+    if (pendingInitialization.isNotEmpty) {
+      final ids = pendingInitialization.toList()..sort();
+      return ['AX待初始化节点${ids.join(',')}，原始pending缺少新建节点的数据'];
+    }
+    if (nodes.length != live.length || !live.every(nodes.containsKey)) {
+      return ['AX原生树与完整图的可达节点不一致'];
+    }
+    return [];
+  }
+
+  String? _update(int id, List<int> childIds) {
+    var node = nodes[id];
+    if (node == null) {
+      if (id != 0 || nodes.isNotEmpty) return '节点$id不在树中且不是新根';
+      node = _AxNode(null);
+      nodes[id] = node;
+    }
+    pendingInitialization.remove(id);
+    final retained = childIds.toSet();
+    for (final child in node.children) {
+      if (!retained.contains(child)) _destroy(child);
+    }
+    for (final childId in childIds) {
+      final child = nodes[childId];
+      if (child == null) {
+        nodes[childId] = _AxNode(id);
+        pendingInitialization.add(childId);
+      } else if (child.parent != id) {
+        return '节点$childId从${child.parent}直接重挂到$id';
+      }
+    }
+    node.children = List.of(childIds);
+    return null;
+  }
+
+  void _destroy(int id) {
+    final node = nodes.remove(id)!;
+    for (final child in node.children) {
+      _destroy(child);
+    }
+    pendingInitialization.remove(id);
+    deleted.add(id);
+    totalDeleted++;
+  }
+
+  Map<String, Object?> json() => {
+    'before': [
+      for (final entry in before.entries)
+        {
+          'id': entry.key,
+          'parent': entry.value.parent,
+          'children': entry.value.children,
+        },
+    ],
+    'reparented': reparented,
+    'deleted': deleted,
+    'pendingInitialization': pendingInitialization.toList(),
+  };
+}
+
 class _TreeTrace {
+  static int _nextTraceId = 0;
+  final int _traceId = _nextTraceId++;
+  final bool _recordEnabled = Platform.environment['IK_AX_TRACE_FULL'] == '1';
+  int _generation = 0, _pumpCount = 0, _stepCount = 0;
+  int _stepRawStart = 0, _stepAxStart = 0, _stepPumpStart = 0;
+  int? _activePump;
+  final ax = _WindowsAxDelta();
   final nodes = <int, _Node>{};
   final batches = <List<_Node>>[];
   final issues = <String>[];
@@ -1301,9 +3320,96 @@ class _TreeTrace {
   Set<int> newIds = {};
   SemanticsOwner? Function()? owner;
   VoidCallback? onIssue;
-  String step = '启动';
+  String _step = '启动';
+  String get step => _step;
+  set step(String value) {
+    _recordStep();
+    _step = value;
+    _stepCount++;
+    _stepRawStart = batches.length;
+    _stepAxStart = ax.commits;
+    _stepPumpStart = _pumpCount;
+  }
+
+  void _record(Map<String, Object?> record) {
+    if (!_recordEnabled) return;
+    debugPrint(
+      'IK_SEMANTICS_TRACE ${jsonEncode({'traceId': _traceId, 'generation': _generation, 'stepId': _stepCount, 'step': step, ...record})}',
+    );
+  }
+
+  int _rawNodesSince(int start) =>
+      batches.skip(start).fold(0, (count, batch) => count + batch.length);
+
+  void _recordStep() {
+    if (!_recordEnabled) return;
+    _record({
+      'kind': 'step',
+      'rawStart': _stepRawStart,
+      'rawEnd': batches.length,
+      'axStart': _stepAxStart,
+      'axEnd': ax.commits,
+      'pumpStart': _stepPumpStart,
+      'pumpEnd': _pumpCount,
+      'rawNodes': _rawNodesSince(_stepRawStart),
+      'zero': batches.length == _stepRawStart,
+      'issues': issues.toList(),
+    });
+  }
+
+  int? beginPump() {
+    if (!_recordEnabled) return null;
+    _activePump = ++_pumpCount;
+    return _activePump;
+  }
+
+  void recordPump(
+    int? pumpId, {
+    required int rawStart,
+    required int axStart,
+    required Duration duration,
+    required bool completed,
+    Object? frameworkError,
+    Object? thrown,
+  }) {
+    if (pumpId == null) return;
+    _record({
+      'kind': 'pump',
+      'pumpId': pumpId,
+      'rawStart': rawStart,
+      'rawEnd': batches.length,
+      'axStart': axStart,
+      'axEnd': ax.commits,
+      'rawNodes': _rawNodesSince(rawStart),
+      'zero': batches.length == rawStart,
+      'durationMicroseconds': duration.inMicroseconds,
+      'completed': completed,
+      'frameworkError': frameworkError?.toString(),
+      'thrown': thrown?.toString(),
+      'issues': issues.toList(),
+    });
+    if (_activePump == pumpId) _activePump = null;
+  }
+
+  void finishDiagnostics({required bool completed}) {
+    if (!_recordEnabled) return;
+    _recordStep();
+    _record({
+      'kind': 'finish',
+      'completed': completed,
+      'rawBatches': batches.length,
+      'axBatches': ax.commits,
+      'rawNodes': _rawNodesSince(0),
+      'pumps': _pumpCount,
+      'steps': _stepCount + 1,
+      'reparented': ax.totalReparented,
+      'deleted': ax.totalDeleted,
+      'issues': issues.toList(),
+    });
+  }
 
   void clear() {
+    ax.clear();
     nodes.clear();
     batches.clear();
     issues.clear();
@@ -1311,11 +3417,32 @@ class _TreeTrace {
     before = {};
     newIds = {};
     onIssue = null;
-    step = '启动';
+    _step = '启动';
+    _generation++;
+    _pumpCount = _stepCount = 0;
+    _stepRawStart = _stepAxStart = _stepPumpStart = 0;
+    _activePump = null;
+    _record({'kind': 'reset'});
   }
 
   void commit(List<_Node> batch) {
     batches.add(List.of(batch));
+    if (_recordEnabled) {
+      _record({
+        'kind': 'batch',
+        'batch': batches.length,
+        'pumpId': _activePump,
+        'eligibleForValidation': issues.isEmpty,
+        'axBefore': ax.commits,
+        'nodeCount': batch.length,
+        'nodes': [for (final node in batch) _json(node)],
+      });
+    }
+    pending = List.of(batch);
+    if (issues.isNotEmpty) {
+      pending = [];
+      return;
+    }
     before = Map.of(nodes);
     newIds = {
       for (final node in batch)
@@ -1377,6 +3504,9 @@ class _TreeTrace {
         if (child == 0) found.add('命中顺序中根0成为节点${node.id}的子节点');
       }
     }
+    if (found.isEmpty) {
+      found.addAll(ax.commit(batch, parents: parents, live: live));
+    }
     if (found.isNotEmpty) {
       final firstIssue = issues.isEmpty;
       issues.add('批${batches.length} $step：${found.join('；')}');
@@ -1403,6 +3533,7 @@ class _TreeTrace {
         'before': [for (final node in before.values) _json(node)],
         'pending': [for (final node in pending) _json(node)],
         'current': [for (final node in nodes.values) _json(node)],
+        'windowsAx': ax.json(),
       })}',
     );
   }
@@ -1425,8 +3556,15 @@ class _TreeTrace {
 
   void expectValid() {
     debugPrint('IK_SEMANTICS 完整检查${batches.length}批，${issues.length}项树错误');
+    final rawNodes = batches.fold(0, (count, batch) => count + batch.length);
+    debugPrint(
+      'IK_SEMANTICS Windows AX检查${ax.commits}批，'
+      '$rawNodes个原始节点，${ax.totalReparented}次重挂、'
+      '${ax.totalDeleted}个节点销毁，全部新建引用核验初始化',
+    );
     expect(batches, isNotEmpty);
     expect(issues.length, 0, reason: issues.firstOrNull);
+    expect(ax.commits, batches.length, reason: '每个已提交原始批次都必须经过Windows AX增量门');
   }
 }
 

@@ -31,6 +31,7 @@ GoRouter createIkRouter({
   Widget Function(BuildContext, Widget)? detailShell,
   Widget Function(BuildContext, String)? settings,
   WidgetBuilder? downloads,
+  bool alignToDesign = false,
 }) {
   Widget detail(BuildContext context, Widget page) =>
       detailShell?.call(context, page) ?? page;
@@ -66,9 +67,12 @@ GoRouter createIkRouter({
       ),
       GoRoute(path: '/player', builder: (context, _) => player(context)),
       page('/queue', (_) => const QueuePage()),
-      page('/recommendations', (_) => const RecommendationsPage()),
-      page('/toplists', (_) => const ToplistsPage()),
-      page('/new-songs', (_) => const NewSongsPage()),
+      page(
+        '/recommendations',
+        (_) => RecommendationsPage(alignToDesign: alignToDesign),
+      ),
+      page('/toplists', (_) => ToplistsPage(alignToDesign: alignToDesign)),
+      page('/new-songs', (_) => NewSongsPage(alignToDesign: alignToDesign)),
       page('/history', (_) => const HistoryPage(allEntries: true)),
       page('/local-music', (_) => const LocalMusicPage()),
       page('/likes', (_) => const LikesPage(allEntries: true)),

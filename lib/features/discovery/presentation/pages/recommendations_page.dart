@@ -1,20 +1,26 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/platform_accent.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/share/song_actions.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../core/widgets/async_state_view.dart';
+import '../../../../l10n/ik_discovery_revision_strings.dart';
 import '../../../../models/song.dart';
 import '../../../../models/platform_type.dart';
+import '../../../../video_app/ik/ik_song_table.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../download/presentation/widgets/download_button.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../providers/recommendations_provider.dart';
 
 class RecommendationsPage extends ConsumerStatefulWidget {
-  const RecommendationsPage({super.key});
+  const RecommendationsPage({super.key, this.alignToDesign = false});
+
+  final bool alignToDesign;
 
   @override
   ConsumerState<RecommendationsPage> createState() =>
@@ -25,6 +31,7 @@ class _RecommendationsPageState extends ConsumerState<RecommendationsPage>
     with SingleTickerProviderStateMixin {
   TabController? _tabController;
   int _lastTabCount = 0;
+  PlatformType _selectedPlatform = PlatformType.netease;
 
   @override
   void initState() {
@@ -76,6 +83,7 @@ class _RecommendationsPageState extends ConsumerState<RecommendationsPage>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(recommendationsProvider);
+    if (widget.alignToDesign) return _buildAligned(context, state);
     final platforms = state.songsByPlatform.keys.toList();
     _syncTabController(platforms.length);
 
@@ -155,6 +163,260 @@ class _RecommendationsPageState extends ConsumerState<RecommendationsPage>
                 );
               }).toList(),
             ),
+    );
+  }
+
+  Widget _buildAligned(BuildContext context, RecommendationsState state) {
+    final platform = _selectedPlatform;
+    final songs = state.songsForPlatform(platform);
+    final source = state.sourceForPlatform(platform);
+    final error = state.errorsByPlatform[platform];
+    final loggedIn = ref.watch(
+      authProvider.select((state) => state.isLoggedIn(platform)),
+    );
+    final label = IkDiscoveryRevisionStrings.sourceLabel(
+      source,
+      platform: platform,
+      loggedIn: loggedIn,
+    );
+    final note = IkDiscoveryRevisionStrings.sourceNote(
+      source,
+      platform: platform,
+    );
+    final currentSong = ref.watch(
+      playerProvider.select((state) => state.currentSong),
+    );
+    final colors = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(IkDiscoveryRevisionStrings.recommendations),
+        actions: [
+          IconButton(
+            tooltip: IkDiscoveryRevisionStrings.refresh,
+            icon: const Icon(Icons.refresh),
+            onPressed: () => ref
+                .read(recommendationsProvider.notifier)
+                .loadRecommendations(),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final platform in PlatformType.musicServices)
+                    ChoiceChip(
+                      label: Text(platform.displayName),
+                      selected: _selectedPlatform == platform,
+                      onSelected: (_) =>
+                          setState(() => _selectedPlatform = platform),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => ref
+                  .read(recommendationsProvider.notifier)
+                  .loadRecommendations(),
+              child: AppScrollbar(
+                key: ValueKey('ik-recommendations-${platform.name}'),
+                builder: (controller) => CustomScrollView(
+                  controller: controller,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: colors.primary.withValues(
+                                      alpha: .09,
+                                    ),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(color: colors.primary),
+                                  ),
+                                ),
+                                if (!loggedIn)
+                                  TextButton.icon(
+                                    onPressed: () =>
+                                        context.push('/login/${platform.name}'),
+                                    icon: const Icon(Icons.login, size: 18),
+                                    label: const Text(
+                                      IkDiscoveryRevisionStrings.login,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                            if (note != null &&
+                                note.isNotEmpty &&
+                                note != error) ...[
+                              const SizedBox(height: 8),
+                              Text(
+                                note,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (songs.isEmpty)
+                      if (error != null)
+                        SliverAsyncStateView(
+                          child: AsyncStateView.error(
+                            title:
+                                IkDiscoveryRevisionStrings.recommendationsFailed(
+                                  platform,
+                                ),
+                            message: error,
+                            onRetry: () => ref
+                                .read(recommendationsProvider.notifier)
+                                .loadRecommendations(),
+                          ),
+                        )
+                      else if (state.isLoading)
+                        const SliverAsyncStateView(
+                          hasScrollBody: true,
+                          child: AsyncStateView.loading(skeleton: true),
+                        )
+                      else
+                        const SliverAsyncStateView(
+                          child: AsyncStateView.empty(
+                            title: IkDiscoveryRevisionStrings.noRecommendations,
+                            message: IkDiscoveryRevisionStrings.refreshHint,
+                          ),
+                        )
+                    else ...[
+                      if (state.isLoading)
+                        const SliverToBoxAdapter(
+                          child: LinearProgressIndicator(),
+                        ),
+                      if (error != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+                            child: Card(
+                              color: colors.errorContainer,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      error,
+                                      style: TextStyle(
+                                        color: colors.onErrorContainer,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    ElevatedButton(
+                                      onPressed: () => ref
+                                          .read(
+                                            recommendationsProvider.notifier,
+                                          )
+                                          .loadRecommendations(),
+                                      child: const Text(
+                                        IkDiscoveryRevisionStrings.retry,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                          child: Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              FilledButton.icon(
+                                onPressed: () => ref
+                                    .read(playerProvider.notifier)
+                                    .playPlaylist(songs),
+                                icon: const Icon(Icons.play_arrow),
+                                label: const Text(
+                                  IkDiscoveryRevisionStrings.playAll,
+                                ),
+                              ),
+                              Text(
+                                IkDiscoveryRevisionStrings.songsCount(
+                                  songs.length,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: IkSongTableHeader(),
+                        ),
+                      ),
+                      SliverList.builder(
+                        itemCount: songs.length,
+                        itemBuilder: (context, index) {
+                          final song = songs[index];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: IkSongTableRow(
+                              song: song,
+                              index: index,
+                              playing:
+                                  currentSong?.id == song.id &&
+                                  currentSong?.platform == song.platform,
+                              onPlay: () => ref
+                                  .read(playerProvider.notifier)
+                                  .playPlaylist(songs, startIndex: index),
+                              onMore: () =>
+                                  showSongActionsMenu(context, ref, song: song),
+                              onMoreWithContext: (buttonContext) =>
+                                  showSongActionsMenu(
+                                    buttonContext,
+                                    ref,
+                                    song: song,
+                                  ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

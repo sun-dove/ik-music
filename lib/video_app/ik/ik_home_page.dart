@@ -7,6 +7,7 @@ import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/discovery/presentation/providers/recommendations_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../l10n/ik_alignment_shell_strings.dart';
+import '../../l10n/ik_discovery_revision_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
@@ -28,6 +29,7 @@ class IkHomePage extends ConsumerStatefulWidget {
     required this.onPlayer,
     required this.onPlay,
     required this.onMore,
+    this.onMoreWithContext,
     this.workspace = false,
     this.alignToDesign = false,
   });
@@ -35,6 +37,7 @@ class IkHomePage extends ConsumerStatefulWidget {
   final VoidCallback onPlayer;
   final void Function(Song, List<Song>) onPlay;
   final ValueChanged<Song> onMore;
+  final void Function(BuildContext, Song)? onMoreWithContext;
   final bool workspace;
   final bool alignToDesign;
   @override
@@ -208,7 +211,9 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                     children: [
                       Expanded(
                         child: Text(
-                          IkStrings.recommendations,
+                          aligned
+                              ? IkDiscoveryRevisionStrings.recommendations
+                              : IkStrings.recommendations,
                           style: aligned
                               ? const TextStyle(
                                   fontSize: 17,
@@ -277,13 +282,26 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      recommendations.sourceForPlatform(platform)?.label ??
-                          IkStrings.recommendations,
+                      aligned
+                          ? IkDiscoveryRevisionStrings.sourceLabel(
+                              recommendations.sourceForPlatform(platform),
+                              platform: platform,
+                              loggedIn: auth.isLoggedIn(platform),
+                            )
+                          : recommendations
+                                    .sourceForPlatform(platform)
+                                    ?.label ??
+                                IkStrings.recommendations,
                     ),
                     if (widget.workspace &&
                         recommendations.songsForPlatform(platform).length > 6)
                       Text(IkWorkspaceStrings.previewTracks(6)),
-                    if (recommendations.sourceForPlatform(platform)?.note
+                    if ((aligned
+                            ? IkDiscoveryRevisionStrings.sourceNote(
+                                recommendations.sourceForPlatform(platform),
+                                platform: platform,
+                              )
+                            : recommendations.sourceForPlatform(platform)?.note)
                         case final String note)
                       Text(note),
                   ],
@@ -354,6 +372,7 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                 songs: recommendations.songsForPlatform(platform),
                 onPlay: widget.onPlay,
                 onMore: widget.onMore,
+                onMoreWithContext: widget.onMoreWithContext,
               )
             else if (!aligned)
               SliverList.builder(
@@ -623,10 +642,12 @@ class _DiscoverySongGrid extends StatelessWidget {
     required this.songs,
     required this.onPlay,
     required this.onMore,
+    this.onMoreWithContext,
   });
   final List<Song> songs;
   final void Function(Song, List<Song>) onPlay;
   final ValueChanged<Song> onMore;
+  final void Function(BuildContext, Song)? onMoreWithContext;
 
   @override
   Widget build(BuildContext context) {
@@ -713,21 +734,25 @@ class _DiscoverySongGrid extends StatelessWidget {
                               ],
                             ),
                           ),
-                          IconButton(
-                            key: ValueKey('ik-discovery-more-$identity'),
-                            tooltip: IkStrings.more,
-                            onPressed: () => onMore(song),
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 40,
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 4,
-                              vertical: 8,
-                            ),
-                            icon: const Icon(
-                              Icons.more_horiz_rounded,
-                              size: 18,
+                          Builder(
+                            builder: (buttonContext) => IconButton(
+                              key: ValueKey('ik-discovery-more-$identity'),
+                              tooltip: IkStrings.more,
+                              onPressed: () => onMoreWithContext == null
+                                  ? onMore(song)
+                                  : onMoreWithContext!(buttonContext, song),
+                              constraints: const BoxConstraints(
+                                minWidth: 32,
+                                minHeight: 40,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 8,
+                              ),
+                              icon: const Icon(
+                                Icons.more_horiz_rounded,
+                                size: 18,
+                              ),
                             ),
                           ),
                         ],

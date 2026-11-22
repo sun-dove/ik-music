@@ -15,10 +15,12 @@ class IkRecentPage extends ConsumerWidget {
     super.key,
     required this.onNavigate,
     required this.onMore,
+    this.onMoreWithContext,
     this.alignToDesign = false,
   });
   final ValueChanged<String> onNavigate;
   final ValueChanged<Song> onMore;
+  final void Function(BuildContext, Song)? onMoreWithContext;
   final bool alignToDesign;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -92,6 +94,10 @@ class IkRecentPage extends ConsumerWidget {
                         .read(playerProvider.notifier)
                         .playPlaylist(songs, startIndex: index),
                     onMore: () => onMore(songs[index]),
+                    onMoreWithContext: onMoreWithContext == null
+                        ? null
+                        : (buttonContext) =>
+                              onMoreWithContext!(buttonContext, songs[index]),
                     playing:
                         player.currentSong?.id == songs[index].id &&
                         player.currentSong?.platform == songs[index].platform,

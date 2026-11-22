@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../models/playlist.dart';
 import '../../../../models/platform_type.dart';
@@ -13,12 +14,19 @@ import '../../../library/presentation/providers/my_playlists_provider.dart';
 class PlaylistPickerSheet extends ConsumerStatefulWidget {
   final Song song;
   final Duration operationTimeout;
+  final bool _deferLoad;
 
   const PlaylistPickerSheet({
     super.key,
     required this.song,
     this.operationTimeout = const Duration(seconds: 8),
-  });
+  }) : _deferLoad = false;
+
+  const PlaylistPickerSheet.contextual({
+    super.key,
+    required this.song,
+    this.operationTimeout = const Duration(seconds: 8),
+  }) : _deferLoad = true;
 
   @override
   ConsumerState<PlaylistPickerSheet> createState() =>
@@ -33,7 +41,17 @@ class _PlaylistPickerSheetState extends ConsumerState<PlaylistPickerSheet> {
   @override
   void initState() {
     super.initState();
-    _playlistsFuture = _loadPlaylists();
+    _playlistsFuture = widget._deferLoad
+        ? _loadAfterFirstFrame()
+        : _loadPlaylists();
+  }
+
+  Future<List<Playlist>> _loadAfterFirstFrame() {
+    final pending = Completer<List<Playlist>>();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      pending.complete(mounted ? _loadPlaylists() : const <Playlist>[]);
+    });
+    return pending.future;
   }
 
   Future<List<Playlist>> _loadPlaylists() async {
@@ -137,15 +155,16 @@ class _PlaylistPickerSheetState extends ConsumerState<PlaylistPickerSheet> {
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(top: 12, bottom: 8),
-                  decoration: BoxDecoration(
-                    color: cs.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
+                if (!ContextualActionTheme.isEnabled(context))
+                  Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    decoration: BoxDecoration(
+                      color: cs.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
                 ListTile(
                   leading: const Icon(Icons.playlist_add),
                   title: const Text('添加到歌单'),

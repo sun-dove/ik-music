@@ -108,3 +108,21 @@ class AppTheme {
     );
   }
 }
+
+/// 显式启用 IK 操作呈现；缺省与没有扩展时均保留既有入口。
+class ContextualActionTheme extends ThemeExtension<ContextualActionTheme> {
+  const ContextualActionTheme({this.enabled = false});
+
+  final bool enabled;
+
+  static bool isEnabled(BuildContext context) =>
+      Theme.of(context).extension<ContextualActionTheme>()?.enabled ?? false;
+
+  @override
+  ContextualActionTheme copyWith({bool? enabled}) =>
+      ContextualActionTheme(enabled: enabled ?? this.enabled);
+
+  @override
+  ContextualActionTheme lerp(ContextualActionTheme? other, double t) =>
+      other == null || t < .5 ? this : other;
+}

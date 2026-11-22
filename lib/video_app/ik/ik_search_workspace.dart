@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../features/discovery/presentation/providers/recommendations_provider.dart';
+import '../../l10n/ik_discovery_revision_strings.dart';
+import '../../l10n/ik_library_revision_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_alignment_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
@@ -21,19 +24,36 @@ class IkSearchWorkspace extends StatefulWidget {
     required this.onPlay,
     required this.onLike,
     required this.onMore,
+    this.onMoreWithContext,
     this.likedKeys = const {},
     this.currentSong,
     this.onAccount,
     this.alignToDesign = false,
     this.useSharedSearch = false,
+    this.hotTerms = const [],
+    this.hotLoading = false,
+    this.hotError,
+    this.onRetryHot,
+    this.recommendations,
+    this.loggedIn = const {},
+    this.onBrowseRecommendations,
+    this.onRetryRecommendation,
   });
   final IkSearchController search;
   final void Function(Song, List<Song>) onPlay;
   final ValueChanged<Song> onLike, onMore;
+  final void Function(BuildContext, Song)? onMoreWithContext;
   final Set<String> likedKeys;
   final Song? currentSong;
   final ValueChanged<PlatformType>? onAccount;
   final bool alignToDesign, useSharedSearch;
+  final List<String> hotTerms;
+  final bool hotLoading;
+  final String? hotError;
+  final VoidCallback? onRetryHot, onBrowseRecommendations;
+  final RecommendationsState? recommendations;
+  final Set<PlatformType> loggedIn;
+  final ValueChanged<PlatformType>? onRetryRecommendation;
   @override
   State<IkSearchWorkspace> createState() => _IkSearchWorkspaceState();
 }
@@ -233,7 +253,9 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                       .firstOrNull,
                 ),
               ),
-              if (widget.search.query.isEmpty)
+              if (widget.search.query.isEmpty &&
+                  widget.onRetryHot == null &&
+                  widget.recommendations == null)
                 const Padding(
                   padding: EdgeInsets.only(top: 28),
                   child: Text(IkStrings.searchIntro),
@@ -242,6 +264,7 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
           ),
         ),
       ),
+      if (widget.search.query.isEmpty) ..._discoverySlivers(context),
       for (final platform in widget.search.platforms)
         if (_filter == null || _filter == platform)
           if (widget.search.groups[platform] case final group?) ...[
@@ -282,6 +305,10 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                     index: index,
                     onPlay: () => widget.onPlay(song, group.songs),
                     onMore: () => widget.onMore(song),
+                    onMoreWithContext: widget.onMoreWithContext == null
+                        ? null
+                        : (buttonContext) =>
+                              widget.onMoreWithContext!(buttonContext, song),
                     onLike: () => widget.onLike(song),
                     liked: widget.likedKeys.contains(videoSongKey(song)),
                     playing:
@@ -334,4 +361,163 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
           ],
     ],
   );
+
+  List<Widget> _discoverySlivers(BuildContext context) {
+    final recommendations = widget.recommendations;
+    final colors = Theme.of(context).colorScheme;
+    return [
+      if (widget.onRetryHot != null ||
+          widget.hotTerms.isNotEmpty ||
+          widget.hotLoading ||
+          widget.hotError != null)
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  IkLibraryRevisionStrings.hotSearch,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  IkLibraryRevisionStrings.hotSearchSource,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                if (widget.hotLoading) const LinearProgressIndicator(),
+                if (widget.hotError != null) ...[
+                  Text(widget.hotError!, style: TextStyle(color: colors.error)),
+                  if (widget.onRetryHot != null)
+                    TextButton(
+                      onPressed: widget.hotLoading ? null : widget.onRetryHot,
+                      child: const Text(VideoStrings.retry),
+                    ),
+                ] else if (!widget.hotLoading && widget.hotTerms.isEmpty)
+                  const Text(IkLibraryRevisionStrings.hotSearchEmpty),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final term in widget.hotTerms)
+                      ActionChip(
+                        label: Text(term),
+                        onPressed: () => widget.search.submit(term),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      if (recommendations != null) ...[
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 20,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Text(
+                      IkLibraryRevisionStrings.recommendationSelection,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    if (widget.onBrowseRecommendations != null)
+                      TextButton(
+                        onPressed: widget.onBrowseRecommendations,
+                        child: const Text(
+                          IkLibraryRevisionStrings.browseRecommendations,
+                        ),
+                      ),
+                  ],
+                ),
+                Text(
+                  IkLibraryRevisionStrings.recommendationHint,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                if (recommendations.isLoading) const LinearProgressIndicator(),
+              ],
+            ),
+          ),
+        ),
+        for (final platform in PlatformType.musicServices)
+          if (_filter == null || _filter == platform) ...[
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 6),
+              sliver: SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        WindowsPlatformIcon(platform: platform, size: 20),
+                        Text(
+                          videoPlatformLabel(platform),
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        Text(
+                          IkDiscoveryRevisionStrings.sourceLabel(
+                            recommendations.sourceForPlatform(platform),
+                            platform: platform,
+                            loggedIn: widget.loggedIn.contains(platform),
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                    if (recommendations.errorsByPlatform[platform]
+                        case final error?) ...[
+                      Text(error, style: TextStyle(color: colors.error)),
+                      if (widget.onRetryRecommendation != null)
+                        TextButton(
+                          onPressed: recommendations.isLoading
+                              ? null
+                              : () => widget.onRetryRecommendation!(platform),
+                          child: const Text(VideoStrings.retry),
+                        ),
+                    ] else if (!recommendations.isLoading &&
+                        recommendations.songsForPlatform(platform).isEmpty)
+                      const Text(IkDiscoveryRevisionStrings.noRecommendations),
+                  ],
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              sliver: SliverList.builder(
+                itemCount: recommendations
+                    .songsForPlatform(platform)
+                    .length
+                    .clamp(0, 4),
+                itemBuilder: (context, index) {
+                  final songs = recommendations.songsForPlatform(platform);
+                  final song = songs[index];
+                  return IkSongTableRow(
+                    song: song,
+                    index: index,
+                    onPlay: () => widget.onPlay(song, songs),
+                    onMore: () => widget.onMore(song),
+                    onMoreWithContext: widget.onMoreWithContext == null
+                        ? null
+                        : (buttonContext) =>
+                              widget.onMoreWithContext!(buttonContext, song),
+                    playing:
+                        widget.currentSong != null &&
+                        videoSongKey(widget.currentSong!) == videoSongKey(song),
+                  );
+                },
+              ),
+            ),
+          ],
+        const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
+      ],
+    ];
+  }
 }

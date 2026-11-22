@@ -146,6 +146,8 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
 
   String? _status(String key) =>
       _busy.contains(key) ? IkWorkspaceStrings.busy : _errors[key];
+  Widget _alignedSliderSemantics(Widget slider) =>
+      widget.alignToDesign ? Semantics(container: true, child: slider) : slider;
   Widget _row(
     String title,
     Widget control, {
@@ -405,12 +407,15 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
                 IkWorkspaceStrings.strength,
                 SizedBox(
                   width: 220,
-                  child: Slider(
-                    value: spatial.desired.strength,
-                    label: '${(spatial.desired.strength * 100).round()}%',
-                    onChanged: spatial.canEnable && spatial.desired.enabled
-                        ? spatialActions.setStrength
-                        : null,
+                  child: Semantics(
+                    container: true,
+                    child: Slider(
+                      value: spatial.desired.strength,
+                      label: '${(spatial.desired.strength * 100).round()}%',
+                      onChanged: spatial.canEnable && spatial.desired.enabled
+                          ? spatialActions.setStrength
+                          : null,
+                    ),
                   ),
                 ),
                 description:
@@ -432,19 +437,21 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
               IkStrings.fadeDuration,
               SizedBox(
                 width: 220,
-                child: Slider(
-                  value: effects.fadeDuration.inMilliseconds.toDouble(),
-                  min: 200,
-                  max: 3000,
-                  divisions: 14,
-                  onChanged: _busy.contains('effects')
-                      ? null
-                      : (value) => _run(
-                          'effects',
-                          () => notifier.setFadeDuration(
-                            Duration(milliseconds: value.round()),
+                child: _alignedSliderSemantics(
+                  Slider(
+                    value: effects.fadeDuration.inMilliseconds.toDouble(),
+                    min: 200,
+                    max: 3000,
+                    divisions: 14,
+                    onChanged: _busy.contains('effects')
+                        ? null
+                        : (value) => _run(
+                            'effects',
+                            () => notifier.setFadeDuration(
+                              Duration(milliseconds: value.round()),
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
               description: '${effects.fadeDuration.inMilliseconds} ms',

@@ -12,6 +12,8 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/ik_strings.dart';
 import '../l10n/ik_alignment_strings.dart';
+import '../core/widgets/song_actions_sheet.dart';
+import '../features/discovery/presentation/providers/recommendations_provider.dart';
 import '../features/library/presentation/providers/likes_provider.dart';
 import 'ik/ik_search.dart';
 import 'ik/ik_catalog_pages.dart';
@@ -80,6 +82,14 @@ import 'windows/windows_my_page.dart';
 import 'windows/windows_player_page.dart';
 import 'windows/windows_download.dart';
 
+IkPlaybackBar _workspacePlaybackBar({
+  required bool alignToDesign,
+  required VoidCallback? onOpen,
+  required VoidCallback onAudio,
+}) => alignToDesign
+    ? IkPlaybackBar.aligned(onOpen: onOpen, onAudio: onAudio)
+    : IkPlaybackBar(onOpen: onOpen, onAudio: onAudio);
+
 class VideoMusicApp extends StatefulWidget {
   const VideoMusicApp({
     super.key,
@@ -117,6 +127,7 @@ class VideoMusicApp extends StatefulWidget {
 class _VideoMusicAppState extends State<VideoMusicApp> {
   final _homeKey = GlobalKey<_VideoHomeState>();
   late final _router = createIkRouter(
+    alignToDesign: widget.workspace && widget.alignToDesign,
     home: (_) => _routeContent(_home()),
     player: (_) => _routeContent(
       _homeKey.currentState?._playerPage() ?? const IkRouteError(),
@@ -144,7 +155,8 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
               child: Consumer(
                 builder: (context, ref, _) {
                   if (widget.workspace) {
-                    return IkPlaybackBar(
+                    return _workspacePlaybackBar(
+                      alignToDesign: widget.alignToDesign,
                       onOpen: () => context.push('/player'),
                       onAudio: () => context.push('/settings/audio'),
                     );
@@ -192,10 +204,10 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
         debugShowCheckedModeBanner: false,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: const [Locale('zh')],
-        theme: (widget.workspace ? IkWorkspaceTheme.from : IkTheme.from)(
+        theme: _workspaceTheme(
           widget.windowsAppearance?.theme(Brightness.light) ?? VideoTheme.light,
         ),
-        darkTheme: (widget.workspace ? IkWorkspaceTheme.from : IkTheme.from)(
+        darkTheme: _workspaceTheme(
           widget.windowsAppearance?.theme(Brightness.dark) ?? VideoTheme.dark,
         ),
         themeMode: switch (widget.preferences.theme) {
@@ -236,6 +248,12 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
       home: _home(),
     );
   }
+
+  ThemeData _workspaceTheme(ThemeData base) => widget.workspace
+      ? widget.alignToDesign
+            ? IkWorkspaceTheme.aligned(base)
+            : IkWorkspaceTheme.from(base)
+      : IkTheme.from(base);
 
   Widget _home() => _VideoHome(
     key: _homeKey,
@@ -352,6 +370,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   var _localReady = false;
   var _committedQuery = '';
   var _hotTerms = <String>[];
+  var _hotLoading = false;
+  String? _hotError;
   var _settingsSection = 'audio';
   Offset? _workspacePointer;
   final _totals = <PlatformType, int?>{};
@@ -389,7 +409,11 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   }
 
   Future<void> _initialize() async {
-    unawaited(_loadHotTerms());
+    unawaited(
+      widget.workspace && widget.alignToDesign
+          ? _loadAlignedHotTerms()
+          : _loadHotTerms(),
+    );
     unawaited(_initializeLocal());
     await ref.read(authProvider.notifier).init();
     if (!mounted) return;
@@ -417,6 +441,22 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       if (mounted) setState(() => _hotTerms = words);
     } catch (_) {
       /* 热搜失败仍可手动输入并搜索。 */
+    }
+  }
+
+  Future<void> _loadAlignedHotTerms() async {
+    if (_hotLoading) return;
+    setState(() {
+      _hotLoading = true;
+      _hotError = null;
+    });
+    try {
+      final words = await _catalog.hotSearch();
+      if (mounted) setState(() => _hotTerms = words);
+    } catch (error) {
+      if (mounted) setState(() => _hotError = VideoFailure.from(error).message);
+    } finally {
+      if (mounted) setState(() => _hotLoading = false);
     }
   }
 
@@ -581,6 +621,53 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       );
       if (mounted && ref.read(authProvider).isLoggedIn(platform)) {
         await _sync(platform);
+      }
+      return;
+    }
+    if (widget.workspace && widget.alignToDesign) {
+      final action = await showContextualDialog<String>(
+        context,
+        builder: (dialogContext) => SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: Text(user.nickname),
+                  subtitle: Text(videoPlatformLabel(platform)),
+                  trailing: IconButton(
+                    tooltip: IkStrings.close,
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.sync),
+                  title: const Text(VideoStrings.resyncLikes),
+                  onTap: () => Navigator.of(dialogContext).pop('sync'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text(VideoStrings.logout),
+                  onTap: () => Navigator.of(dialogContext).pop('logout'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (!mounted || action == null) return;
+      if (action == 'sync') {
+        await _sync(platform);
+      } else {
+        _libraryEpoch[platform] = (_libraryEpoch[platform] ?? 0) + 1;
+        _syncing.remove(platform);
+        await ref.read(authProvider.notifier).logout(platform);
+        if (mounted) {
+          setState(() => _libraries.remove(platform));
+          _pushLikes();
+        }
       }
       return;
     }
@@ -795,7 +882,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                 )
               : null,
           playbackBar: widget.workspace
-              ? IkPlaybackBar(
+              ? _workspacePlaybackBar(
+                  alignToDesign: widget.alignToDesign,
                   onOpen: null,
                   onAudio: () => context.push('/settings/audio'),
                 )
@@ -1087,6 +1175,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   );
 
   Future<bool> _windowsQuality(bool download) async {
+    if (widget.workspace && widget.alignToDesign) {
+      return _alignedWindowsQuality(download);
+    }
     final preferences = _unifiedPreferences!;
     final highest = preferences.sources?.value.highestQuality == true;
     final selected = await showModalBottomSheet<(AudioLevel?, bool)>(
@@ -1129,6 +1220,81 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                 onTap: () => Navigator.pop(sheet, (level, false)),
               ),
           ],
+        ),
+      ),
+    );
+    if (selected == null) return false;
+    try {
+      await preferences.setQuality(
+        selected.$1,
+        download: download,
+        highest: selected.$2,
+      );
+    } on DesktopConfigurationException catch (error) {
+      _notice(error.toString());
+      return false;
+    }
+    if (!mounted) return true;
+    setState(() {});
+    final song = ref.read(playerProvider).currentSong;
+    if (!download && song != null && song.platform != PlatformType.local) {
+      await ref
+          .read(playerProvider.notifier)
+          .switchQuality(_effectiveQuality(song.platform));
+    }
+    return true;
+  }
+
+  Future<bool> _alignedWindowsQuality(bool download) async {
+    final preferences = _unifiedPreferences!;
+    final highest = preferences.sources?.value.highestQuality == true;
+    final selected = await showContextualDialog<(AudioLevel?, bool)>(
+      context,
+      builder: (dialogContext) => SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  download
+                      ? WindowsMusicStrings.downloadQuality
+                      : WindowsMusicStrings.playQuality,
+                ),
+                subtitle: const Text(WindowsMusicStrings.qualityHint),
+                trailing: IconButton(
+                  tooltip: IkStrings.close,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+              if (!download && preferences.sources != null)
+                ListTile(
+                  title: const Text(WindowsMusicStrings.highest),
+                  subtitle: const Text(SourceStrings.highestHint),
+                  trailing: highest ? const Icon(Icons.check) : null,
+                  onTap: () => Navigator.of(dialogContext).pop((null, true)),
+                ),
+              for (final level in [
+                AudioLevel.low,
+                AudioLevel.high,
+                AudioLevel.lossless,
+                AudioLevel.hires,
+                AudioLevel.master,
+              ])
+                ListTile(
+                  title: Text(WindowsMusicPreferences.qualityName(level)),
+                  trailing:
+                      (download || !highest) &&
+                          preferences.qualityLabel(download: download) ==
+                              WindowsMusicPreferences.qualityName(level)
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.of(dialogContext).pop((level, false)),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -1317,6 +1483,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       await _windowsQuality(download);
       return;
     }
+    if (widget.workspace && widget.alignToDesign) {
+      await _alignedPlatformQuality(platform, download);
+      return;
+    }
     var highest = false;
     final selected = await showModalBottomSheet<AudioLevel>(
       context: context,
@@ -1394,6 +1564,90 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     }
   }
 
+  Future<void> _alignedPlatformQuality(
+    PlatformType platform,
+    bool download,
+  ) async {
+    final selected = await showContextualDialog<(AudioLevel?, bool)>(
+      context,
+      builder: (dialogContext) => SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  VideoStrings.qualityPickerTitle(
+                    videoPlatformLabel(platform),
+                    download,
+                  ),
+                ),
+                subtitle: const Text(VideoStrings.qualityPermissions),
+                trailing: IconButton(
+                  tooltip: IkStrings.close,
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ),
+              if (!download && widget.sourceSettings != null)
+                ListTile(
+                  title: const Text(SourceStrings.highest),
+                  subtitle: const Text(SourceStrings.highestHint),
+                  trailing: widget.sourceSettings!.value.highestQuality
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.of(dialogContext).pop((null, true)),
+                ),
+              for (final level in [
+                AudioLevel.low,
+                AudioLevel.high,
+                AudioLevel.lossless,
+                AudioLevel.hires,
+                AudioLevel.master,
+              ])
+                ListTile(
+                  title: Text(level.displayNameFor(platform)),
+                  trailing:
+                      (download ||
+                              widget.sourceSettings?.value.highestQuality !=
+                                  true) &&
+                          widget.preferences.quality(
+                                platform,
+                                download: download,
+                              ) ==
+                              level
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.of(dialogContext).pop((level, false)),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selected == null) return;
+    final settings = widget.sourceSettings;
+    if (!download && settings != null) {
+      await settings.save(settings.value.copyWith(highestQuality: selected.$2));
+    }
+    if (selected.$1 != null) {
+      await widget.preferences.setQuality(
+        platform,
+        selected.$1!,
+        download: download,
+      );
+    }
+    if (!mounted) return;
+    setState(() {});
+    if (!download &&
+        ref.read(playerProvider).currentSong?.platform == platform) {
+      await ref
+          .read(playerProvider.notifier)
+          .switchQuality(selected.$1 ?? widget.preferences.quality(platform));
+    }
+  }
+
   Future<void> _download(List<Song> songs) async {
     if (songs.isEmpty) return;
     final notifier = ref.read(downloadProvider.notifier);
@@ -1455,10 +1709,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     ),
   );
 
-  Future<void> _ikSongMore(Song song) async {
+  Future<void> _ikSongMore(Song song, {BuildContext? menuContext}) async {
     final local = ref.read(likesProvider).songs.contains(song);
     final action = widget.workspace
-        ? await _workspaceSongMenu(song, local)
+        ? await _workspaceSongMenu(song, local, anchorContext: menuContext)
         : await showModalBottomSheet<String>(
             context: context,
             showDragHandle: true,
@@ -1539,7 +1793,11 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     }
   }
 
-  Future<String?> _workspaceSongMenu(Song song, bool local) {
+  Future<String?> _workspaceSongMenu(
+    Song song,
+    bool local, {
+    BuildContext? anchorContext,
+  }) {
     final size = MediaQuery.sizeOf(context);
     final point = _workspacePointer ?? Offset(size.width / 2, size.height / 2);
     PopupMenuItem<String> item(
@@ -1567,12 +1825,46 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     );
     return showMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(
-        point.dx,
-        point.dy,
-        size.width - point.dx,
-        size.height - point.dy,
-      ),
+      useRootNavigator: anchorContext != null,
+      position: anchorContext == null
+          ? RelativeRect.fromLTRB(
+              point.dx,
+              point.dy,
+              size.width - point.dx,
+              size.height - point.dy,
+            )
+          : null,
+      positionBuilder: anchorContext == null
+          ? null
+          : (_, _) {
+              final overlay =
+                  Navigator.of(
+                        context,
+                        rootNavigator: true,
+                      ).overlay!.context.findRenderObject()!
+                      as RenderBox;
+              final box = anchorContext.mounted
+                  ? anchorContext.findRenderObject()
+                  : null;
+              if (box is! RenderBox || !box.hasSize || !box.attached) {
+                return RelativeRect.fromRect(
+                  Rect.fromCenter(
+                    center: overlay.size.center(Offset.zero),
+                    width: 0,
+                    height: 0,
+                  ),
+                  Offset.zero & overlay.size,
+                );
+              }
+              final bottom = box.localToGlobal(
+                box.size.bottomLeft(Offset.zero),
+                ancestor: overlay,
+              );
+              return RelativeRect.fromRect(
+                Rect.fromLTWH(bottom.dx, bottom.dy, box.size.width, 0),
+                Offset.zero & overlay.size,
+              );
+            },
       constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
       items: [
         PopupMenuItem<String>(
@@ -1743,34 +2035,34 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     await _play(local, [local]);
   }
 
-  Widget _alignedDownloadsPage() => Consumer(
+  Widget _alignedDownloadsPage() =>
+      Scaffold(appBar: AppBar(), body: _alignedDownloadsContent());
+
+  Widget _alignedDownloadsContent() => Consumer(
     builder: (context, ref, _) {
       final state = ref.watch(downloadProvider);
       final notifier = ref.read(downloadProvider.notifier);
-      return Scaffold(
-        appBar: AppBar(),
-        body: IkDownloadsWorkspace(
-          tasks: state.tasks,
-          queueBlockedReason: state.queueBlockedReason,
-          onDirectory: widget.windowsAppearance == null
-              ? _directory
-              : _windowsDirectory,
-          onPause: (task) async {
-            notifier.pauseDownload(task.id);
-          },
-          onResume: (task) => notifier.resumeDownload(task.id),
-          onResolve: _resolveDownload,
-          onCancel: (task) async {
-            notifier.cancelDownload(task.id);
-          },
-          onPlay: _playDownload,
-          onOpenFolder: (task) => openIkDownloadFolder(
-            notifier.manager.directoryService,
-            task.filePath,
-          ),
-          canResolve: _canActOnDownload,
-          actionLabel: _downloadActionLabel,
+      return IkDownloadsWorkspace(
+        tasks: state.tasks,
+        queueBlockedReason: state.queueBlockedReason,
+        onDirectory: widget.windowsAppearance == null
+            ? _directory
+            : _windowsDirectory,
+        onPause: (task) async {
+          notifier.pauseDownload(task.id);
+        },
+        onResume: (task) => notifier.resumeDownload(task.id),
+        onResolve: _resolveDownload,
+        onCancel: (task) async {
+          notifier.cancelDownload(task.id);
+        },
+        onPlay: _playDownload,
+        onOpenFolder: (task) => openIkDownloadFolder(
+          notifier.manager.directoryService,
+          task.filePath,
         ),
+        canResolve: _canActOnDownload,
+        actionLabel: _downloadActionLabel,
       );
     },
   );
@@ -2350,6 +2642,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           onPlayer: _openPlayer,
           onPlay: _play,
           onMore: _ikSongMore,
+          onMoreWithContext: widget.workspace && widget.alignToDesign
+              ? (buttonContext, song) =>
+                    _ikSongMore(song, menuContext: buttonContext)
+              : null,
         ),
         if (widget.workspace)
           IkSearchWorkspace(
@@ -2359,6 +2655,35 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             onPlay: _play,
             onLike: _toggleLike,
             onMore: _ikSongMore,
+            onMoreWithContext: widget.alignToDesign
+                ? (buttonContext, song) =>
+                      _ikSongMore(song, menuContext: buttonContext)
+                : null,
+            hotTerms: widget.alignToDesign ? _hotTerms : const [],
+            hotLoading: widget.alignToDesign && _hotLoading,
+            hotError: widget.alignToDesign ? _hotError : null,
+            onRetryHot: widget.alignToDesign
+                ? () => unawaited(_loadAlignedHotTerms())
+                : null,
+            recommendations: widget.alignToDesign
+                ? ref.watch(recommendationsProvider)
+                : null,
+            loggedIn: widget.alignToDesign
+                ? {
+                    for (final platform in _platforms)
+                      if (auth.isLoggedIn(platform)) platform,
+                  }
+                : const {},
+            onBrowseRecommendations: widget.alignToDesign
+                ? () => context.push('/recommendations')
+                : null,
+            onRetryRecommendation: widget.alignToDesign
+                ? (platform) => unawaited(
+                    ref
+                        .read(recommendationsProvider.notifier)
+                        .retryLatestPlatform(platform),
+                  )
+                : null,
             onAccount: _account,
             likedKeys: liked,
             currentSong: player.currentSong,
@@ -2385,6 +2710,13 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             onSync: _sync,
             onPlay: _play,
             onMore: _ikSongMore,
+            onMoreWithContext: widget.alignToDesign
+                ? (buttonContext, song) =>
+                      _ikSongMore(song, menuContext: buttonContext)
+                : null,
+            downloadsBuilder: widget.alignToDesign
+                ? (_) => _alignedDownloadsContent()
+                : null,
             onNavigate: (path) => context.push(path),
             onDownloads: _downloads,
             onAccounts: () => setState(() {
@@ -2425,6 +2757,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             alignToDesign: widget.alignToDesign,
             onNavigate: (path) => context.push(path),
             onMore: _ikSongMore,
+            onMoreWithContext: widget.alignToDesign
+                ? (buttonContext, song) =>
+                      _ikSongMore(song, menuContext: buttonContext)
+                : null,
           ),
         widget.workspace ? _workspaceSettings() : _settingsPage(),
       ];
@@ -2446,7 +2782,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               _index = 4;
             }),
             pages: pages,
-            playbackBar: IkPlaybackBar(
+            playbackBar: _workspacePlaybackBar(
+              alignToDesign: widget.alignToDesign,
               onOpen: _openPlayer,
               onAudio: () => setState(() {
                 _settingsSection = 'audio';

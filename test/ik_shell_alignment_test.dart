@@ -208,11 +208,11 @@ void main() {
           check('顶栏分割线', locationContainer);
           check('主标题', find.text('听点喜欢的。'));
           await tester.scrollUntilVisible(
-            find.text('为你推荐').first.hitTestable(),
+            find.text('推荐').first.hitTestable(),
             140,
             scrollable: discoveryScroll,
           );
-          check('推荐标题', find.text('为你推荐').first);
+          check('推荐标题', find.text('推荐').first);
           await tester.scrollUntilVisible(
             find.text('当前内容来自新歌榜').hitTestable(),
             140,
@@ -254,7 +254,7 @@ void main() {
           .dy;
       expect(viewport.bottom, bottom);
       final requiredTexts = width < 720
-          ? ['开始探索', '为你推荐', 'QQ 音乐']
+          ? ['开始探索', '推荐', 'QQ 音乐']
           : ['开始探索', '推荐0'];
       for (final text in requiredTexts) {
         final item = find.text(text).first;

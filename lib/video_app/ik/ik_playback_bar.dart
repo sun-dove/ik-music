@@ -51,9 +51,18 @@ Future<void> showIkQueue(BuildContext context) => showGeneralDialog<void>(
 );
 
 class IkPlaybackBar extends ConsumerWidget {
-  const IkPlaybackBar({super.key, required this.onOpen, required this.onAudio});
+  const IkPlaybackBar({super.key, required this.onOpen, required this.onAudio})
+    : _stableSeekSemantics = false;
+  const IkPlaybackBar.aligned({
+    super.key,
+    required this.onOpen,
+    required this.onAudio,
+  }) : _stableSeekSemantics = true;
   final VoidCallback? onOpen;
   final VoidCallback onAudio;
+  final bool _stableSeekSemantics;
+  Widget _seekSemantics(Slider slider) =>
+      _stableSeekSemantics ? Semantics(container: true, child: slider) : slider;
   String _time(Duration value) =>
       '${value.inMinutes}:${(value.inSeconds % 60).toString().padLeft(2, '0')}';
   @override
@@ -203,27 +212,29 @@ class IkPlaybackBar extends ConsumerWidget {
                     overlayRadius: 10,
                   ),
                 ),
-                child: Slider(
-                  key: const ValueKey('ik-bar-seek'),
-                  value: player.position.inMilliseconds.toDouble().clamp(
-                    0,
-                    player.duration.inMilliseconds.toDouble().clamp(
+                child: _seekSemantics(
+                  Slider(
+                    key: const ValueKey('ik-bar-seek'),
+                    value: player.position.inMilliseconds.toDouble().clamp(
+                      0,
+                      player.duration.inMilliseconds.toDouble().clamp(
+                        1,
+                        double.infinity,
+                      ),
+                    ),
+                    max: player.duration.inMilliseconds.toDouble().clamp(
                       1,
                       double.infinity,
                     ),
+                    onChanged:
+                        song == null ||
+                            player.isTransitioning ||
+                            player.duration <= Duration.zero
+                        ? null
+                        : (value) => notifier.seek(
+                            Duration(milliseconds: value.round()),
+                          ),
                   ),
-                  max: player.duration.inMilliseconds.toDouble().clamp(
-                    1,
-                    double.infinity,
-                  ),
-                  onChanged:
-                      song == null ||
-                          player.isTransitioning ||
-                          player.duration <= Duration.zero
-                      ? null
-                      : (value) => notifier.seek(
-                          Duration(milliseconds: value.round()),
-                        ),
                 ),
               ),
             ),

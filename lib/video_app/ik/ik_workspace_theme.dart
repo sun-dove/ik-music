@@ -1,8 +1,21 @@
 import 'package:flutter/material.dart';
 
+import '../../core/theme/app_theme.dart';
 import 'ik_theme.dart';
 
 abstract final class IkWorkspaceTheme {
+  static ThemeData aligned(ThemeData original) {
+    final base = from(original);
+    return base.copyWith(
+      extensions: [
+        ...base.extensions.values.where(
+          (value) => value is! ContextualActionTheme,
+        ),
+        const ContextualActionTheme(enabled: true),
+      ],
+    );
+  }
+
   static ThemeData from(ThemeData original) {
     final base = IkTheme.from(original);
     final dark = base.brightness == Brightness.dark;
