@@ -31,6 +31,7 @@ class IkSearchWorkspace extends StatefulWidget {
     this.alignToDesign = false,
     this.compactDiscovery = false,
     this.useSharedSearch = false,
+    this.dismissSourceMenuOnBack = false,
     this.hotTerms = const [],
     this.hotLoading = false,
     this.hotError,
@@ -49,6 +50,7 @@ class IkSearchWorkspace extends StatefulWidget {
   final ValueChanged<PlatformType>? onAccount;
   final bool alignToDesign, useSharedSearch;
   final bool compactDiscovery;
+  final bool dismissSourceMenuOnBack;
   final List<String> hotTerms;
   final bool hotLoading;
   final String? hotError;
@@ -387,6 +389,7 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
           width: constraints.maxWidth < 460 ? 140 : 180,
           child: IkSelect<String>(
             alignToDesign: true,
+            dismissOnSystemBack: widget.dismissSourceMenuOnBack,
             label: IkWorkspaceStrings.source,
             value: _filter?.name ?? 'all',
             items: {

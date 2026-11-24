@@ -15,6 +15,7 @@ class IkDesktopWorkspace extends StatelessWidget {
     required this.playbackBar,
     required this.onAccount,
     this.alignToDesign = false,
+    this.mobileKeyboardLayout = false,
     this.onSearch,
   });
   final int index;
@@ -23,6 +24,7 @@ class IkDesktopWorkspace extends StatelessWidget {
   final Widget playbackBar;
   final VoidCallback onAccount;
   final bool alignToDesign;
+  final bool mobileKeyboardLayout;
   final ValueChanged<String>? onSearch;
   static const labels = [
     IkWorkspaceStrings.discovery,
@@ -134,9 +136,16 @@ class IkDesktopWorkspace extends StatelessWidget {
         ]
       : pages;
 
+  Widget _keyboardChrome(Widget child, bool hidden) =>
+      mobileKeyboardLayout ? Offstage(offstage: hidden, child: child) : child;
+
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 720;
+    final keyboardVisible =
+        mobileKeyboardLayout &&
+        !wide &&
+        MediaQuery.viewInsetsOf(context).bottom > 0;
     final sidebar = Theme.of(context).colorScheme.primary
         .withValues(alpha: .035);
     return Scaffold(
@@ -145,40 +154,43 @@ class IkDesktopWorkspace extends StatelessWidget {
         child: Column(
           children: [
             if (!wide)
-              Container(
-                color: sidebar,
-                padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _brand(compact: true)),
-                        IconButton(
-                          key: const ValueKey('ik-workspace-nav-4'),
-                          tooltip: IkWorkspaceStrings.settings,
-                          onPressed: () => onSelect(4),
-                          icon: const Icon(Icons.settings_outlined, size: 20),
-                        ),
-                        IconButton(
-                          key: const ValueKey('ik-workspace-account'),
-                          tooltip: IkWorkspaceStrings.connect,
-                          onPressed: onAccount,
-                          icon: const Icon(
-                            Icons.person_outline_rounded,
-                            size: 20,
+              _keyboardChrome(
+                Container(
+                  color: sidebar,
+                  padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _brand(compact: true)),
+                          IconButton(
+                            key: const ValueKey('ik-workspace-nav-4'),
+                            tooltip: IkWorkspaceStrings.settings,
+                            onPressed: () => onSelect(4),
+                            icon: const Icon(Icons.settings_outlined, size: 20),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        for (var i = 0; i < 4; i++)
-                          Expanded(child: _nav(context, i, compact: true)),
-                      ],
-                    ),
-                  ],
+                          IconButton(
+                            key: const ValueKey('ik-workspace-account'),
+                            tooltip: IkWorkspaceStrings.connect,
+                            onPressed: onAccount,
+                            icon: const Icon(
+                              Icons.person_outline_rounded,
+                              size: 20,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          for (var i = 0; i < 4; i++)
+                            Expanded(child: _nav(context, i, compact: true)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
+                keyboardVisible,
               ),
             Expanded(
               child: Row(
@@ -281,7 +293,7 @@ class IkDesktopWorkspace extends StatelessWidget {
                 ],
               ),
             ),
-            playbackBar,
+            _keyboardChrome(playbackBar, keyboardVisible),
           ],
         ),
       ),

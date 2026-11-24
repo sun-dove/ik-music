@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -959,6 +960,93 @@ void main() {
     expect(find.text(IkStrings.nextUp), findsNothing);
     expect(tester.takeException(), isNull);
     await captureIkUi(tester, 'settings');
+  });
+
+  testWidgets('E02 根底栏音效从备份切到播放与音效并保留设置状态', (tester) async {
+    const filePicker = MethodChannel('miguelruivo.flutter.plugins.filepicker');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    final backupBytes = Uint8List.fromList(
+      utf8.encode('{"manifest":{"version":1,"appVersion":"preview-fixture"}}'),
+    );
+    var selections = 0;
+    messenger.setMockMethodCallHandler(filePicker, (call) async {
+      expect(call.method, 'custom');
+      selections++;
+      return [
+        {
+          'name': 'preview.json',
+          'size': backupBytes.length,
+          'bytes': backupBytes,
+        },
+      ];
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(filePicker, null));
+    await mount(tester, workspace: true, alignToDesign: true);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+    await drain(tester);
+    final workspace = find.byType(IkSettingsWorkspace);
+    final settingsState = tester.state(workspace);
+    final route = ModalRoute.of(tester.element(workspace));
+    expect(route, isNotNull);
+    final backupTab = find.byKey(const ValueKey('ik-settings-backup'));
+    final backupContent = find.text(IkWorkspaceStrings.backupExportHint);
+    final preview = find.text(IkWorkspaceStrings.backupPreview);
+    final audioContent = find.byKey(const ValueKey('ik-spatial-emphasis'));
+    final bottomAudio = find.descendant(
+      of: find.byType(IkPlaybackBar),
+      matching: find.byTooltip(IkWorkspaceStrings.audio),
+    );
+    expect(audioContent.hitTestable(), findsOneWidget);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await tester.tap(backupTab);
+      await drain(tester);
+      expect(backupContent.hitTestable(), findsOneWidget);
+      expect(audioContent, findsNothing);
+      if (attempt == 0) {
+        final selectBackup = find.widgetWithText(
+          OutlinedButton,
+          IkWorkspaceStrings.selectBackup,
+        );
+        await tester.ensureVisible(selectBackup);
+        await tester.tap(selectBackup);
+        await drain(tester);
+      }
+      expect(preview, findsOneWidget);
+      expect(selections, 1);
+      expect(bottomAudio.hitTestable(), findsOneWidget);
+      await tester.tap(bottomAudio);
+      await drain(tester);
+      expect(audioContent.hitTestable(), findsOneWidget);
+      expect(backupContent, findsNothing);
+      expect(preview, findsNothing);
+      expect(tester.state(workspace), same(settingsState));
+      expect(ModalRoute.of(tester.element(workspace)), same(route));
+      expect(tester.takeException(), isNull);
+    }
+    await tester.tap(backupTab);
+    await drain(tester);
+    expect(preview, findsOneWidget);
+    expect(selections, 1);
+  });
+
+  testWidgets('E03 旧设置普通重建保留当前备份区', (tester) async {
+    await mount(tester, workspace: true);
+    final settingsNav = find.byKey(const ValueKey('ik-workspace-nav-4'));
+    await tester.tap(settingsNav);
+    await drain(tester);
+    final workspace = find.byType(IkSettingsWorkspace);
+    final settingsState = tester.state(workspace);
+    await tester.tap(find.byKey(const ValueKey('ik-settings-backup')));
+    await drain(tester);
+    final backupContent = find.text(IkWorkspaceStrings.backupExportHint);
+    expect(backupContent.hitTestable(), findsOneWidget);
+    final before = tester.widget<IkSettingsWorkspace>(workspace);
+    await tester.tap(settingsNav);
+    await drain(tester);
+    expect(tester.widget<IkSettingsWorkspace>(workspace), isNot(same(before)));
+    expect(tester.state(workspace), same(settingsState));
+    expect(backupContent.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('K02/K04 曲库真实入口可打开歌单、本地音乐、历史与下载管理', (tester) async {

@@ -106,6 +106,8 @@ class VideoMusicApp extends StatefulWidget {
     this.redesign = false,
     this.workspace = false,
     this.alignToDesign = false,
+    this.mobileKeyboardLayout = false,
+    this.dismissSourceMenuOnBack = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -120,6 +122,8 @@ class VideoMusicApp extends StatefulWidget {
   final bool redesign;
   final bool workspace;
   final bool alignToDesign;
+  final bool mobileKeyboardLayout;
+  final bool dismissSourceMenuOnBack;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
@@ -260,6 +264,8 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
     redesign: widget.redesign,
     workspace: widget.workspace,
     alignToDesign: widget.alignToDesign,
+    mobileKeyboardLayout: widget.mobileKeyboardLayout,
+    dismissSourceMenuOnBack: widget.dismissSourceMenuOnBack,
     preferences: widget.preferences,
     customSourceCredentials:
         widget.customSourceCredentials ??
@@ -293,6 +299,8 @@ class _VideoHome extends ConsumerStatefulWidget {
     this.redesign = false,
     this.workspace = false,
     this.alignToDesign = false,
+    this.mobileKeyboardLayout = false,
+    this.dismissSourceMenuOnBack = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore customSourceCredentials;
@@ -308,6 +316,8 @@ class _VideoHome extends ConsumerStatefulWidget {
   final bool redesign;
   final bool workspace;
   final bool alignToDesign;
+  final bool mobileKeyboardLayout;
+  final bool dismissSourceMenuOnBack;
   @override
   ConsumerState<_VideoHome> createState() => _VideoHomeState();
 }
@@ -373,6 +383,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   var _hotLoading = false;
   String? _hotError;
   var _settingsSection = 'audio';
+  var _settingsSectionRequest = 0;
   Offset? _workspacePointer;
   final _totals = <PlatformType, int?>{};
 
@@ -1466,6 +1477,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     unified: _unifiedPreferences,
     appearance: widget.windowsAppearance,
     initialSection: section ?? _settingsSection,
+    sectionRequest: section == null ? _settingsSectionRequest : 0,
     onThemeChanged: widget.onThemeChanged,
     onAccount: _account,
     onSync: _sync,
@@ -2652,6 +2664,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             alignToDesign: widget.alignToDesign,
             compactDiscovery: widget.alignToDesign,
             useSharedSearch: widget.alignToDesign,
+            dismissSourceMenuOnBack: widget.dismissSourceMenuOnBack,
             search: _ikSearch,
             onPlay: _play,
             onLike: _toggleLike,
@@ -2771,6 +2784,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           onPointerDown: (event) => _workspacePointer = event.position,
           child: IkDesktopWorkspace(
             alignToDesign: widget.alignToDesign,
+            mobileKeyboardLayout: widget.mobileKeyboardLayout,
             onSearch: widget.alignToDesign
                 ? (query) {
                     unawaited(_ikSearch.submit(query));
@@ -2789,6 +2803,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               onOpen: _openPlayer,
               onAudio: () => setState(() {
                 _settingsSection = 'audio';
+                if (widget.alignToDesign) _settingsSectionRequest++;
                 _index = 4;
               }),
             ),

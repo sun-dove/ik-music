@@ -22,6 +22,9 @@ import 'package:mconnect/models/song.dart';
 import 'package:mconnect/video_app/ik/ik_like_action.dart';
 import 'package:mconnect/video_app/ik/ik_lyrics_action.dart';
 import 'package:mconnect/video_app/ik/ik_playback_bar.dart';
+import 'package:mconnect/video_app/ik/ik_theme.dart';
+import 'package:mconnect/video_app/ik/ik_workspace.dart';
+import 'package:mconnect/video_app/ui/video_theme.dart';
 
 import 'support/content_page_fakes.dart';
 
@@ -146,6 +149,207 @@ void main() {
       }
     });
     await tester.pump();
+  }
+
+  // 正式长期门：使用真实播放栏验证键盘输入几何、命中与状态恢复。
+  Future<
+    ({ProviderContainer container, _BarPlayer player, List<String> queries})
+  >
+  mountKeyboard(
+    WidgetTester tester, {
+    required double width,
+    required double scale,
+    required bool withTrack,
+    double height = 640,
+    bool? keyboardLayout = true,
+  }) async {
+    tester.view.physicalSize = Size(width, height);
+    tester.view.devicePixelRatio = 1;
+    final player = _BarPlayer();
+    player.publish(
+      withTrack
+          ? const PlayerState(
+              currentSong: _track,
+              duration: Duration(minutes: 3),
+              isPlaying: true,
+            )
+          : const PlayerState(),
+    );
+    final likes = _Likes(database);
+    await tester.runAsync(likes.loadAllLikes);
+    final queries = <String>[];
+    final container = ProviderContainer(
+      overrides: [
+        playerProvider.overrideWith((ref) => player),
+        likesProvider.overrideWith((ref) => likes),
+        floatingLyricsProvider.overrideWith(
+          (ref) => IkStrictFloatingLyricsNotifier(save: (_) async {}),
+        ),
+      ],
+    );
+    final defaultWorkspace = IkDesktopWorkspace(
+      index: 1,
+      onSelect: (_) {},
+      onAccount: () {},
+      alignToDesign: true,
+      onSearch: queries.add,
+      pages: [
+        const Text('发现页'),
+        ListView(
+          key: const ValueKey('keyboard-results'),
+          children: [for (var i = 0; i < 30; i++) Text('搜索结果 $i')],
+        ),
+        const Text('音乐库页'),
+        const Text('最近播放页'),
+        const Text('设置页'),
+      ],
+      playbackBar: IkPlaybackBar.aligned(onOpen: () {}, onAudio: () {}),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: IkTheme.from(VideoTheme.light),
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
+          home: keyboardLayout == null
+              ? defaultWorkspace
+              : IkDesktopWorkspace(
+                  index: defaultWorkspace.index,
+                  onSelect: defaultWorkspace.onSelect,
+                  onAccount: defaultWorkspace.onAccount,
+                  alignToDesign: defaultWorkspace.alignToDesign,
+                  mobileKeyboardLayout: keyboardLayout,
+                  onSearch: defaultWorkspace.onSearch,
+                  pages: defaultWorkspace.pages,
+                  playbackBar: defaultWorkspace.playbackBar,
+                ),
+        ),
+      ),
+    );
+    await tester.pump();
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox.shrink());
+      container.dispose();
+      await tester.pump();
+      tester.view.resetViewInsets();
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    return (container: container, player: player, queries: queries);
+  }
+
+  for (final width in [320.0, 390.0]) {
+    for (final scale in [1.0, 1.5]) {
+      for (final withTrack in [false, true]) {
+        final trackLabel = withTrack ? '有播放会话' : '空播放器';
+        testWidgets('K01/K02 ${width}x640 $scale $trackLabel 输入可命中及关闭恢复', (
+          tester,
+        ) async {
+          PlatformUtils.setDebugOverride(AppPlatform.android);
+          final h = await mountKeyboard(
+            tester,
+            width: width,
+            scale: scale,
+            withTrack: withTrack,
+          );
+          final search = find.byKey(const ValueKey('ik-workspace-search'));
+          final results = find.byKey(const ValueKey('keyboard-results'));
+          final pageElement = tester.element(results);
+          final playerState = h.container.read(playerProvider);
+          await tester.tap(search);
+          await tester.enterText(search, 'music');
+          final controller = tester.widget<TextField>(search).controller!;
+          for (final inset in [248.0, 320.0]) {
+            await tester.tap(search);
+            tester.view.viewInsets = FakeViewPadding(bottom: inset);
+            await tester.pump();
+            final inputRect = tester.getRect(search);
+            expect(inputRect.top, greaterThanOrEqualTo(0));
+            expect(inputRect.bottom, lessThanOrEqualTo(640 - inset));
+            expect(search.hitTestable(), findsOneWidget);
+            expect(
+              search.hitTestable(at: const Alignment(0, .75)),
+              findsOneWidget,
+            );
+            final visibleBar = find.byType(IkPlaybackBar);
+            if (visibleBar.evaluate().isNotEmpty) {
+              final barRect = tester.getRect(visibleBar);
+              expect(
+                inputRect.overlaps(barRect),
+                isFalse,
+                reason: '输入矩形$inputRect不可与播放栏$barRect相交',
+              );
+            }
+            expect(find.byType(IkPlaybackBar).hitTestable(), findsNothing);
+            expect(controller.text, 'music');
+            expect(tester.element(results), same(pageElement));
+            await tester.testTextInput.receiveAction(TextInputAction.search);
+            expect(h.queries.last, 'music');
+            tester.testTextInput.hide();
+            tester.view.viewInsets = const FakeViewPadding();
+            await tester.pump();
+            expect(search.hitTestable(), findsOneWidget);
+            expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+            expect(
+              find.byKey(const ValueKey('ik-workspace-nav-1')).hitTestable(),
+              findsOneWidget,
+            );
+            expect(
+              tester.widget<TextField>(search).controller,
+              same(controller),
+            );
+            expect(controller.text, 'music');
+            expect(tester.element(results), same(pageElement));
+            expect(h.container.read(playerProvider), same(playerState));
+          }
+          expect(h.queries, ['music', 'music']);
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
+  }
+
+  for (final config in <(double, bool?)>[
+    (320, null),
+    (320, false),
+    (720, false),
+    (720, true),
+    (1200, false),
+    (1200, true),
+  ]) {
+    testWidgets('K03 ${config.$1}x960 ${config.$2} 缺省和宽窗保留导航底栏', (
+      tester,
+    ) async {
+      await mountKeyboard(
+        tester,
+        width: config.$1,
+        height: 960,
+        scale: 1,
+        withTrack: false,
+        keyboardLayout: config.$2,
+      );
+      final search = find.byKey(const ValueKey('ik-workspace-search'));
+      final bar = find.byType(IkPlaybackBar);
+      final before = tester.getRect(bar);
+      await tester.tap(search);
+      await tester.enterText(search, 'music');
+      tester.view.viewInsets = const FakeViewPadding(bottom: 248);
+      await tester.pump();
+      final after = tester.getRect(bar);
+      expect(bar.hitTestable(), findsOneWidget);
+      expect(after.size, before.size);
+      expect(after.top, before.top - 248);
+      expect(
+        find.byKey(const ValueKey('ik-workspace-nav-1')).hitTestable(),
+        findsOneWidget,
+      );
+      expect(tester.widget<TextField>(search).controller!.text, 'music');
+      expect(tester.takeException(), isNull);
+    });
   }
 
   testWidgets('U03 播放栏收藏忙碌禁用，落盘失败显示错误并可重试', (tester) async {

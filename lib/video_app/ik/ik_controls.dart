@@ -11,6 +11,7 @@ class IkSelect<T> extends StatefulWidget {
     required this.onChanged,
     this.enabled = true,
     this.alignToDesign = false,
+    this.dismissOnSystemBack = false,
   });
   final String label;
   final T value;
@@ -18,12 +19,19 @@ class IkSelect<T> extends StatefulWidget {
   final ValueChanged<T> onChanged;
   final bool enabled;
   final bool alignToDesign;
+  final bool dismissOnSystemBack;
   @override
   State<IkSelect<T>> createState() => _IkSelectState<T>();
 }
 
 class _IkSelectState<T> extends State<IkSelect<T>> {
   final _focus = FocusNode();
+  late final _backMenuController = MenuController();
+
+  void _refreshMenuBack() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _focus.dispose();
@@ -33,7 +41,11 @@ class _IkSelectState<T> extends State<IkSelect<T>> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return MenuAnchor(
+    final backMenu = widget.dismissOnSystemBack ? _backMenuController : null;
+    final menu = MenuAnchor(
+      controller: backMenu,
+      onOpen: backMenu == null ? null : _refreshMenuBack,
+      onClose: backMenu == null ? null : _refreshMenuBack,
       childFocusNode: _focus,
       style: MenuStyle(
         elevation: const WidgetStatePropertyAll(8),
@@ -135,6 +147,14 @@ class _IkSelectState<T> extends State<IkSelect<T>> {
           ),
         ),
       ),
+    );
+    if (backMenu == null) return menu;
+    return PopScope<Object?>(
+      canPop: !backMenu.isOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && backMenu.isOpen) backMenu.close();
+      },
+      child: menu,
     );
   }
 }

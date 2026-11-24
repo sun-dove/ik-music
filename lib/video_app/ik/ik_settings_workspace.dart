@@ -52,6 +52,7 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
     this.appearance,
     this.unified,
     this.initialSection = 'audio',
+    this.sectionRequest = 0,
     this.alignToDesign = false,
   });
   final VideoPreferences preferences;
@@ -64,6 +65,7 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
       onCache;
   final ValueChanged<PlatformType> onAccount, onSync;
   final String initialSection;
+  final int sectionRequest;
   final bool alignToDesign;
   @override
   ConsumerState<IkSettingsWorkspace> createState() =>
@@ -112,7 +114,8 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
       oldWidget.unified?.removeListener(_preferencesChanged);
       widget.unified?.addListener(_preferencesChanged);
     }
-    if (oldWidget.initialSection != widget.initialSection &&
+    if ((oldWidget.initialSection != widget.initialSection ||
+            oldWidget.sectionRequest != widget.sectionRequest) &&
         sections.containsKey(widget.initialSection)) {
       _section = widget.initialSection;
     }
