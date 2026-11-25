@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/widgets/app_scrollbar.dart';
+import '../../../../l10n/ik_library_revision_strings.dart';
 import '../../../../models/song.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../../domain/smart_playlist_rule.dart';
@@ -13,31 +14,59 @@ import '../providers/smart_playlists_provider.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 
 class SmartPlaylistsPage extends ConsumerWidget {
-  const SmartPlaylistsPage({super.key, this.safeDelete = false});
+  const SmartPlaylistsPage({super.key, this.safeDelete = false})
+    : _embedded = false;
+  const SmartPlaylistsPage.embedded({super.key, this.safeDelete = false})
+    : _embedded = true;
   final bool safeDelete;
+  final bool _embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(smartPlaylistsProvider);
     final notifier = ref.read(smartPlaylistsProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('智能歌单'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '刷新',
-            onPressed: notifier.load,
-          ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: '新建规则',
-            onPressed: () => context.push('/smart-playlists/editor'),
-          ),
-        ],
+    final actions = <Widget>[
+      IconButton(
+        icon: const Icon(Icons.refresh),
+        tooltip: '刷新',
+        onPressed: notifier.load,
       ),
-      body: _SmartPlaylistsBody(state: state, safeDelete: safeDelete),
+      IconButton(
+        icon: const Icon(Icons.add),
+        tooltip: '新建规则',
+        onPressed: () => context.push('/smart-playlists/editor'),
+      ),
+    ];
+    final body = _SmartPlaylistsBody(
+      state: state,
+      safeDelete: safeDelete,
+      embedded: _embedded,
+    );
+    if (_embedded) {
+      return Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 16, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    IkLibraryRevisionStrings.smartPlaylists,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                ...actions,
+              ],
+            ),
+          ),
+          Expanded(child: body),
+        ],
+      );
+    }
+    return Scaffold(
+      appBar: AppBar(title: const Text('智能歌单'), actions: actions),
+      body: body,
     );
   }
 }
@@ -45,8 +74,13 @@ class SmartPlaylistsPage extends ConsumerWidget {
 class _SmartPlaylistsBody extends ConsumerWidget {
   final SmartPlaylistsState state;
   final bool safeDelete;
+  final bool embedded;
 
-  const _SmartPlaylistsBody({required this.state, required this.safeDelete});
+  const _SmartPlaylistsBody({
+    required this.state,
+    required this.safeDelete,
+    this.embedded = false,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -54,6 +88,23 @@ class _SmartPlaylistsBody extends ConsumerWidget {
       return const Center(child: CircularProgressIndicator());
     }
     if (state.error != null && state.rules.isEmpty) {
+      if (embedded) {
+        return Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                state.error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              TextButton(
+                onPressed: ref.read(smartPlaylistsProvider.notifier).load,
+                child: const Text(IkLibraryRevisionStrings.retry),
+              ),
+            ],
+          ),
+        );
+      }
       return Center(
         child: Text(
           state.error!,
@@ -95,7 +146,12 @@ class _SmartPlaylistsBody extends ConsumerWidget {
           child: AppScrollbar(
             builder: (controller) => ListView.builder(
               controller: controller,
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
+              padding: EdgeInsets.fromLTRB(
+                embedded ? 24 : 12,
+                8,
+                embedded ? 24 : 12,
+                embedded ? 24 : 96,
+              ),
               itemCount: state.rules.length,
               itemBuilder: (context, index) =>
                   _ruleCard(context, ref, state, index),

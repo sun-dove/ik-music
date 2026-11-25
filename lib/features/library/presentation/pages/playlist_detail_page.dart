@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/share/song_actions.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../core/widgets/async_state_view.dart';
+import '../../../../core/widgets/song_actions_sheet.dart';
 import '../../../../models/audio_quality.dart';
 import '../../../../models/platform_type.dart';
 import '../../../../models/playlist.dart';
@@ -164,6 +166,18 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
     );
   }
 
+  Future<void> _openContextualSongMenu(
+    BuildContext buttonContext,
+    Song song,
+  ) async {
+    await showSongActionsMenu(
+      buttonContext,
+      ref,
+      song: song,
+      isLocal: song.platform == PlatformType.local,
+    );
+  }
+
   // --- batch actions -------------------------------------------------------
 
   Future<void> _batchDownload() async {
@@ -207,15 +221,23 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
     final songs = _selectedSongs;
     if (songs.isEmpty || _busy) return;
 
-    final target = await showModalBottomSheet<Playlist>(
-      context: context,
-      useRootNavigator: true,
-      isScrollControlled: true,
-      builder: (_) => _PlaylistTargetSheet(
-        platform: widget.platform,
-        songCount: songs.length,
-      ),
-    );
+    final target = ContextualActionTheme.isEnabled(context)
+        ? await showContextualDialog<Playlist>(
+            context,
+            builder: (_) => _PlaylistTargetSheet(
+              platform: widget.platform,
+              songCount: songs.length,
+            ),
+          )
+        : await showModalBottomSheet<Playlist>(
+            context: context,
+            useRootNavigator: true,
+            isScrollControlled: true,
+            builder: (_) => _PlaylistTargetSheet(
+              platform: widget.platform,
+              songCount: songs.length,
+            ),
+          );
     if (target == null || !mounted) return;
 
     setState(() => _busy = true);
@@ -506,11 +528,22 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
               children: [
                 if (song.platform != PlatformType.local)
                   DownloadButton(song: song, size: 22),
-                IconButton(
-                  icon: const Icon(Icons.more_vert, size: 20),
-                  tooltip: '歌曲操作',
-                  onPressed: () => unawaited(_openSongMenu(song)),
-                ),
+                if (ContextualActionTheme.isEnabled(context))
+                  Builder(
+                    builder: (buttonContext) => IconButton(
+                      icon: const Icon(Icons.more_vert, size: 20),
+                      tooltip: '歌曲操作',
+                      onPressed: () => unawaited(
+                        _openContextualSongMenu(buttonContext, song),
+                      ),
+                    ),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.more_vert, size: 20),
+                    tooltip: '歌曲操作',
+                    onPressed: () => unawaited(_openSongMenu(song)),
+                  ),
               ],
             ),
       onTap: _selectionMode

@@ -9,7 +9,7 @@ import 'package:mconnect/video_app/windows/windows_my_page.dart';
 void main() {
   test('K01 当前产品显示 IK Music 并保持安装和数据身份', () {
     expect(VideoStrings.appName, 'IK Music');
-    expect(VideoStrings.appVersion, 'IK Music · 0.6.0');
+    expect(VideoStrings.appVersion, 'IK Music · 0.6.1');
     final installer = File('installer/yueyin.iss').readAsStringSync();
     expect(installer, contains('54A778C9-2261-4E1F-BA89-EE68844DA7AA'));
     expect(installer, contains('IconFilename: "{app}\\ik.ico"'));
@@ -51,8 +51,8 @@ void main() {
     expect(find.text('我的'), findsOneWidget);
     expect(find.text('IK Music'), findsNothing);
     expect(find.text('DJ Music'), findsNothing);
-    await tester.scrollUntilVisible(find.text('IK Music · 0.6.0'), 300);
-    expect(find.text('IK Music · 0.6.0'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('IK Music · 0.6.1'), 300);
+    expect(find.text('IK Music · 0.6.1'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -12,6 +12,7 @@ import '../../../../core/theme/platform_accent.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../core/widgets/async_state_view.dart';
+import '../../../../l10n/ik_discovery_revision_strings.dart';
 import '../../../../l10n/l10n.dart';
 import '../../../../models/audio_quality.dart';
 import '../../../../models/platform_type.dart';
@@ -33,13 +34,17 @@ import '../widgets/ranked_song_tile.dart';
 /// * a platform that fails keeps its entry and shows its error instead of
 ///   silently disappearing.
 class ToplistsPage extends ConsumerStatefulWidget {
-  const ToplistsPage({super.key});
+  const ToplistsPage({super.key, this.alignToDesign = false});
+
+  final bool alignToDesign;
 
   @override
   ConsumerState<ToplistsPage> createState() => _ToplistsPageState();
 }
 
 class _ToplistsPageState extends ConsumerState<ToplistsPage> {
+  PlatformType _selectedPlatform = PlatformType.netease;
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +60,7 @@ class _ToplistsPageState extends ConsumerState<ToplistsPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(toplistsProvider);
+    if (widget.alignToDesign) return _buildAligned(context, state);
     final platforms = _platformsToRender(state);
 
     return Scaffold(
@@ -133,6 +139,158 @@ class _ToplistsPageState extends ConsumerState<ToplistsPage> {
     );
   }
 
+  Widget _buildAligned(BuildContext context, ToplistsState state) {
+    final platform = _selectedPlatform;
+    final toplists = state.toplistsForPlatform(platform);
+    final error = state.errorForPlatform(platform);
+    final accent = PlatformAccent.colorOf(context, platform);
+    final groups = <String?, List<Toplist>>{};
+    for (final toplist in toplists) {
+      if (platform == PlatformType.qq && toplist.id == qqHotToplistId) {
+        continue;
+      }
+      groups.putIfAbsent(toplist.groupName, () => []).add(toplist);
+    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(IkDiscoveryRevisionStrings.toplists),
+        actions: [
+          IconButton(
+            tooltip: IkDiscoveryRevisionStrings.refresh,
+            icon: const Icon(Icons.refresh),
+            onPressed: () => ref.read(toplistsProvider.notifier).refresh(),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final platform in PlatformType.musicServices)
+                    ChoiceChip(
+                      label: Text(platform.displayName),
+                      selected: _selectedPlatform == platform,
+                      onSelected: (_) =>
+                          setState(() => _selectedPlatform = platform),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () => ref.read(toplistsProvider.notifier).refresh(),
+              child: AppScrollbar(
+                builder: (controller) => CustomScrollView(
+                  controller: controller,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Wrap(
+                          spacing: 12,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Text(
+                              platform.displayName,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            if (state.isOffline(platform))
+                              const _OfflineBadge(),
+                            if (toplists.isNotEmpty)
+                              Text(
+                                IkDiscoveryRevisionStrings.toplistsCount(
+                                  toplists.length,
+                                ),
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (platform == PlatformType.qq)
+                      SliverToBoxAdapter(
+                        child: _AlignedHotChartCard(
+                          meta: state.qqHotToplist,
+                          onTap: () => _openChart(
+                            PlatformType.qq,
+                            qqHotToplistId,
+                            state.qqHotToplist?.name ?? qqHotToplistName,
+                          ),
+                        ),
+                      ),
+                    if (state.isLoading && toplists.isNotEmpty)
+                      const SliverToBoxAdapter(
+                        child: LinearProgressIndicator(),
+                      ),
+                    if (error != null)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                          child: _PlatformError(
+                            platform: platform,
+                            message: error,
+                            onRetry: () =>
+                                ref.read(toplistsProvider.notifier).refresh(),
+                          ),
+                        ),
+                      ),
+                    if (state.isLoading && toplists.isEmpty)
+                      const SliverAsyncStateView(
+                        hasScrollBody: true,
+                        child: AsyncStateView.loading(skeleton: true),
+                      )
+                    else if (toplists.isEmpty && error == null)
+                      const SliverAsyncStateView(
+                        child: AsyncStateView.empty(
+                          title: IkDiscoveryRevisionStrings.noToplists,
+                          message: IkDiscoveryRevisionStrings.refreshHint,
+                        ),
+                      ),
+                    for (final entry in groups.entries) ...[
+                      if (entry.key != null)
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                            child: Text(
+                              entry.key!,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                        ),
+                      SliverList.builder(
+                        itemCount: entry.value.length,
+                        itemBuilder: (_, index) {
+                          final toplist = entry.value[index];
+                          return _ToplistTile(
+                            toplist: toplist,
+                            accent: accent,
+                            onTap: () =>
+                                _openChart(platform, toplist.id, toplist.name),
+                          );
+                        },
+                      ),
+                    ],
+                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   List<PlatformType> _platformsToRender(ToplistsState state) {
     return PlatformType.musicServices.where((platform) {
       return state.toplistsForPlatform(platform).isNotEmpty ||
@@ -148,6 +306,79 @@ class _ToplistsPageState extends ConsumerState<ToplistsPage> {
     context.push(
       '/toplist/${platform.name}/${Uri.encodeComponent(toplistId)}'
       '${query.isEmpty ? '' : '?$query'}',
+    );
+  }
+}
+
+class _AlignedHotChartCard extends StatelessWidget {
+  const _AlignedHotChartCard({required this.meta, required this.onTap});
+
+  final Toplist? meta;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final details = <String>[
+      IkDiscoveryRevisionStrings.songsCount(meta?.songCount ?? 300),
+      if (meta?.updateFrequency != null) meta!.updateFrequency!,
+      if (meta?.period != null) meta!.period!,
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Card(
+        key: const Key('ik-toplists-qq-hot'),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                _ChartCover(
+                  coverUrl: meta?.coverUrl,
+                  accent: PlatformAccent.qq,
+                  size: 48,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        IkDiscoveryRevisionStrings.pinnedHot,
+                        style: Theme.of(context).textTheme.labelSmall
+                            ?.copyWith(color: colors.primary),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        meta?.name ?? qqHotToplistName,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        details.join(' · '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        IkDiscoveryRevisionStrings.browseHot,
+                        style: TextStyle(color: colors.primary),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

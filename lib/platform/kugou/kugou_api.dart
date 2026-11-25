@@ -24,6 +24,14 @@ class KugouApi {
   String? _mid;
   String? _uuid;
   KugouPlaybackClient _clientMode = KugouPlaybackClient.android;
+  final _personalDailySession = ValueNotifier<int>(0);
+
+  ValueListenable<int> get personalDailySessionChanges => _personalDailySession;
+
+  void markPersonalDailySessionChanged() => _personalDailySession.value++;
+
+  (String?, String?, String?, String?, String?) get _personalDailyFields =>
+      (_token, _userid, _dfid, _mid, _uuid);
 
   /// [dio] is injectable for tests; production always goes through
   /// [createPlatformDio] so the shared retry / error-translation interceptors
@@ -72,11 +80,13 @@ class KugouApi {
       (_vipToken?.isNotEmpty ?? false);
 
   void setClientMode(KugouPlaybackClient mode) {
+    final previous = _clientMode;
     _clientMode = mode;
+    if (mode != previous) markPersonalDailySessionChanged();
   }
 
   void setClientVariant(String? variant) {
-    _clientMode = clientModeFromVariant(variant);
+    setClientMode(clientModeFromVariant(variant));
   }
 
   static KugouPlaybackClient clientModeFromVariant(String? variant) {
@@ -101,6 +111,7 @@ class KugouApi {
     String? mid,
     String? uuid,
   }) {
+    final previous = _personalDailyFields;
     void setIfPresent(String? value, void Function(String) set) {
       final trimmed = value?.trim();
       if (trimmed != null && trimmed.isNotEmpty && trimmed != 'null') {
@@ -115,6 +126,7 @@ class KugouApi {
     setIfPresent(dfid, (value) => _dfid = value);
     setIfPresent(mid, (value) => _mid = value);
     setIfPresent(uuid, (value) => _uuid = value);
+    if (_personalDailyFields != previous) markPersonalDailySessionChanged();
   }
 
   void restoreToken(String token) {
@@ -135,6 +147,7 @@ class KugouApi {
   /// exactly the kind of sudden device change Kugou's risk control reacts to.
   /// Pass [keepDeviceIds] `false` when the caller really wants anonymity.
   void clearSession({bool keepDeviceIds = true}) {
+    final previous = _personalDailyFields;
     _token = null;
     _userid = null;
     _vipToken = null;
@@ -144,6 +157,7 @@ class KugouApi {
       _mid = null;
       _uuid = null;
     }
+    if (_personalDailyFields != previous) markPersonalDailySessionChanged();
   }
 
   /// Decode response data - handles both Map and String (JSON) responses.
@@ -575,6 +589,48 @@ class KugouApi {
     return _decodeResponse(res.data);
   }
 
+  Future<Response<String>> getPersonalDailySongs() {
+    final body = jsonEncode({'platform': 'android', 'userid': _userid});
+    final params = _signedAndroidParams({'uuid': '-'}, body, _clientMode);
+    return _dio.post<String>(
+      'https://gateway.kugou.com/everyday_song_recommend',
+      data: body,
+      queryParameters: params,
+      options: _personalDailyOptions(
+        headers: {
+          'User-Agent': 'Android15-1070-11083-46-0-DiscoveryDRADProtocol-wifi',
+          'x-router': 'everydayrec.service.kugou.com',
+          'dfid': params['dfid'],
+          'mid': params['mid'],
+          'clienttime': params['clienttime'],
+          'kg-rc': '1',
+          'kg-thash': '5d816a0',
+          'kg-rec': '1',
+          'kg-rf': 'B9EDA08A64250DEFFBCADDEE00F8F25F',
+        },
+        contentType: Headers.jsonContentType,
+      ),
+    );
+  }
+
+  Options _personalDailyOptions({
+    Map<String, dynamic>? headers,
+    String? contentType,
+  }) => Options(
+    headers: headers,
+    contentType: contentType,
+    responseType: ResponseType.plain,
+    followRedirects: false,
+    validateStatus: (code) =>
+        code != null &&
+        ((code >= 200 && code < 300) || code == 401 || code == 403),
+  );
+
+  Map<String, dynamic>? decodePersonalDailyReply(String text) {
+    final decoded = jsonDecode(_stripResourceTags(text));
+    return decoded is Map<String, dynamic> ? decoded : null;
+  }
+
   /// Mobile homepage modules (`m.kugou.com/?json=true`).
   ///
   /// `data` is 10 recommended songs (same song shape as `rank/song`), and
@@ -809,6 +865,26 @@ class KugouApi {
       },
     );
     return _decodeResponse(res.data);
+  }
+
+  Future<Response<String>> getPersonalDailyAccount() {
+    final isLite = _clientMode == KugouPlaybackClient.lite;
+    return _dio.get<String>(
+      KugouEndpoints.userInfo,
+      queryParameters: {
+        'srcappid': 2919,
+        'clientver': isLite ? 11440 : 20000,
+        'clienttime': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        'mid': _mid,
+        'uuid': _uuid ?? 'uuid',
+        'dfid': _dfid,
+        'appid': isLite ? 3116 : 1005,
+        'token': _token,
+        'userid': _userid,
+        'platid': 4,
+      },
+      options: _personalDailyOptions(),
+    );
   }
 
   // --- Library ---

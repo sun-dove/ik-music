@@ -22,6 +22,7 @@ import 'package:mconnect/models/song.dart';
 import 'package:mconnect/video_app/ik/ik_controls.dart';
 import 'package:mconnect/video_app/ik/ik_settings_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_strict_settings.dart';
+import 'package:mconnect/video_app/ik/ik_workspace_theme.dart';
 import 'package:mconnect/video_app/built_in/catalog.dart';
 import 'package:mconnect/video_app/built_in/catalog_coordinator.dart';
 import 'package:mconnect/video_app/built_in/fixed_importer.dart';
@@ -84,6 +85,8 @@ void main() {
     bool qualityPlayback = false,
     bool localPlayback = false,
     bool failQualityWrites = false,
+    bool alignToDesign = false,
+    Brightness brightness = Brightness.light,
   }) async {
     tester.view.physicalSize = Size(width, 900);
     tester.view.devicePixelRatio = 1;
@@ -196,6 +199,9 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          theme: alignToDesign
+              ? IkWorkspaceTheme.from(ThemeData(brightness: brightness))
+              : null,
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context)
                 .copyWith(textScaler: TextScaler.linear(scale)),
@@ -207,6 +213,7 @@ void main() {
               appearance: appearance,
               unified: unified,
               initialSection: section,
+              alignToDesign: alignToDesign,
               onThemeChanged: () {},
               onAccount: (_) {},
               onSync: (_) {},
@@ -457,6 +464,48 @@ void main() {
       }
     }
     expect(checked, 126);
+  });
+
+  testWidgets('A03/A07 原稿设置浅深×七区×六宽×三字号完整252布局无溢出', (tester) async {
+    var checked = 0;
+    for (final brightness in Brightness.values) {
+      for (final section in [
+        'audio',
+        'appearance',
+        'lyrics',
+        'sources',
+        'downloads',
+        'accounts',
+        'backup',
+      ]) {
+        for (final width in [1440.0, 1200.0, 900.0, 720.0, 390.0, 320.0]) {
+          for (final scale in [1.0, 1.25, 1.5]) {
+            final h = await mount(
+              tester,
+              section: section,
+              width: width,
+              scale: scale,
+              alignToDesign: true,
+              brightness: brightness,
+            );
+            final failures = <Object>[];
+            Object? next;
+            while ((next = tester.takeException()) != null) {
+              failures.add(next!);
+            }
+            expect(
+              failures,
+              isEmpty,
+              reason: '$brightness $section $width ${scale * 100}%',
+            );
+            expect(find.byType(IkSettingsWorkspace), findsOneWidget);
+            checked++;
+            await unmount(tester, h);
+          }
+        }
+      }
+    }
+    expect(checked, 252);
   });
 }
 

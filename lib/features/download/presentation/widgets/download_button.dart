@@ -4,6 +4,8 @@ import 'package:collection/collection.dart';
 
 import 'dart:async';
 
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/song_actions_sheet.dart';
 import '../../../../models/audio_quality.dart';
 import '../../../../models/song.dart';
 import '../../../../models/user.dart';
@@ -129,28 +131,19 @@ class DownloadButton extends ConsumerWidget {
   }
 
   void _showQualityPicker(BuildContext context, WidgetRef ref) {
-    showModalBottomSheet(
-      context: context,
-      // The nearest navigator is the shell's nested one, which is now full-screen so
-      // routed pages can paint to the bottom edge. A sheet pushed there would be
-      // laid out under the floating chrome (the mini player, and the nav capsule on
-      // the home tabs). The root navigator puts it above the whole shell, which is
-      // what a modal sheet should cover.
-      useRootNavigator: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        final l = ctx.l10n;
-        return SafeArea(
-          child: FutureBuilder<List<AudioQuality>>(
-            future: _loadQualities(),
-            builder: (context, snapshot) {
-              final qualities = snapshot.data ?? const <AudioQuality>[];
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+    final contextual = ContextualActionTheme.isEnabled(context);
+    Widget picker(BuildContext ctx) {
+      final cs = Theme.of(ctx).colorScheme;
+      final l = ctx.l10n;
+      return SafeArea(
+        child: FutureBuilder<List<AudioQuality>>(
+          future: _loadQualities(),
+          builder: (context, snapshot) {
+            final qualities = snapshot.data ?? const <AudioQuality>[];
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (!contextual)
                   Container(
                     width: 40,
                     height: 4,
@@ -160,6 +153,33 @@ class DownloadButton extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
+                if (contextual)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            l.downloadQualityPicker(song.name),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: MaterialLocalizations.of(ctx)
+                              .closeButtonTooltip,
+                          onPressed: () =>
+                              Navigator.of(ctx, rootNavigator: true).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                  )
+                else
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -175,76 +195,92 @@ class DownloadButton extends ConsumerWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Divider(height: 1),
-                  if (snapshot.connectionState == ConnectionState.waiting)
-                    const Padding(
-                      padding: EdgeInsets.all(24),
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: qualities.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, index) {
-                          final quality = qualities[index];
-                          return ListTile(
-                            leading: Icon(
-                              quality.isLossless
-                                  ? Icons.album
-                                  : quality.level == AudioLevel.low
-                                  ? Icons.music_note
-                                  : Icons.high_quality,
-                              size: 20,
-                            ),
-                            title: Row(
-                              children: [
-                                Flexible(
+                const Divider(height: 1),
+                if (snapshot.connectionState == ConnectionState.waiting)
+                  const Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: qualities.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final quality = qualities[index];
+                        return ListTile(
+                          leading: Icon(
+                            quality.isLossless
+                                ? Icons.album
+                                : quality.level == AudioLevel.low
+                                ? Icons.music_note
+                                : Icons.high_quality,
+                            size: 20,
+                          ),
+                          title: Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  quality.level.displayNameFor(song.platform),
+                                  maxLines: contextual ? 2 : null,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (quality.isVipOnly || quality.isSvipOnly) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 1,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: cs.primaryContainer,
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
                                   child: Text(
-                                    quality.level.displayNameFor(song.platform),
-                                    overflow: TextOverflow.ellipsis,
+                                    quality.isSvipOnly
+                                        ? l.downloadRequiresSvip
+                                        : l.downloadRequiresVip,
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      color: cs.primary,
+                                    ),
                                   ),
                                 ),
-                                if (quality.isVipOnly ||
-                                    quality.isSvipOnly) ...[
-                                  const SizedBox(width: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 4,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: cs.primaryContainer,
-                                      borderRadius: BorderRadius.circular(3),
-                                    ),
-                                    child: Text(
-                                      quality.isSvipOnly
-                                          ? l.downloadRequiresSvip
-                                          : l.downloadRequiresVip,
-                                      style: TextStyle(
-                                        fontSize: 9,
-                                        color: cs.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ],
                               ],
-                            ),
-                            subtitle: Text(_qualitySubtitle(l, quality)),
-                            onTap: () =>
-                                _startDownload(ctx, ref, quality.level),
-                          );
-                        },
-                      ),
+                            ],
+                          ),
+                          subtitle: Text(_qualitySubtitle(l, quality)),
+                          onTap: () => _startDownload(ctx, ref, quality.level),
+                        );
+                      },
                     ),
-                  const SizedBox(height: 8),
-                ],
-              );
-            },
-          ),
-        );
-      },
+                  ),
+                const SizedBox(height: 8),
+              ],
+            );
+          },
+        ),
+      );
+    }
+
+    if (contextual) {
+      showContextualDialog<void>(context, builder: picker);
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      // The nearest navigator is the shell's nested one, which is now full-screen so
+      // routed pages can paint to the bottom edge. A sheet pushed there would be
+      // laid out under the floating chrome (the mini player, and the nav capsule on
+      // the home tabs). The root navigator puts it above the whole shell, which is
+      // what a modal sheet should cover.
+      useRootNavigator: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: picker,
     );
   }
 

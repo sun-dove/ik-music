@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../models/platform_type.dart';
+import '../../../../video_app/ik/ik_controls.dart';
 import '../../domain/smart_playlist_rule.dart';
 import '../providers/smart_playlists_provider.dart';
 import '../../../../core/utils/snackbar_helper.dart';
@@ -249,20 +251,31 @@ class _SmartPlaylistEditorPageState
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.sort),
               title: const Text('排序方式'),
-              trailing: DropdownButton<SmartPlaylistSortOrder>(
-                value: _sortBy,
-                underline: const SizedBox.shrink(),
-                items: [
-                  for (final order in SmartPlaylistSortOrder.values)
-                    DropdownMenuItem(
-                      value: order,
-                      child: Text(order.displayName),
+              trailing: ContextualActionTheme.isEnabled(context)
+                  ? IkSelect<SmartPlaylistSortOrder>(
+                      label: '排序方式',
+                      value: _sortBy,
+                      items: {
+                        for (final order in SmartPlaylistSortOrder.values)
+                          order: order.displayName,
+                      },
+                      onChanged: (value) => setState(() => _sortBy = value),
+                      alignToDesign: true,
+                    )
+                  : DropdownButton<SmartPlaylistSortOrder>(
+                      value: _sortBy,
+                      underline: const SizedBox.shrink(),
+                      items: [
+                        for (final order in SmartPlaylistSortOrder.values)
+                          DropdownMenuItem(
+                            value: order,
+                            child: Text(order.displayName),
+                          ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) setState(() => _sortBy = value);
+                      },
                     ),
-                ],
-                onChanged: (value) {
-                  if (value != null) setState(() => _sortBy = value);
-                },
-              ),
             ),
             const SizedBox(height: 12),
             SwitchListTile(

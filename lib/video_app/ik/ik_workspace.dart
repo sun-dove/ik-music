@@ -14,12 +14,18 @@ class IkDesktopWorkspace extends StatelessWidget {
     required this.pages,
     required this.playbackBar,
     required this.onAccount,
+    this.alignToDesign = false,
+    this.mobileKeyboardLayout = false,
+    this.onSearch,
   });
   final int index;
   final ValueChanged<int> onSelect;
   final List<Widget> pages;
   final Widget playbackBar;
   final VoidCallback onAccount;
+  final bool alignToDesign;
+  final bool mobileKeyboardLayout;
+  final ValueChanged<String>? onSearch;
   static const labels = [
     IkWorkspaceStrings.discovery,
     VideoStrings.search,
@@ -119,9 +125,27 @@ class IkDesktopWorkspace extends StatelessWidget {
     ],
   );
 
+  List<Widget> _pageChildren() => alignToDesign
+      ? [
+          for (final page in pages.indexed)
+            Overlay.wrap(
+              key: ValueKey('ik-workspace-page-overlay-${page.$1}'),
+              clipBehavior: Clip.none,
+              child: page.$2,
+            ),
+        ]
+      : pages;
+
+  Widget _keyboardChrome(Widget child, bool hidden) =>
+      mobileKeyboardLayout ? Offstage(offstage: hidden, child: child) : child;
+
   @override
   Widget build(BuildContext context) {
     final wide = MediaQuery.sizeOf(context).width >= 720;
+    final keyboardVisible =
+        mobileKeyboardLayout &&
+        !wide &&
+        MediaQuery.viewInsetsOf(context).bottom > 0;
     final sidebar = Theme.of(context).colorScheme.primary
         .withValues(alpha: .035);
     return Scaffold(
@@ -130,40 +154,43 @@ class IkDesktopWorkspace extends StatelessWidget {
         child: Column(
           children: [
             if (!wide)
-              Container(
-                color: sidebar,
-                padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(child: _brand(compact: true)),
-                        IconButton(
-                          key: const ValueKey('ik-workspace-nav-4'),
-                          tooltip: IkWorkspaceStrings.settings,
-                          onPressed: () => onSelect(4),
-                          icon: const Icon(Icons.settings_outlined, size: 20),
-                        ),
-                        IconButton(
-                          key: const ValueKey('ik-workspace-account'),
-                          tooltip: IkWorkspaceStrings.connect,
-                          onPressed: onAccount,
-                          icon: const Icon(
-                            Icons.person_outline_rounded,
-                            size: 20,
+              _keyboardChrome(
+                Container(
+                  color: sidebar,
+                  padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
+                  child: Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(child: _brand(compact: true)),
+                          IconButton(
+                            key: const ValueKey('ik-workspace-nav-4'),
+                            tooltip: IkWorkspaceStrings.settings,
+                            onPressed: () => onSelect(4),
+                            icon: const Icon(Icons.settings_outlined, size: 20),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        for (var i = 0; i < 4; i++)
-                          Expanded(child: _nav(context, i, compact: true)),
-                      ],
-                    ),
-                  ],
+                          IconButton(
+                            key: const ValueKey('ik-workspace-account'),
+                            tooltip: IkWorkspaceStrings.connect,
+                            onPressed: onAccount,
+                            icon: const Icon(
+                              Icons.person_outline_rounded,
+                              size: 20,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          for (var i = 0; i < 4; i++)
+                            Expanded(child: _nav(context, i, compact: true)),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
+                keyboardVisible,
               ),
             Expanded(
               child: Row(
@@ -246,15 +273,139 @@ class IkDesktopWorkspace extends StatelessWidget {
                       ),
                     ),
                   Expanded(
-                    child: IndexedStack(index: index, children: pages),
+                    child: alignToDesign && onSearch != null
+                        ? Column(
+                            children: [
+                              _WorkspaceTopBar(
+                                location: labels[index],
+                                onSearch: onSearch!,
+                              ),
+                              Expanded(
+                                child: IndexedStack(
+                                  index: index,
+                                  children: _pageChildren(),
+                                ),
+                              ),
+                            ],
+                          )
+                        : IndexedStack(index: index, children: _pageChildren()),
                   ),
                 ],
               ),
             ),
-            playbackBar,
+            _keyboardChrome(playbackBar, keyboardVisible),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _WorkspaceTopBar extends StatefulWidget {
+  const _WorkspaceTopBar({required this.location, required this.onSearch});
+  final String location;
+  final ValueChanged<String> onSearch;
+
+  @override
+  State<_WorkspaceTopBar> createState() => _WorkspaceTopBarState();
+}
+
+class _WorkspaceTopBarState extends State<_WorkspaceTopBar> {
+  final _query = TextEditingController();
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final scale = MediaQuery.textScalerOf(context).scale(13) / 13;
+        final stacked = constraints.maxWidth < 480 * scale;
+        final location = Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.chevron_right_rounded,
+              size: 18,
+              color: colors.onSurfaceVariant,
+            ),
+            const SizedBox(width: 7),
+            Text(
+              widget.location,
+              key: const ValueKey('ik-workspace-location'),
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+          ],
+        );
+        final search = TextField(
+          key: const ValueKey('ik-workspace-search'),
+          controller: _query,
+          textInputAction: TextInputAction.search,
+          onSubmitted: widget.onSearch,
+          style: const TextStyle(fontSize: 13),
+          decoration: InputDecoration(
+            hintText: IkStrings.searchHint,
+            hintMaxLines: 1,
+            prefixIcon: const Icon(Icons.search_rounded, size: 18),
+            prefixIconConstraints: const BoxConstraints(minWidth: 38),
+            filled: true,
+            fillColor: colors.surface,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 12,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: colors.outlineVariant.withValues(alpha: .55),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: colors.outlineVariant.withValues(alpha: .55),
+              ),
+            ),
+          ),
+        );
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Container(
+            padding: EdgeInsets.symmetric(vertical: stacked ? 14 : 20),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: colors.outlineVariant.withValues(alpha: .45),
+                ),
+              ),
+            ),
+            child: stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [location, const SizedBox(height: 10), search],
+                  )
+                : Row(
+                    children: [
+                      location,
+                      const Spacer(),
+                      SizedBox(
+                        width: (300 * scale).clamp(
+                          0,
+                          constraints.maxWidth * .64,
+                        ),
+                        child: search,
+                      ),
+                    ],
+                  ),
+          ),
+        );
+      },
     );
   }
 }

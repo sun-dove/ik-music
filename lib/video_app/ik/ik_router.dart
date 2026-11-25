@@ -24,12 +24,15 @@ import '../../models/platform_type.dart';
 import 'ik_audio_page.dart';
 import 'ik_backup_page.dart';
 import 'ik_floating_lyrics.dart';
+import 'ik_personal_daily_page.dart';
 
 GoRouter createIkRouter({
   required WidgetBuilder home,
   required WidgetBuilder player,
   Widget Function(BuildContext, Widget)? detailShell,
   Widget Function(BuildContext, String)? settings,
+  WidgetBuilder? downloads,
+  bool alignToDesign = false,
 }) {
   Widget detail(BuildContext context, Widget page) =>
       detailShell?.call(context, page) ?? page;
@@ -65,9 +68,29 @@ GoRouter createIkRouter({
       ),
       GoRoute(path: '/player', builder: (context, _) => player(context)),
       page('/queue', (_) => const QueuePage()),
-      page('/recommendations', (_) => const RecommendationsPage()),
-      page('/toplists', (_) => const ToplistsPage()),
-      page('/new-songs', (_) => const NewSongsPage()),
+      page(
+        '/recommendations',
+        (_) => RecommendationsPage(alignToDesign: alignToDesign),
+      ),
+      if (alignToDesign)
+        GoRoute(
+          path: '/daily',
+          builder: (context, state) {
+            final name = state.uri.queryParameters['platform'];
+            final platform = name == null
+                ? PlatformType.netease
+                : PlatformType.tryParse(name);
+            if (platform == null || !platform.isMusicService) {
+              return const IkRouteError();
+            }
+            return detail(
+              context,
+              IkPersonalDailyPage(initialPlatform: platform),
+            );
+          },
+        ),
+      page('/toplists', (_) => ToplistsPage(alignToDesign: alignToDesign)),
+      page('/new-songs', (_) => NewSongsPage(alignToDesign: alignToDesign)),
       page('/history', (_) => const HistoryPage(allEntries: true)),
       page('/local-music', (_) => const LocalMusicPage()),
       page('/likes', (_) => const LikesPage(allEntries: true)),
@@ -84,7 +107,7 @@ GoRouter createIkRouter({
           localImportFailure: IkStrings.importPlaylistFailed,
         ),
       ),
-      page('/downloads', (_) => const DownloadPage()),
+      page('/downloads', downloads ?? (_) => const DownloadPage()),
       page('/offline-cache', (_) => const OfflineCachePage()),
       page(
         '/listening-stats',

@@ -367,6 +367,9 @@ Future<void> main() async {
       child: VideoMusicApp(
         redesign: true,
         workspace: true,
+        alignToDesign: true,
+        mobileKeyboardLayout: !PlatformUtils.isDesktop,
+        dismissSourceMenuOnBack: !PlatformUtils.isDesktop,
         expandedPlatforms: true,
         catalog: catalog,
         preferences: preferences,

@@ -10,6 +10,14 @@ import '../../models/platform_type.dart';
 import 'qq_endpoints.dart';
 import 'qq_toplist_ids.dart';
 
+class _PersonalDailyCard {
+  _PersonalDailyCard(this.tag);
+
+  final String tag;
+  final ids = <int>{};
+  bool hasTitle = false;
+}
+
 class QqApi {
   static final Random _secureRandom = Random.secure();
 
@@ -17,8 +25,21 @@ class QqApi {
   bool get requiresCompleteMusicSession => false;
 
   final Dio _dio;
-  String? _cookie;
+  String? _storedCookie;
+  final _personalDailySession = ValueNotifier(0);
   String? _playbackGuid;
+
+  String? get _cookie => _storedCookie;
+
+  set _cookie(String? value) {
+    if (_storedCookie == value) return;
+    _storedCookie = value;
+    markPersonalDailySessionChanged();
+  }
+
+  ValueListenable<int> get personalDailySessionChanges => _personalDailySession;
+
+  void markPersonalDailySessionChanged() => _personalDailySession.value++;
 
   /// QQ's `g_tk` ("bkn"): the DJB2 hash of `p_skey`, masked to 31 bits.
   ///
@@ -187,6 +208,23 @@ class QqApi {
 
   String? get cookie => _cookie;
 
+  String? get personalDailyMusicId {
+    final cookies = _parseCookieMap(_cookie ?? '');
+    final rawId = cookies['qqmusic_uin'];
+    final id = rawId == null ? null : _positiveDecimal(rawId);
+    if (id == null || !_hasCookieValue(cookies['qqmusic_encrypt_uin'])) {
+      return null;
+    }
+    if (!_hasCookieValue(cookies['qm_keyst']) &&
+        !_hasCookieValue(cookies['qqmusic_key'])) {
+      return null;
+    }
+    return id.toString();
+  }
+
+  static bool _hasCookieValue(String? value) =>
+      value != null && value.isNotEmpty && value != 'null' && value != '0';
+
   bool get hasCompleteMusicSession {
     final musicId = _extractCookie('qqmusic_uin');
     final musicKey =
@@ -201,8 +239,10 @@ class QqApi {
   }
 
   void restoreCookie(String cookie) {
+    final sameCookie = _cookie == cookie;
     _cookie = cookie;
     _dio.options.headers['cookie'] = cookie;
+    if (sameCookie) markPersonalDailySessionChanged();
   }
 
   /// Normalises a QQ response body into a map.
@@ -1411,6 +1451,166 @@ class QqApi {
         RegExp("playlist/(\\d+)").firstMatch(scope) ??
         RegExp("id=(\\d+)").firstMatch(scope);
     return match?.group(1);
+  }
+
+  Future<({int? status, String? playlistId})> getPersonalDailyPlaylist(
+    String cookieSnapshot,
+  ) async {
+    final response = await _dio.get<String>(
+      QqEndpoints.dailyPrivatePage,
+      options: _personalDailyOptions(cookieSnapshot),
+    );
+    final page = response.data;
+    return (
+      status: response.statusCode,
+      playlistId: response.statusCode == 200 && page != null
+          ? _findPersonalDailyPlaylistId(page)
+          : null,
+    );
+  }
+
+  Future<({int? status, Map<String, dynamic> body, bool accessDenied})>
+  getPersonalDailyPlaylistPage(
+    String playlistId, {
+    required String cookieSnapshot,
+    required int songBegin,
+    required int songNum,
+  }) async {
+    final response = await _dio.post<String>(
+      QqEndpoints.musicu,
+      data: {
+        'comm': {'ct': 19, 'cv': 1845},
+        'req_0': {
+          'module': QqEndpoints.modulePlaylistDetail,
+          'method': QqEndpoints.methodGetPlaylistDetail,
+          'param': {
+            'disstid': int.parse(playlistId),
+            'dirid': 0,
+            'tag': 1,
+            'song_num': songNum,
+            'song_begin': songBegin,
+            'userinfo': 1,
+          },
+        },
+      },
+      options: _personalDailyOptions(
+        cookieSnapshot,
+        contentType: Headers.jsonContentType,
+      ),
+    );
+    return (
+      status: response.statusCode,
+      body: response.statusCode == 200
+          ? responseMapOf(response.data)
+          : <String, dynamic>{},
+      accessDenied: response.data?.trim() == 'Access Deny ! No Actions !',
+    );
+  }
+
+  static Options _personalDailyOptions(String cookie, {String? contentType}) =>
+      Options(
+        contentType: contentType,
+        responseType: ResponseType.plain,
+        followRedirects: false,
+        // 个人入口自行判断 HTTP 状态，避免旧 401/403 广播作用于新会话。
+        validateStatus: (status) => status != null,
+        headers: {'Referer': 'https://y.qq.com/', 'cookie': cookie},
+      );
+
+  static const _privateTitle = '今日私享'; // i18n-exempt: QQ 服务端 HTML 标题
+  static final _privateHtmlToken = RegExp(
+    r'''<!--[\s\S]*?(?:-->|$)|'''
+    r'''<(script|style|template|textarea|title)\b(?:"[^"]*"|'[^']*'|[^'">])*>[\s\S]*?(?:</\s*\1\s*>|$)|'''
+    r'''<(/?)([a-z][\w:-]*)\b((?:"[^"]*"|'[^']*'|[^'">])*)>|[^<]+''',
+    caseSensitive: false,
+  );
+  static final _privateHtmlAttribute = RegExp(
+    r'''([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?''',
+  );
+  static final _privatePlaylistLink = RegExp(
+    r'^/(?:n/(?:ryqq|yqq)/)?playlist/(\d+)(?:\.html)?/?$',
+  );
+  static final _decimal = RegExp(r'^\d+$');
+
+  static int? _positiveDecimal(String text) {
+    if (!_decimal.hasMatch(text)) return null;
+    final value = int.tryParse(text);
+    return value != null && value > 0 ? value : null;
+  }
+
+  static String? _findPersonalDailyPlaylistId(String html) {
+    final cards = <_PersonalDailyCard>[];
+    _PersonalDailyCard? active;
+    var depth = 0;
+    for (final token in _privateHtmlToken.allMatches(html)) {
+      final name = token.group(3)?.toLowerCase();
+      if (name == null) {
+        if (token[0]!.trim() == _privateTitle && active != null) {
+          active.hasTitle = true;
+        }
+        continue;
+      }
+      if (token[2] == '/') {
+        if (active != null && name == active.tag && --depth == 0) {
+          cards.add(active);
+          active = null;
+        }
+        continue;
+      }
+
+      final attrs = <String, List<String>>{};
+      for (final attribute in _privateHtmlAttribute.allMatches(token[4]!)) {
+        final values = attrs.putIfAbsent(attribute[1]!.toLowerCase(), () => []);
+        values.add(attribute[2] ?? attribute[3] ?? attribute[4] ?? '');
+      }
+      final isCard =
+          (name == 'li' || name == 'div') &&
+          (attrs['class']?.first ?? '')
+              .split(RegExp(r'\s+'))
+              .contains('playlist__item');
+      if (isCard) {
+        // 标记不完整或嵌套卡片为歧义，终止其邻域的匹配。
+        if (active != null) return null;
+        active = _PersonalDailyCard(name);
+        depth = 1;
+      } else if (active != null && name == active.tag) {
+        depth++;
+      }
+      if (active == null) continue;
+      if (attrs['title']?.first.trim() == _privateTitle) active.hasTitle = true;
+      for (final key in const [
+        'data-rid',
+        'data-dissid',
+        'data-disstid',
+        'dissid',
+      ]) {
+        for (final rawId in attrs[key] ?? const <String>[]) {
+          final id = _positiveDecimal(rawId);
+          if (id != null) active.ids.add(id);
+        }
+      }
+      if (name != 'a') continue;
+      for (final href in attrs['href'] ?? const <String>[]) {
+        final uri = Uri.tryParse(href);
+        if (uri == null ||
+            (uri.hasScheme && uri.scheme != 'https' && uri.scheme != 'http') ||
+            (uri.hasAuthority && uri.host != 'y.qq.com')) {
+          continue;
+        }
+        final pathId = _privatePlaylistLink.firstMatch(uri.path)?.group(1);
+        final rawId =
+            pathId ??
+            (uri.path.endsWith('/playlist.html')
+                ? uri.queryParameters['id'] ?? uri.queryParameters['disstid']
+                : null);
+        final id = rawId == null ? null : _positiveDecimal(rawId);
+        if (id != null) active.ids.add(id);
+      }
+    }
+    final personal = cards.where((card) => card.hasTitle).toList();
+    if (active?.hasTitle == true || personal.length != 1) return null;
+    final ids = personal.single.ids;
+    return ids.length == 1 ? ids.single.toString() : null;
   }
 
   String? _windowAround(String text, String marker, int radius) {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -11,8 +12,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mconnect/core/database/app_database.dart';
+import 'package:mconnect/core/network/api_exception.dart';
 import 'package:mconnect/core/platform/platform_utils.dart';
 import 'package:mconnect/core/share/share_links.dart';
+import 'package:mconnect/core/widgets/song_actions_sheet.dart';
 import 'package:mconnect/features/album/presentation/pages/album_page.dart';
 import 'package:mconnect/features/artist/presentation/pages/artist_page.dart';
 import 'package:mconnect/features/auth/presentation/pages/login_page.dart';
@@ -20,13 +23,25 @@ import 'package:mconnect/features/auth/presentation/providers/auth_provider.dart
 import 'package:mconnect/features/backup/presentation/pages/backup_page.dart';
 import 'package:mconnect/features/discovery/presentation/pages/recommendations_page.dart';
 import 'package:mconnect/features/download/presentation/providers/download_provider.dart';
+import 'package:mconnect/features/download/data/download_directory_service.dart';
+import 'package:mconnect/features/download/data/repositories/download_manager.dart';
+import 'package:mconnect/features/download/domain/entities/download_task.dart';
+import 'package:mconnect/features/download/domain/entities/download_failure.dart';
+import 'package:mconnect/features/library/presentation/providers/likes_provider.dart';
 import 'package:mconnect/features/download/presentation/providers/download_quality_provider.dart';
 import 'package:mconnect/features/download/presentation/screens/download_page.dart';
 import 'package:mconnect/features/library/presentation/pages/history_page.dart';
 import 'package:mconnect/features/library/presentation/pages/platform_playlists_page.dart';
+import 'package:mconnect/features/library/presentation/pages/playlist_detail_page.dart';
 import 'package:mconnect/features/library/data/my_playlists_repository.dart';
 import 'package:mconnect/features/library/presentation/providers/my_playlists_provider.dart';
 import 'package:mconnect/features/local_music/presentation/pages/local_music_page.dart';
+import 'package:mconnect/features/local_music/presentation/providers/local_music_provider.dart';
+import 'package:mconnect/features/local_music/data/local_lyrics_store.dart';
+import 'package:mconnect/features/local_music/data/local_scan_root_store.dart';
+import 'package:mconnect/features/local_music/data/local_track_store.dart';
+import 'package:mconnect/features/local_music/data/online_library_snapshot.dart';
+import 'package:mconnect/features/local_music/data/track_ratings_store.dart';
 import 'package:mconnect/features/new_songs/presentation/pages/new_songs_page.dart';
 import 'package:mconnect/features/player/data/playback_keep_alive_service.dart';
 import 'package:mconnect/features/player/data/playback_notification_service.dart';
@@ -38,12 +53,14 @@ import 'package:mconnect/features/smart_playlists/presentation/pages/smart_playl
 import 'package:mconnect/features/stats/presentation/pages/listening_stats_page.dart';
 import 'package:mconnect/features/toplist/presentation/pages/toplists_page.dart';
 import 'package:mconnect/l10n/ik_strings.dart';
+import 'package:mconnect/l10n/ik_workspace_strings.dart';
 import 'package:mconnect/l10n/video_strings.dart';
 import 'package:mconnect/l10n/windows_music_strings.dart';
 import 'package:mconnect/models/album.dart';
 import 'package:mconnect/models/audio_quality.dart';
 import 'package:mconnect/models/artist.dart';
 import 'package:mconnect/models/platform_type.dart';
+import 'package:mconnect/models/playlist.dart';
 import 'package:mconnect/models/song.dart';
 import 'package:mconnect/models/toplist.dart';
 import 'package:mconnect/models/user.dart';
@@ -59,7 +76,10 @@ import 'package:mconnect/video_app/ik/ik_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_settings_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_playback_bar.dart';
 import 'package:mconnect/video_app/ik/ik_controls.dart';
+import 'package:mconnect/video_app/ik/ik_song_table.dart';
 import 'package:mconnect/video_app/ik/ik_search_workspace.dart';
+import 'package:mconnect/video_app/ik/ik_library_workspace.dart';
+import 'package:mconnect/video_app/ik/ik_downloads_workspace.dart';
 import 'package:mconnect/video_app/multi_source/multi_source_player.dart';
 import 'package:mconnect/video_app/playback/video_platforms.dart';
 import 'package:mconnect/video_app/playback/video_stream_state.dart';
@@ -73,6 +93,7 @@ import 'package:mconnect/video_app/windows/windows_player_page.dart';
 import 'package:mconnect/video_app/windows/windows_window_controller.dart';
 
 import 'support/content_page_fakes.dart';
+import 'download_fakes.dart' show MemoryDownloadDirectoryStore;
 
 // 正式装配门：真实 VideoMusicApp + Router + 内容/个人数据 providers。
 // 仅音频设备、网络目录和账号认证替换为可控边界，数据库使用真实内存 SQLite。
@@ -116,6 +137,8 @@ void main() {
     PlatformUtils.setDebugOverride(AppPlatform.linux);
     await settings.clear();
     await settings.put('video.cacheInitialized', true);
+    await MyPlaylistsRepository(storageDirectory: scratch)
+        .restoreStorageSnapshot(null);
     for (final platform in PlatformType.musicServices) {
       PlatformRegistry.register(_Content(platform));
     }
@@ -145,8 +168,14 @@ void main() {
     double width = 1200,
     bool desktopAppearance = false,
     bool workspace = false,
+    bool alignToDesign = false,
+    DownloadState? downloads,
     double textScale = 1,
     PlayerAudioController? audioController,
+    List<String> hotTerms = const [],
+    bool hotFailure = false,
+    LocalMusicNotifier? localNotifier,
+    DownloadManager? downloadManager,
   }) async {
     tester.view.physicalSize = Size(width, 900);
     tester.view.devicePixelRatio = 1;
@@ -154,7 +183,7 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final catalog = _Catalog();
+    final catalog = _Catalog(hotTerms: hotTerms, hotFailure: hotFailure);
     final auth = _Auth();
     final preferences = VideoPreferences(settings);
     final unified = WindowsMusicPreferences(
@@ -191,17 +220,23 @@ void main() {
       playbackHealthCheckInterval: Duration.zero,
       playbackMemorySaveInterval: Duration.zero,
     );
+    if (localNotifier != null) await localNotifier.initialize();
     final container = ProviderContainer(
       overrides: [
         authProvider.overrideWith((ref) => auth),
         playerProvider.overrideWith((ref) => player),
+        if (localNotifier != null)
+          localMusicProvider.overrideWith((ref) => localNotifier),
         myPlaylistsProvider.overrideWith(
           (ref) => MyPlaylistsNotifier(
-            repository: MyPlaylistsRepository(storageDirectory: scratch),
+            repository: _IoPlaylistsRepository(ioZone, scratch),
           ),
         ),
         downloadProvider.overrideWith(
-          (ref) => DownloadNotifier(initialState: const DownloadState()),
+          (ref) => DownloadNotifier(
+            initialState: downloads ?? const DownloadState(),
+            manager: downloadManager,
+          ),
         ),
         downloadQualityProvider.overrideWithValue(
           (platform) => unified.quality(platform, download: true),
@@ -234,6 +269,7 @@ void main() {
           child: VideoMusicApp(
             redesign: true,
             workspace: workspace,
+            alignToDesign: alignToDesign,
             expandedPlatforms: true,
             preferences: preferences,
             unifiedPreferences: unified,
@@ -330,6 +366,552 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('A01/A04 原稿对齐真实共用搜索、来源和专辑歌手路由', (tester) async {
+    final app = await mount(tester, workspace: true, alignToDesign: true);
+    final shell = find.byType(IkDesktopWorkspace);
+    final shellWidget = tester.widget<IkDesktopWorkspace>(shell);
+    expect(shellWidget.alignToDesign, isTrue);
+    expect(shellWidget.onSearch, isNotNull);
+    shellWidget.onSearch!('对齐验收');
+    await drain(tester);
+    expect(app.catalog.searches.map((c) => c.$2).toSet(), {'对齐验收'});
+    expect(find.byType(IkSearchWorkspace).hitTestable(), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(IkSearchWorkspace),
+        matching: find.byType(TextField),
+      ),
+      findsNothing,
+    );
+    await tester.tap(find.text('搜索歌曲qq').first);
+    await drain(tester);
+    final player = tester.widget<WindowsPlayerPage>(
+      find.byType(WindowsPlayerPage),
+    );
+    expect(player.alignToDesign, isTrue);
+    expect(player.onArtist, isNotNull);
+    expect(player.onAlbum, isNotNull);
+    player.onAlbum!();
+    await drain(tester);
+    expect(find.byType(AlbumPage).hitTestable(), findsOneWidget);
+    await back(tester);
+    tester
+        .widget<WindowsPlayerPage>(find.byType(WindowsPlayerPage))
+        .onArtist!();
+    await drain(tester);
+    expect(find.byType(ArtistPage).hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('A06 新下载路由与曲库入口共用新工作页和播放栏', (tester) async {
+    await mount(tester, workspace: true, alignToDesign: true);
+    final router = GoRouter.of(tester.element(find.byType(IkDesktopWorkspace)));
+    unawaited(router.push<void>('/downloads'));
+    await drain(tester);
+    expect(find.byType(IkDownloadsWorkspace).hitTestable(), findsOneWidget);
+    expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+    expect(find.text(VideoStrings.downloadManagement), findsOneWidget);
+    await back(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    await tester.tap(find.text(VideoStrings.download).hitTestable());
+    await drain(tester);
+    expect(find.byType(IkDownloadsWorkspace).hitTestable(), findsOneWidget);
+    expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R01 音乐库五分类在同壳切换，后四分类不跳旧路由', (tester) async {
+    await mount(tester, workspace: true, alignToDesign: true);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    final library = find.byType(IkLibraryWorkspace);
+    final router = GoRouter.of(tester.element(library));
+    for (final entry in <(String, Type?, String)>[
+      (IkStrings.playlists, PlatformPlaylistsPage, 'playlists'),
+      (VideoStrings.localMusic, LocalMusicPage, 'local'),
+      (VideoStrings.download, IkDownloadsWorkspace, 'downloads'),
+      (IkStrings.smart, SmartPlaylistsPage, 'smart'),
+      (IkWorkspaceStrings.likes, null, 'likes'),
+    ]) {
+      final tab = find
+          .descendant(
+            of: library,
+            matching: find.byKey(ValueKey('ik-library-category-${entry.$3}')),
+          )
+          .hitTestable();
+      expect(tab, findsOneWidget, reason: '五分类始终可见：${entry.$1}');
+      await tester.tap(tab);
+      await drain(tester);
+      expect(
+        router.routerDelegate.currentConfiguration.uri.path,
+        '/',
+        reason: '${entry.$1}应在音乐库同壳切换',
+      );
+      expect(find.byType(IkDesktopWorkspace).hitTestable(), findsOneWidget);
+      expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+      expect(
+        find.descendant(
+          of: library,
+          matching: find.text(IkWorkspaceStrings.library),
+        ),
+        findsOneWidget,
+      );
+      if (entry.$2 != null) {
+        expect(find.byType(entry.$2!), findsOneWidget);
+      }
+      expect(tab.hitTestable(), findsOneWidget, reason: '当前分类仍可点击：${entry.$1}');
+      expect(tester.takeException(), isNull, reason: entry.$1);
+    }
+  });
+
+  testWidgets('R05 搜索空态显示真实热词，点击使用原分来源搜索', (tester) async {
+    final app = await mount(
+      tester,
+      workspace: true,
+      alignToDesign: true,
+      hotTerms: const ['真实热词一', '真实热词二'],
+    );
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-1')));
+    await drain(tester);
+    final search = find.byType(IkSearchWorkspace);
+    expect(
+      find.descendant(of: search, matching: find.text('真实热词一')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: search, matching: find.text('真实热词二')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('真实热词二'));
+    await drain(tester);
+    expect(app.catalog.searches.map((call) => call.$2).toSet(), {'真实热词二'});
+    expect(find.text('真实热词一'), findsNothing);
+    expect(find.text('搜索歌曲qq'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R05 热词失败原因和重试可见，推荐与手动搜索仍可用', (tester) async {
+    final app = await mount(
+      tester,
+      workspace: true,
+      alignToDesign: true,
+      hotFailure: true,
+    );
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-1')));
+    await drain(tester);
+    final search = find.byType(IkSearchWorkspace);
+    expect(
+      find.descendant(of: search, matching: find.text('热搜暂时连接失败')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: search, matching: find.text(VideoStrings.retry)),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: search, matching: find.textContaining('推荐精选')),
+      findsWidgets,
+    );
+    app.catalog.hotFailure = false;
+    app.catalog.hotTerms = ['重新取得的热词'];
+    await tester.tap(
+      find
+          .descendant(of: search, matching: find.text(VideoStrings.retry))
+          .first,
+    );
+    await drain(tester);
+    expect(find.text('重新取得的热词'), findsOneWidget);
+    expect(find.text('热搜暂时连接失败'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R02 音乐库歌单和规则详情返回原分类，创建与筛选仍可用', (tester) async {
+    final app = await mount(tester, workspace: true, alignToDesign: true);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('ik-library-category-playlists')),
+    );
+    await drain(tester);
+    expect(find.byType(IkDesktopWorkspace).hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip('新建歌单').hitTestable());
+    await drain(tester);
+    expect(find.byType(AlertDialog), findsOneWidget);
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.byType(TextField),
+      ),
+      '同壳验收歌单',
+    );
+    await tester.tap(
+      find.descendant(of: find.byType(AlertDialog), matching: find.text('新建')),
+    );
+    await drain(tester);
+    expect(app.container.read(myPlaylistsProvider).isSaving, isFalse);
+    expect(app.container.read(myPlaylistsProvider).error, isNull);
+    expect(find.text('同壳验收歌单'), findsOneWidget);
+    await tester.tap(find.text('同壳验收歌单'));
+    await drain(tester);
+    expect(find.byType(PlaylistDetailPage).hitTestable(), findsOneWidget);
+    await back(tester);
+    expect(find.byType(PlatformPlaylistsPage).hitTestable(), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ik-library-category-smart')));
+    await drain(tester);
+    await tester.tap(find.byTooltip('新建规则').hitTestable());
+    await drain(tester);
+    expect(find.byType(SmartPlaylistEditorPage).hitTestable(), findsOneWidget);
+    await back(tester);
+    expect(find.byType(SmartPlaylistsPage), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('ik-library-category-local')));
+    await drain(tester);
+    expect(
+      find.byKey(const Key('local-music-search-field')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('local-music-merge-switch')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(
+      app.container.read(myPlaylistsProvider).playlists.map((p) => p.name),
+      contains('同壳验收歌单'),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R08 已登录账号使用居中窗口，取消不变更账号', (tester) async {
+    final app = await mount(tester, workspace: true, alignToDesign: true);
+    app.auth.replaceUser('菜单验收账号');
+    await drain(tester);
+    // 通过实际设置组件的既有入口执行，避免直接调用私有账号方法。
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+    await drain(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-settings-accounts')));
+    await drain(tester);
+    final settingsPage = tester.widget<IkSettingsWorkspace>(
+      find.byType(IkSettingsWorkspace),
+    );
+    settingsPage.onAccount(PlatformType.qq);
+    await drain(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.text('菜单验收账号'), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await drain(tester);
+    expect(
+      app.container.read(authProvider).userFor(PlatformType.qq)?.id,
+      '菜单验收账号',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R02 本地分类沿用歌曲列与更多按钮，分组筛选和批量目标居中', (tester) async {
+    final local = _localLibrary();
+    final app = await mount(
+      tester,
+      workspace: true,
+      alignToDesign: true,
+      localNotifier: local,
+    );
+    final target = await tester.runAsync(
+      () => app.container.read(myPlaylistsProvider.notifier).create('本地验收目标'),
+    );
+    expect(target, isNotNull);
+    await drain(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-library-category-local')));
+    await drain(tester);
+    final localPage = find.byType(LocalMusicPage);
+    expect(
+      find.descendant(of: localPage, matching: find.byType(IkSongTableRow)),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: localPage, matching: find.byType(IkSongTableHeader)),
+      findsOneWidget,
+      reason: '本地歌曲与喜欢的音乐使用相同列标题',
+    );
+    final more = find
+        .descendant(of: localPage, matching: find.byTooltip(IkStrings.more))
+        .first;
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await drain(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(PopupMenuItem<SongAction>), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await drain(tester);
+    for (final view in [
+      LocalLibraryView.albums,
+      LocalLibraryView.artists,
+      LocalLibraryView.folders,
+    ]) {
+      local.setView(view);
+      await drain(tester);
+      final group = find
+          .descendant(of: localPage, matching: find.byType(ExpansionTile))
+          .first;
+      await tester.ensureVisible(group);
+      await tester.tap(group);
+      await drain(tester);
+      final row = find.descendant(
+        of: group,
+        matching: find.byType(IkSongTableRow),
+      );
+      expect(row, findsOneWidget, reason: '${view.name}组内也沿用统一歌曲列');
+      final groupMore = find.descendant(
+        of: row,
+        matching: find.byTooltip(IkStrings.more),
+      );
+      await tester.ensureVisible(groupMore);
+      await tester.tap(groupMore);
+      await drain(tester);
+      expect(find.byType(BottomSheet), findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await drain(tester);
+    }
+    local.setView(LocalLibraryView.songs);
+    local.setKeyword('本地歌曲甲');
+    await drain(tester);
+    expect(local.state.visibleSongs.map((song) => song.name), ['本地歌曲甲']);
+    local.clearQuery();
+    await drain(tester);
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('local-music-select-toggle')),
+      -180,
+      scrollable: find
+          .descendant(of: localPage, matching: find.byType(Scrollable))
+          .first,
+    );
+    await tester.tap(find.byKey(const Key('local-music-select-toggle')));
+    await drain(tester);
+    await tester.ensureVisible(find.byKey(const Key('local-music-select-all')));
+    await tester.tap(find.byKey(const Key('local-music-select-all')));
+    await drain(tester);
+    await tester.tap(find.byKey(const Key('local-music-batch-add')));
+    await drain(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(Dialog), findsOneWidget);
+    await tester.tap(find.text('本地验收目标').hitTestable());
+    await drain(tester);
+    final saved = await tester.runAsync(
+      () =>
+          app.container.read(myPlaylistsProvider.notifier).getSongs(target!.id),
+    );
+    expect(
+      saved!.map((song) => song.id).toSet(),
+      local.state.songs.map((song) => song.id).toSet(),
+    );
+    expect(find.byType(Dialog), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R07 歌单导出及二维码居中，取消保留当前库分类', (tester) async {
+    final app = await mount(tester, workspace: true, alignToDesign: true);
+    await tester.runAsync(
+      () => app.container.read(myPlaylistsProvider.notifier).create('导出验收歌单'),
+    );
+    await drain(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('ik-library-category-playlists')),
+    );
+    await drain(tester);
+    await tester.tap(find.byTooltip('歌单操作').hitTestable());
+    await drain(tester);
+    await tester.tap(find.text('导出歌单').hitTestable());
+    await drain(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(Dialog), findsOneWidget);
+    for (final label in [
+      '分享链接',
+      'M3U8 播放列表',
+      '纯文本（歌名 - 歌手）',
+      IkStrings.playlistJson,
+      '二维码分享',
+    ]) {
+      expect(find.text(label), findsOneWidget);
+    }
+    await tester.tap(find.text('二维码分享'));
+    await drain(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.textContaining('扫码导入'), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await drain(tester);
+    expect(find.byType(PlatformPlaylistsPage), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('ik-library-category-playlists')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R07 歌曲菜单打开后后台移除目标行，缩放与取消不访问失效锚点', (tester) async {
+    final app = await mount(tester, workspace: true, alignToDesign: true);
+    final likes = app.container.read(likesProvider.notifier);
+    for (final existing in app.container.read(likesProvider).songs.toList()) {
+      await tester.runAsync(() => likes.toggleLike(existing));
+    }
+    const song = Song(
+      id: 'revision-menu-removed-anchor',
+      platform: PlatformType.qq,
+      name: '后台移除锚点验收歌曲',
+      artists: [Artist(id: 'revision-anchor-artist', name: '验收歌手')],
+    );
+    expect(await tester.runAsync(() => likes.toggleLike(song)), isTrue);
+    await drain(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    final library = find.byType(IkLibraryWorkspace);
+    final row = find.descendant(
+      of: library,
+      matching: find.byWidgetPredicate(
+        (widget) => widget is IkSongTableRow && widget.song == song,
+      ),
+    );
+    expect(row, findsOneWidget);
+    final more = find.descendant(
+      of: row,
+      matching: find.byTooltip(IkStrings.more),
+    );
+    await tester.ensureVisible(more);
+    await tester.tap(more);
+    await drain(tester);
+    expect(find.byType(PopupMenuItem<String>), findsWidgets);
+    expect(find.byType(BottomSheet), findsNothing);
+    expect(tester.takeException(), isNull);
+    final downloads = app.container.read(downloadProvider).tasks.toList();
+
+    expect(await tester.runAsync(() => likes.toggleLike(song)), isFalse);
+    await drain(tester);
+    expect(row, findsNothing, reason: '真实通知器已移除歌曲行和更多按钮');
+    tester.view.physicalSize = const Size(900, 900);
+    await drain(tester);
+    expect(tester.takeException(), isNull, reason: '窗口重排不读取失效按钮上下文');
+    expect(find.byType(PopupMenuItem<String>), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await drain(tester);
+    expect(find.byType(PopupMenuItem<String>), findsNothing);
+    expect(library.hitTestable(), findsOneWidget);
+    expect(app.container.read(likesProvider).songs, isEmpty);
+    expect(app.container.read(downloadProvider).tasks, downloads);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('R08 VIP下载音质居中，取消不重试，确认沿用统一保存与原重试', (tester) async {
+    final song = _song(PlatformType.qq, name: 'VIP音质入口验收歌曲');
+    final task = DownloadTask(
+      id: DownloadTask.buildId(song, AudioLevel.high),
+      song: song,
+      quality: AudioLevel.high,
+      status: DownloadStatus.failed,
+      createdAt: DateTime(2026, 11, 22),
+      error: '当前账号无此下载音质权限',
+      failureKind: DownloadFailureKind.vip,
+    );
+    final app = await mount(
+      tester,
+      workspace: true,
+      alignToDesign: true,
+      desktopAppearance: true,
+      downloads: DownloadState(tasks: [task]),
+      downloadManager: DownloadManager(
+        directoryService: _IoDownloadDirectoryService(ioZone, scratch),
+      ),
+    );
+    final platform = _VipContent();
+    PlatformRegistry.register(platform);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+    await drain(tester);
+    await tester.tap(
+      find.byKey(const ValueKey('ik-library-category-downloads')),
+    );
+    await drain(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-downloads-group-failed')));
+    await drain(tester);
+    final resolve = find.byKey(ValueKey('ik-download-resolve-${task.id}'));
+    await tester.ensureVisible(resolve);
+    await tester.tap(resolve);
+    await drain(tester);
+    expect(find.byType(BottomSheet), findsNothing);
+    final dialog = find.byType(Dialog);
+    expect(dialog, findsOneWidget);
+    final surface = find
+        .descendant(
+          of: dialog,
+          matching: find.byWidgetPredicate(
+            (widget) => widget is Material && widget.type == MaterialType.card,
+          ),
+        )
+        .first;
+    final rect = tester.getRect(surface);
+    expect(rect.center.dx, closeTo(600, 1));
+    expect(rect.center.dy, closeTo(450, 1));
+    for (final level in [
+      AudioLevel.low,
+      AudioLevel.high,
+      AudioLevel.lossless,
+      AudioLevel.hires,
+      AudioLevel.master,
+    ]) {
+      expect(
+        find.descendant(
+          of: dialog,
+          matching: find.text(WindowsMusicPreferences.qualityName(level)),
+        ),
+        findsOneWidget,
+      );
+    }
+    final before = app.unified.value;
+    final storedBefore = settings.get(WindowsMusicPreferences.key);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await drain(tester);
+    expect(app.unified.value, same(before));
+    expect(settings.get(WindowsMusicPreferences.key), storedBefore);
+    expect(app.container.read(downloadProvider).tasks, [task]);
+    expect(platform.qualities, isEmpty);
+    expect(find.byType(IkLibraryWorkspace).hitTestable(), findsOneWidget);
+
+    await tester.tap(resolve);
+    await drain(tester);
+    await tester.tap(
+      find.descendant(
+        of: dialog,
+        matching: find.text(
+          WindowsMusicPreferences.qualityName(AudioLevel.lossless),
+        ),
+      ),
+    );
+    await drain(tester);
+    expect(dialog, findsNothing);
+    final reloaded = WindowsMusicPreferences(VideoPreferences(settings))
+      ..load();
+    for (final platform in PlatformType.musicServices) {
+      expect(
+        app.unified.quality(platform, download: true),
+        AudioLevel.lossless,
+      );
+      expect(reloaded.quality(platform, download: true), AudioLevel.lossless);
+    }
+    reloaded.dispose();
+    final tasks = app.container.read(downloadProvider).tasks;
+    expect(tasks.any((value) => value.id == task.id), isFalse);
+    final retried = tasks.singleWhere(
+      (value) => value.id == DownloadTask.buildId(song, AudioLevel.lossless),
+    );
+    expect(retried.song, song);
+    expect(retried.quality, AudioLevel.lossless);
+    expect(retried.failureKind, DownloadFailureKind.vip);
+    expect(platform.qualities, isNotEmpty);
+    expect(platform.qualities, everyElement(AudioLevel.lossless));
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('U01/U03/U06 新工作区实际装配、七区、音质持久化与按需队列', (tester) async {
     final harness = await mount(tester, workspace: true);
     expect(find.byType(IkDesktopWorkspace), findsOneWidget);
@@ -378,6 +960,93 @@ void main() {
     expect(find.text(IkStrings.nextUp), findsNothing);
     expect(tester.takeException(), isNull);
     await captureIkUi(tester, 'settings');
+  });
+
+  testWidgets('E02 根底栏音效从备份切到播放与音效并保留设置状态', (tester) async {
+    const filePicker = MethodChannel('miguelruivo.flutter.plugins.filepicker');
+    final messenger = tester.binding.defaultBinaryMessenger;
+    final backupBytes = Uint8List.fromList(
+      utf8.encode('{"manifest":{"version":1,"appVersion":"preview-fixture"}}'),
+    );
+    var selections = 0;
+    messenger.setMockMethodCallHandler(filePicker, (call) async {
+      expect(call.method, 'custom');
+      selections++;
+      return [
+        {
+          'name': 'preview.json',
+          'size': backupBytes.length,
+          'bytes': backupBytes,
+        },
+      ];
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(filePicker, null));
+    await mount(tester, workspace: true, alignToDesign: true);
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+    await drain(tester);
+    final workspace = find.byType(IkSettingsWorkspace);
+    final settingsState = tester.state(workspace);
+    final route = ModalRoute.of(tester.element(workspace));
+    expect(route, isNotNull);
+    final backupTab = find.byKey(const ValueKey('ik-settings-backup'));
+    final backupContent = find.text(IkWorkspaceStrings.backupExportHint);
+    final preview = find.text(IkWorkspaceStrings.backupPreview);
+    final audioContent = find.byKey(const ValueKey('ik-spatial-emphasis'));
+    final bottomAudio = find.descendant(
+      of: find.byType(IkPlaybackBar),
+      matching: find.byTooltip(IkWorkspaceStrings.audio),
+    );
+    expect(audioContent.hitTestable(), findsOneWidget);
+    for (var attempt = 0; attempt < 2; attempt++) {
+      await tester.tap(backupTab);
+      await drain(tester);
+      expect(backupContent.hitTestable(), findsOneWidget);
+      expect(audioContent, findsNothing);
+      if (attempt == 0) {
+        final selectBackup = find.widgetWithText(
+          OutlinedButton,
+          IkWorkspaceStrings.selectBackup,
+        );
+        await tester.ensureVisible(selectBackup);
+        await tester.tap(selectBackup);
+        await drain(tester);
+      }
+      expect(preview, findsOneWidget);
+      expect(selections, 1);
+      expect(bottomAudio.hitTestable(), findsOneWidget);
+      await tester.tap(bottomAudio);
+      await drain(tester);
+      expect(audioContent.hitTestable(), findsOneWidget);
+      expect(backupContent, findsNothing);
+      expect(preview, findsNothing);
+      expect(tester.state(workspace), same(settingsState));
+      expect(ModalRoute.of(tester.element(workspace)), same(route));
+      expect(tester.takeException(), isNull);
+    }
+    await tester.tap(backupTab);
+    await drain(tester);
+    expect(preview, findsOneWidget);
+    expect(selections, 1);
+  });
+
+  testWidgets('E03 旧设置普通重建保留当前备份区', (tester) async {
+    await mount(tester, workspace: true);
+    final settingsNav = find.byKey(const ValueKey('ik-workspace-nav-4'));
+    await tester.tap(settingsNav);
+    await drain(tester);
+    final workspace = find.byType(IkSettingsWorkspace);
+    final settingsState = tester.state(workspace);
+    await tester.tap(find.byKey(const ValueKey('ik-settings-backup')));
+    await drain(tester);
+    final backupContent = find.text(IkWorkspaceStrings.backupExportHint);
+    expect(backupContent.hitTestable(), findsOneWidget);
+    final before = tester.widget<IkSettingsWorkspace>(workspace);
+    await tester.tap(settingsNav);
+    await drain(tester);
+    expect(tester.widget<IkSettingsWorkspace>(workspace), isNot(same(before)));
+    expect(tester.state(workspace), same(settingsState));
+    expect(backupContent.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('K02/K04 曲库真实入口可打开歌单、本地音乐、历史与下载管理', (tester) async {
@@ -838,6 +1507,212 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  for (final dark in [false, true]) {
+    for (final width in [320.0, 390.0, 720.0, 900.0, 1200.0, 1440.0]) {
+      for (final scale in [1.0, 1.25, 1.5]) {
+        testWidgets(
+          'R09 新音乐库和搜索全量布局 ${dark ? '深' : '浅'} ${width.toInt()}/$scale',
+          (tester) async {
+            await tester.runAsync(
+              () => settings.put('video.theme', dark ? 'dark' : 'light'),
+            );
+            final local = _localLibrary();
+            final app = await mount(
+              tester,
+              workspace: true,
+              alignToDesign: true,
+              width: width,
+              textScale: scale,
+              hotTerms: const ['热门曲目一', '热门歌手二', '热门专辑三'],
+              localNotifier: local,
+              downloads: DownloadState(
+                tasks: [
+                  for (final status in [
+                    DownloadStatus.downloading,
+                    DownloadStatus.completed,
+                    DownloadStatus.failed,
+                  ])
+                    DownloadTask(
+                      id: 'revision-${status.name}',
+                      song: _song(PlatformType.qq, name: '布局验收${status.name}'),
+                      quality: AudioLevel.high,
+                      status: status,
+                      createdAt: DateTime(2026, 11, 22),
+                      progress: .4,
+                      error: status == DownloadStatus.failed ? '来源连接失败' : null,
+                      failureKind: status == DownloadStatus.failed
+                          ? DownloadFailureKind.network
+                          : null,
+                    ),
+                ],
+              ),
+            );
+            await tester.runAsync(
+              () => app.container
+                  .read(myPlaylistsProvider.notifier)
+                  .create('布局验收歌单'),
+            );
+            await drain(tester);
+            final suffix = '${dark ? 'dark' : 'light'}-${width.toInt()}-$scale';
+            Future<void> check(String scene) async {
+              expect(tester.takeException(), isNull, reason: '$scene $suffix');
+              expect(
+                find.byType(Dialog).evaluate().isEmpty
+                    ? find.byType(IkPlaybackBar).hitTestable()
+                    : find.byType(IkPlaybackBar),
+                findsOneWidget,
+                reason: '底栏保留；模态窗口关闭后恢复操作：$scene $suffix',
+              );
+              await captureIkUi(tester, 'revision-$scene-$suffix');
+            }
+
+            await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-1')));
+            await drain(tester);
+            await check('search-empty');
+            expect(find.text('热门曲目一').hitTestable(), findsOneWidget);
+            await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+            await drain(tester);
+            for (final category in [
+              'likes',
+              'playlists',
+              'local',
+              'downloads',
+              'smart',
+            ]) {
+              final tab = find.byKey(ValueKey('ik-library-category-$category'));
+              await tester.ensureVisible(tab);
+              await tester.pump();
+              expect(tab.hitTestable(), findsOneWidget);
+              await tester.tap(tab);
+              await drain(tester);
+              await check('library-$category');
+              if (category == 'downloads') {
+                for (final group in ['completed', 'failed']) {
+                  final downloadTab = find.byKey(
+                    ValueKey('ik-downloads-group-$group'),
+                  );
+                  await tester.ensureVisible(downloadTab);
+                  await tester.tap(downloadTab);
+                  await drain(tester);
+                  await check('downloads-$group');
+                }
+              }
+              if (category == 'playlists') {
+                await tester.tap(find.byTooltip('歌单操作').hitTestable());
+                await drain(tester);
+                await tester.tap(find.text('导出歌单').hitTestable());
+                await drain(tester);
+                expect(find.byType(BottomSheet), findsNothing);
+                await check('export');
+                await tester.ensureVisible(find.text('二维码分享'));
+                await tester.tap(find.text('二维码分享'));
+                await drain(tester);
+                expect(find.byType(BottomSheet), findsNothing);
+                await check('qr');
+                await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+                await drain(tester);
+              }
+              if (category == 'local') {
+                for (final view in [
+                  LocalLibraryView.albums,
+                  LocalLibraryView.artists,
+                  LocalLibraryView.folders,
+                ]) {
+                  local.setView(view);
+                  await drain(tester);
+                  final group = switch (view) {
+                    LocalLibraryView.albums => find.byKey(
+                      Key('album-group-${local.state.albumGroups.first.id}'),
+                    ),
+                    LocalLibraryView.artists => find.byKey(
+                      Key('artist-group-${local.state.artistGroups.first.id}'),
+                    ),
+                    LocalLibraryView.folders => find.byKey(
+                      Key('folder-group-${local.state.folderGroups.first.id}'),
+                    ),
+                    LocalLibraryView.songs => throw StateError('分组门不能使用歌曲视图'),
+                  };
+                  await tester.scrollUntilVisible(
+                    group,
+                    180,
+                    scrollable: find
+                        .descendant(
+                          of: find.byType(LocalMusicPage),
+                          matching: find.byType(Scrollable),
+                        )
+                        .first,
+                  );
+                  final groupHeader = find
+                      .descendant(of: group, matching: find.byType(ListTile))
+                      .first;
+                  await Scrollable.ensureVisible(
+                    tester.element(groupHeader),
+                    alignment: .2,
+                  );
+                  await tester.pump();
+                  expect(groupHeader.hitTestable(), findsOneWidget);
+                  await tester.tap(groupHeader);
+                  await drain(tester);
+                  expect(
+                    find.descendant(
+                      of: group,
+                      matching: find.byType(IkSongTableRow),
+                    ),
+                    findsWidgets,
+                    reason: '${view.name}必须实际展开歌曲，不能以未命中点击代替场景',
+                  );
+                  await check('local-${view.name}');
+                }
+                local.setView(LocalLibraryView.songs);
+                await drain(tester);
+                final localScroll = tester.state<ScrollableState>(
+                  find
+                      .descendant(
+                        of: find.byType(LocalMusicPage),
+                        matching: find.byType(Scrollable),
+                      )
+                      .first,
+                );
+                localScroll.position.jumpTo(
+                  localScroll.position.minScrollExtent,
+                );
+                await tester.pump();
+                await tester.ensureVisible(
+                  find.byKey(const Key('local-music-select-toggle')),
+                );
+                await tester.tap(
+                  find.byKey(const Key('local-music-select-toggle')),
+                );
+                await drain(tester);
+                await tester.ensureVisible(
+                  find.byKey(const Key('local-music-select-all')),
+                );
+                await tester.tap(
+                  find.byKey(const Key('local-music-select-all')),
+                );
+                await drain(tester);
+                await check('local-selection');
+                await tester.ensureVisible(
+                  find.byKey(const Key('local-music-batch-add')),
+                );
+                await tester.tap(
+                  find.byKey(const Key('local-music-batch-add')),
+                );
+                await drain(tester);
+                expect(find.byType(BottomSheet), findsNothing);
+                await check('local-batch-target');
+                await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+                await drain(tester);
+                local.setSelectionMode(false);
+                await drain(tester);
+              }
+            }
+          },
+        );
+      }
+    }
+  }
+
   for (final width in [320.0, 390.0, 720.0, 900.0, 1200.0, 1440.0]) {
     testWidgets('U11 工作区五页与播放栏真实装配 ${width.toInt()} / 150%', (tester) async {
       final app = await mount(
@@ -873,6 +1748,133 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'player width=$width');
       if (width == 320) await captureIkUi(tester, 'player-narrow');
     });
+  }
+
+  for (final dark in [false, true]) {
+    for (final width in [320.0, 390.0, 720.0, 900.0, 1200.0, 1440.0]) {
+      for (final scale in [1.0, 1.25, 1.5]) {
+        testWidgets('A07 对齐版实际装配 ${dark ? '深' : '浅'} ${width.toInt()}/$scale', (
+          tester,
+        ) async {
+          await tester.runAsync(
+            () => settings.put('video.theme', dark ? 'dark' : 'light'),
+          );
+          final app = await mount(
+            tester,
+            workspace: true,
+            alignToDesign: true,
+            width: width,
+            textScale: scale,
+            downloads: DownloadState(
+              tasks: [
+                for (final status in [
+                  DownloadStatus.downloading,
+                  DownloadStatus.completed,
+                  DownloadStatus.failed,
+                ])
+                  DownloadTask(
+                    id: 'capture-${status.name}',
+                    song: _song(PlatformType.qq, name: '验收${status.name}歌曲'),
+                    quality: AudioLevel.high,
+                    status: status,
+                    createdAt: DateTime(2026, 11, 21),
+                    progress: .42,
+                    downloadedBytes: 4200000,
+                    totalBytes: 10000000,
+                    filePath: status == DownloadStatus.completed
+                        ? 'D:/音乐/验收歌曲.mp3'
+                        : null,
+                    error: status == DownloadStatus.failed
+                        ? '该来源连接失败，请稍后重试'
+                        : null,
+                    failureKind: status == DownloadStatus.failed
+                        ? DownloadFailureKind.network
+                        : null,
+                  ),
+              ],
+            ),
+          );
+          final suffix = '${dark ? 'dark' : 'light'}-${width.toInt()}-$scale';
+          Future<void> check(String page) async {
+            expect(tester.takeException(), isNull, reason: '$page $suffix');
+            if ((width == 1200 && scale == 1) ||
+                (width == 390 && scale == 1.5)) {
+              await captureIkUi(tester, 'aligned-$page-$suffix');
+            }
+          }
+
+          await check('home');
+          await tester.enterText(
+            find.byKey(const ValueKey('ik-workspace-search')),
+            '验收搜索',
+          );
+          await tester.testTextInput.receiveAction(TextInputAction.search);
+          await drain(tester);
+          await check('search');
+          await tester.runAsync(
+            () => app.container
+                .read(likesProvider.notifier)
+                .toggleLike(_song(PlatformType.qq)),
+          );
+          await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+          await drain(tester);
+          await check('library');
+          await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-3')));
+          await drain(tester);
+          await check('recent');
+          await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+          await drain(tester);
+          await check('audio');
+          await tester.tap(
+            find.byKey(const ValueKey('ik-settings-appearance')),
+          );
+          await drain(tester);
+          await check('appearance');
+          final router = GoRouter.of(
+            tester.element(find.byType(IkDesktopWorkspace)),
+          );
+          unawaited(router.push<void>('/downloads'));
+          await drain(tester);
+          await check('downloads');
+          for (final group in ['completed', 'failed']) {
+            final tab = find.byKey(ValueKey('ik-downloads-group-$group'));
+            await tester.ensureVisible(tab);
+            await tester.pump();
+            await tester.tap(tab);
+            await drain(tester);
+            await check('downloads-$group');
+          }
+          await back(tester);
+          await app.container
+              .read(playerProvider.notifier)
+              .playSong(_song(PlatformType.qq));
+          await drain(tester);
+          app.container
+              .read(sourcePlaybackViewProvider.notifier)
+              .state = const SourcePlaybackView(
+            message: '当前音源已返回音频',
+            details: '主来源已连接\n备用来源未请求\n实际格式与码率由响应确认',
+            sourceName: '验收来源',
+            format: 'mp3',
+            bitrate: 320000,
+          );
+          unawaited(router.push<void>('/player'));
+          await drain(tester);
+          await check('player');
+          final expand = find.byKey(const ValueKey('ik-player-source-expand'));
+          await tester.ensureVisible(expand);
+          await tester.pump();
+          await tester.tap(expand);
+          await drain(tester);
+          expect(
+            find.byKey(const ValueKey('ik-inline-source-status')),
+            findsOneWidget,
+          );
+          expect(find.byType(AlertDialog), findsNothing);
+          await check('player-source');
+        });
+      }
+    }
   }
 
   testWidgets('U05 切歌装载中禁止拖动进度，装载完成后恢复', (tester) async {
@@ -952,6 +1954,33 @@ Song _song(PlatformType platform, {String? name}) => Song(
   duration: const Duration(seconds: 200),
 );
 
+LocalMusicNotifier _localLibrary() => LocalMusicNotifier(
+  trackStore: MemoryLocalTrackStore(const [
+    LocalTrackEntry(
+      path: '/受控曲库/专辑甲/本地歌曲甲.mp3',
+      mtime: 1,
+      size: 1000,
+      title: '本地歌曲甲',
+      artistName: '本地歌手甲',
+      albumName: '本地专辑甲',
+      durationMs: 180000,
+    ),
+    LocalTrackEntry(
+      path: '/受控曲库/专辑乙/本地歌曲乙.mp3',
+      mtime: 1,
+      size: 2000,
+      title: '本地歌曲乙',
+      artistName: '本地歌手乙',
+      albumName: '本地专辑乙',
+      durationMs: 240000,
+    ),
+  ]),
+  lyricsStore: MemoryLocalLyricsStore(),
+  rootStore: MemoryLocalScanRootStore(),
+  onlineSnapshot: MemoryOnlineLibrarySnapshot(),
+  ratingsStore: MemoryTrackRatingsStore(),
+);
+
 class _Content extends FakeContentPlatform {
   _Content(PlatformType platform)
     : super(
@@ -980,11 +2009,75 @@ class _Content extends FakeContentPlatform {
       '[00:00.00]验收歌词\n[00:10.00]下一句';
 }
 
+class _VipContent extends _Content {
+  _VipContent() : super(PlatformType.qq);
+  final qualities = <AudioLevel>[];
+  @override
+  Future<String> getSongUrl(
+    String songId, {
+    AudioLevel quality = AudioLevel.low,
+  }) {
+    qualities.add(quality);
+    throw NoVipMembershipException('QQ音乐');
+  }
+}
+
+class _IoDownloadDirectoryService extends DownloadDirectoryService {
+  _IoDownloadDirectoryService(this.ioZone, Directory directory)
+    : super(
+        store: MemoryDownloadDirectoryStore(),
+        defaultRootProvider: () async =>
+            Directory('${directory.path}/vip-download'),
+      );
+  final Zone ioZone;
+  @override
+  Future<DownloadDestination> resolveDownloadDestination(
+    PlatformType platformType,
+    AudioLevel quality, {
+    bool create = true,
+  }) => ioZone.run(
+    () =>
+        super.resolveDownloadDestination(platformType, quality, create: create),
+  );
+}
+
+// 保留真实文件格式和原仓库逻辑；IO 操作完整进入真实 Zone，避免 flush
+// 的 Future 被测试 FakeAsync 持住，留下尚未完成的零字节 .tmp 文件。
+class _IoPlaylistsRepository extends MyPlaylistsRepository {
+  const _IoPlaylistsRepository(this.ioZone, Directory directory)
+    : super(storageDirectory: directory);
+  final Zone ioZone;
+
+  @override
+  Future<List<Playlist>> getPlaylists() => ioZone.run(super.getPlaylists);
+  @override
+  Future<Playlist> createPlaylist(String name) =>
+      ioZone.run(() => super.createPlaylist(name));
+  @override
+  Future<List<Song>> getSongs(String id) =>
+      ioZone.run(() => super.getSongs(id));
+  @override
+  Future<String?> exportPlaylistLink(String id) =>
+      ioZone.run(() => super.exportPlaylistLink(id));
+  @override
+  Future<bool> addSong(String id, Song song) =>
+      ioZone.run(() => super.addSong(id, song));
+}
+
 class _Catalog extends ExpandedVideoCatalog {
+  _Catalog({this.hotTerms = const [], this.hotFailure = false});
+  List<String> hotTerms;
+  bool hotFailure;
   final searches = <(PlatformType, String, int)>[];
   final syncs = <(PlatformType, String)>[];
   @override
-  Future<List<String>> hotSearch() async => const [];
+  Future<List<String>> hotSearch() async {
+    if (hotFailure) {
+      throw const VideoFailure(VideoFailureKind.network, '热搜暂时连接失败');
+    }
+    return hotTerms;
+  }
+
   @override
   Future<VideoPage> search(
     PlatformType platform,

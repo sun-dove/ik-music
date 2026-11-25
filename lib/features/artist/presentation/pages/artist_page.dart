@@ -9,12 +9,14 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/network/api_error_l10n.dart';
 import '../../../../core/network/platform_http.dart';
 import '../../../../core/share/song_actions.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/theme/platform_accent.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
 import '../../../../core/widgets/async_state_view.dart';
 import '../../../../models/album.dart';
 import '../../../../models/artist.dart';
 import '../../../../models/platform_type.dart';
+import '../../../../models/song.dart';
 import '../../../download/presentation/widgets/download_button.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../providers/artist_provider.dart';
@@ -123,45 +125,17 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
                     const _InlineHint(text: '暂无热门歌曲')
                   else
                     for (var i = 0; i < data.topSongs.length; i++)
-                      ListTile(
-                        onTap: () => ref
-                            .read(playerProvider.notifier)
-                            .playPlaylist(data.topSongs, startIndex: i),
-                        onLongPress: () => showSongActionsMenu(
-                          context,
-                          ref,
-                          song: data.topSongs[i],
-                        ),
-                        leading: SizedBox(
-                          width: 28,
-                          child: Text(
-                            '${i + 1}',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Theme.of(context).colorScheme.outline,
-                            ),
+                      if (ContextualActionTheme.isEnabled(context))
+                        Builder(
+                          builder: (rowContext) => _buildSongTile(
+                            context,
+                            data.topSongs,
+                            i,
+                            menuContext: rowContext,
                           ),
-                        ),
-                        title: Text(
-                          data.topSongs[i].name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Text(
-                          data.topSongs[i].album?.name ?? '',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Theme.of(context).colorScheme.outline,
-                          ),
-                        ),
-                        trailing: DownloadButton(
-                          song: data.topSongs[i],
-                          size: 22,
-                        ),
-                      ),
+                        )
+                      else
+                        _buildSongTile(context, data.topSongs, i),
                 ],
               ),
             ),
@@ -170,6 +144,45 @@ class _ArtistPageState extends ConsumerState<ArtistPage> {
       ),
     );
   }
+
+  Widget _buildSongTile(
+    BuildContext context,
+    List<Song> songs,
+    int index, {
+    BuildContext? menuContext,
+  }) => ListTile(
+    onTap: () => ref
+        .read(playerProvider.notifier)
+        .playPlaylist(songs, startIndex: index),
+    onLongPress: () =>
+        showSongActionsMenu(menuContext ?? context, ref, song: songs[index]),
+    leading: SizedBox(
+      width: 28,
+      child: Text(
+        '${index + 1}',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 13,
+          color: Theme.of(context).colorScheme.outline,
+        ),
+      ),
+    ),
+    title: Text(
+      songs[index].name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    ),
+    subtitle: Text(
+      songs[index].album?.name ?? '',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        fontSize: 12,
+        color: Theme.of(context).colorScheme.outline,
+      ),
+    ),
+    trailing: DownloadButton(song: songs[index], size: 22),
+  );
 }
 
 class _ArtistHeader extends StatelessWidget {

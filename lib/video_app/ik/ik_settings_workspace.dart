@@ -16,6 +16,7 @@ import '../../features/offline_cache/presentation/providers/offline_cache_provid
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../features/smart_playlists/presentation/providers/smart_playlists_provider.dart';
 import '../../features/stats/presentation/providers/listening_stats_provider.dart';
+import '../../l10n/ik_alignment_settings_strings.dart';
 import '../../l10n/ik_runtime_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
@@ -51,6 +52,8 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
     this.appearance,
     this.unified,
     this.initialSection = 'audio',
+    this.sectionRequest = 0,
+    this.alignToDesign = false,
   });
   final VideoPreferences preferences;
   final WindowsAppearance? appearance;
@@ -62,6 +65,8 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
       onCache;
   final ValueChanged<PlatformType> onAccount, onSync;
   final String initialSection;
+  final int sectionRequest;
+  final bool alignToDesign;
   @override
   ConsumerState<IkSettingsWorkspace> createState() =>
       _IkSettingsWorkspaceState();
@@ -109,7 +114,8 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
       oldWidget.unified?.removeListener(_preferencesChanged);
       widget.unified?.addListener(_preferencesChanged);
     }
-    if (oldWidget.initialSection != widget.initialSection &&
+    if ((oldWidget.initialSection != widget.initialSection ||
+            oldWidget.sectionRequest != widget.sectionRequest) &&
         sections.containsKey(widget.initialSection)) {
       _section = widget.initialSection;
     }
@@ -143,12 +149,15 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
 
   String? _status(String key) =>
       _busy.contains(key) ? IkWorkspaceStrings.busy : _errors[key];
+  Widget _alignedSliderSemantics(Widget slider) =>
+      widget.alignToDesign ? Semantics(container: true, child: slider) : slider;
   Widget _row(
     String title,
     Widget control, {
     String? description,
     String? key,
   }) => IkSettingRow(
+    alignToDesign: widget.alignToDesign,
     title: title,
     control: control,
     description: description,
@@ -185,9 +194,17 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
             ),
         ];
         return SingleChildScrollView(
-          padding: EdgeInsets.all(size.maxWidth < 580 ? 16 : 30),
+          padding: EdgeInsets.all(
+            widget.alignToDesign
+                ? 24
+                : size.maxWidth < 580
+                ? 16
+                : 30,
+          ),
           child: Align(
-            alignment: Alignment.topCenter,
+            alignment: widget.alignToDesign
+                ? Alignment.topLeft
+                : Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1100),
               child: Column(
@@ -281,6 +298,7 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
           ? WindowsMusicStrings.downloadQuality
           : WindowsMusicStrings.playQuality,
       IkSelect<String>(
+        alignToDesign: widget.alignToDesign,
         label: download
             ? WindowsMusicStrings.downloadQuality
             : WindowsMusicStrings.playQuality,
@@ -341,49 +359,72 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        IkSettingCard(
-          children: [
-            _row(
-              IkWorkspaceStrings.spatial,
-              Switch(
-                value: spatial.desired.enabled,
-                onChanged:
-                    spatial.canEnable &&
-                        spatial.status != IkSpatialStatus.applying
-                    ? spatialActions.setEnabled
-                    : null,
-              ),
-              description: spatial.message.isEmpty
-                  ? IkWorkspaceStrings.spatialHint
-                  : spatial.message,
-            ),
-            if (spatial.status == IkSpatialStatus.failed ||
-                spatial.status == IkSpatialStatus.unsupported)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: spatialActions.retry,
-                  child: const Text(IkWorkspaceStrings.retry),
-                ),
-              ),
-            _row(
-              IkWorkspaceStrings.strength,
-              SizedBox(
-                width: 220,
-                child: Slider(
-                  value: spatial.desired.strength,
-                  onChanged: spatial.canEnable && spatial.desired.enabled
-                      ? spatialActions.setStrength
+        if (widget.alignToDesign)
+          _spatialEmphasis(spatial, spatialActions)
+        else
+          IkSettingCard(
+            children: [
+              _row(
+                IkWorkspaceStrings.spatial,
+                Switch(
+                  value: spatial.desired.enabled,
+                  onChanged:
+                      spatial.canEnable &&
+                          spatial.status != IkSpatialStatus.applying
+                      ? spatialActions.setEnabled
                       : null,
                 ),
+                description: spatial.message.isEmpty
+                    ? IkWorkspaceStrings.spatialHint
+                    : spatial.message,
               ),
-              description: '${(spatial.desired.strength * 100).round()}%',
-            ),
-          ],
-        ),
+              if (spatial.status == IkSpatialStatus.failed ||
+                  spatial.status == IkSpatialStatus.unsupported)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: spatialActions.retry,
+                    child: const Text(IkWorkspaceStrings.retry),
+                  ),
+                ),
+              _row(
+                IkWorkspaceStrings.strength,
+                SizedBox(
+                  width: 220,
+                  child: Slider(
+                    value: spatial.desired.strength,
+                    onChanged: spatial.canEnable && spatial.desired.enabled
+                        ? spatialActions.setStrength
+                        : null,
+                  ),
+                ),
+                description: '${(spatial.desired.strength * 100).round()}%',
+              ),
+            ],
+          ),
         IkSettingCard(
           children: [
             _quality(false),
+            if (widget.alignToDesign)
+              _row(
+                IkWorkspaceStrings.strength,
+                SizedBox(
+                  width: 220,
+                  child: Semantics(
+                    container: true,
+                    child: Slider(
+                      value: spatial.desired.strength,
+                      label: '${(spatial.desired.strength * 100).round()}%',
+                      onChanged: spatial.canEnable && spatial.desired.enabled
+                          ? spatialActions.setStrength
+                          : null,
+                    ),
+                  ),
+                ),
+                description:
+                    '${IkAlignmentSettingsStrings.strengthHint} · '
+                    '${(spatial.desired.strength * 100).round()}%',
+              ),
             _row(
               IkStrings.fade,
               Switch(
@@ -399,19 +440,21 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
               IkStrings.fadeDuration,
               SizedBox(
                 width: 220,
-                child: Slider(
-                  value: effects.fadeDuration.inMilliseconds.toDouble(),
-                  min: 200,
-                  max: 3000,
-                  divisions: 14,
-                  onChanged: _busy.contains('effects')
-                      ? null
-                      : (value) => _run(
-                          'effects',
-                          () => notifier.setFadeDuration(
-                            Duration(milliseconds: value.round()),
+                child: _alignedSliderSemantics(
+                  Slider(
+                    value: effects.fadeDuration.inMilliseconds.toDouble(),
+                    min: 200,
+                    max: 3000,
+                    divisions: 14,
+                    onChanged: _busy.contains('effects')
+                        ? null
+                        : (value) => _run(
+                            'effects',
+                            () => notifier.setFadeDuration(
+                              Duration(milliseconds: value.round()),
+                            ),
                           ),
-                        ),
+                  ),
                 ),
               ),
               description: '${effects.fadeDuration.inMilliseconds} ms',
@@ -422,15 +465,17 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
           children: [
             _row(
               IkStrings.equalizer,
-              Switch(
-                value: effects.equalizerEnabled,
-                onChanged: eqAvailable && !_busy.contains('effects')
-                    ? (value) => _run(
-                        'effects',
-                        () => notifier.setEqualizerEnabled(value),
-                      )
-                    : null,
-              ),
+              widget.alignToDesign
+                  ? Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _equalizerPreset(effects, notifier, eqAvailable),
+                        _equalizerToggle(effects, notifier, eqAvailable),
+                      ],
+                    )
+                  : _equalizerToggle(effects, notifier, eqAvailable),
               description: switch (audio.status) {
                 IkAudioStatus.applied => IkRuntimeStrings.audioApplied,
                 IkAudioStatus.failed => IkRuntimeStrings.audioApplyFailed,
@@ -439,50 +484,41 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
               },
               key: 'effects',
             ),
-            _row(
-              IkWorkspaceStrings.eqPreset,
-              IkSelect<EqualizerPreset>(
-                label: IkWorkspaceStrings.eqPreset,
-                value: effects.equalizerPreset,
-                items: {
-                  for (final preset in EqualizerPreset.values)
-                    preset: preset.displayName,
-                },
-                enabled:
-                    eqAvailable &&
-                    effects.equalizerEnabled &&
-                    !_busy.contains('effects'),
-                onChanged: (value) =>
-                    _run('effects', () => notifier.setEqualizerPreset(value)),
-              ),
-            ),
-            for (final frequency in [60, 230, 910, 3600, 14000].indexed)
+            if (!widget.alignToDesign)
               _row(
-                IkStrings.band(frequency.$2),
-                SizedBox(
-                  width: 220,
-                  child: Slider(
-                    value: effects.effectiveEqualizerBandGains[frequency.$1],
-                    min: -12,
-                    max: 12,
-                    divisions: 24,
-                    onChanged:
-                        eqAvailable &&
-                            effects.equalizerEnabled &&
-                            !_busy.contains('effects')
-                        ? (value) => _run(
-                            'effects',
-                            () => notifier.setEqualizerBandGain(
-                              frequency.$1,
-                              value,
-                            ),
-                          )
-                        : null,
-                  ),
-                ),
-                description:
-                    '${effects.effectiveEqualizerBandGains[frequency.$1].toStringAsFixed(0)} dB',
+                IkWorkspaceStrings.eqPreset,
+                _equalizerPreset(effects, notifier, eqAvailable),
               ),
+            if (widget.alignToDesign)
+              _equalizerBands(effects, notifier, eqAvailable)
+            else
+              for (final frequency in [60, 230, 910, 3600, 14000].indexed)
+                _row(
+                  IkStrings.band(frequency.$2),
+                  SizedBox(
+                    width: 220,
+                    child: Slider(
+                      value: effects.effectiveEqualizerBandGains[frequency.$1],
+                      min: -12,
+                      max: 12,
+                      divisions: 24,
+                      onChanged:
+                          eqAvailable &&
+                              effects.equalizerEnabled &&
+                              !_busy.contains('effects')
+                          ? (value) => _run(
+                              'effects',
+                              () => notifier.setEqualizerBandGain(
+                                frequency.$1,
+                                value,
+                              ),
+                            )
+                          : null,
+                    ),
+                  ),
+                  description:
+                      '${effects.effectiveEqualizerBandGains[frequency.$1].toStringAsFixed(0)} dB',
+                ),
             if (audio.status == IkAudioStatus.failed)
               TextButton(
                 onPressed: ref.read(ikAudioRuntimeProvider.notifier).retry,
@@ -521,6 +557,7 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
             _row(
               IkStrings.timerDuration,
               IkSelect<int>(
+                alignToDesign: widget.alignToDesign,
                 label: IkStrings.timerDuration,
                 value: effects.sleepTimerDuration.inMinutes,
                 items: {
@@ -549,6 +586,410 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
     );
   }
 
+  Widget _spatialEmphasis(
+    IkSpatialState spatial,
+    IkSpatialCoordinator actions,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+    final dark = scheme.brightness == Brightness.dark;
+    final foreground = dark ? const Color(0xffd6eee8) : const Color(0xff244c43);
+    final status = spatial.message.isNotEmpty
+        ? spatial.message
+        : spatial.status == IkSpatialStatus.applying
+        ? IkWorkspaceStrings.busy
+        : IkAlignmentSettingsStrings.spatialOff;
+    return Container(
+      key: const ValueKey('ik-spatial-emphasis'),
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xff213b34) : const Color(0xffeaf4ee),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: scheme.primary.withValues(alpha: dark ? .24 : .12),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, size) {
+          final text = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                IkAlignmentSettingsStrings.immersion,
+                style: TextStyle(fontSize: 12, color: foreground),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                IkWorkspaceStrings.spatial,
+                style: TextStyle(
+                  fontSize: 25,
+                  fontWeight: FontWeight.w600,
+                  color: foreground,
+                ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                IkAlignmentSettingsStrings.spatialDescription,
+                style: TextStyle(fontSize: 13, height: 1.6, color: foreground),
+              ),
+              const SizedBox(height: 15),
+              Wrap(
+                spacing: 12,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Semantics(
+                    label: IkWorkspaceStrings.spatial,
+                    child: Switch(
+                      value: spatial.desired.enabled,
+                      onChanged:
+                          spatial.canEnable &&
+                              spatial.status != IkSpatialStatus.applying
+                          ? actions.setEnabled
+                          : null,
+                    ),
+                  ),
+                  Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: spatial.status == IkSpatialStatus.failed
+                          ? scheme.error
+                          : foreground,
+                    ),
+                  ),
+                  if (spatial.status == IkSpatialStatus.failed ||
+                      spatial.status == IkSpatialStatus.unsupported)
+                    TextButton(
+                      onPressed: actions.retry,
+                      child: const Text(IkWorkspaceStrings.retry),
+                    ),
+                ],
+              ),
+            ],
+          );
+          if (size.maxWidth < 440 ||
+              MediaQuery.textScalerOf(context).scale(14) > 19) {
+            return text;
+          }
+          return Row(
+            children: [
+              Expanded(child: text),
+              const SizedBox(width: 24),
+              ExcludeSemantics(
+                child: Container(
+                  width: 124,
+                  height: 124,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: scheme.primary.withValues(alpha: .18),
+                    ),
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: scheme.primary.withValues(alpha: .08),
+                      border: Border.all(
+                        color: scheme.primary.withValues(alpha: .18),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.headphones_rounded,
+                      color: foreground,
+                      size: 40,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _equalizerToggle(
+    AudioEffectsSettings effects,
+    AudioEffectsSettingsNotifier notifier,
+    bool available,
+  ) => Switch(
+    value: effects.equalizerEnabled,
+    onChanged: available && !_busy.contains('effects')
+        ? (value) => _run('effects', () => notifier.setEqualizerEnabled(value))
+        : null,
+  );
+
+  Widget _equalizerPreset(
+    AudioEffectsSettings effects,
+    AudioEffectsSettingsNotifier notifier,
+    bool available,
+  ) => IkSelect<EqualizerPreset>(
+    alignToDesign: widget.alignToDesign,
+    label: IkWorkspaceStrings.eqPreset,
+    value: effects.equalizerPreset,
+    items: {
+      for (final preset in EqualizerPreset.values) preset: preset.displayName,
+    },
+    enabled:
+        available && effects.equalizerEnabled && !_busy.contains('effects'),
+    onChanged: (value) =>
+        _run('effects', () => notifier.setEqualizerPreset(value)),
+  );
+
+  Widget _equalizerBands(
+    AudioEffectsSettings effects,
+    AudioEffectsSettingsNotifier notifier,
+    bool available,
+  ) => Padding(
+    padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+    child: LayoutBuilder(
+      builder: (context, size) {
+        final scale = MediaQuery.textScalerOf(context).scale(12) / 12;
+        final columns = (size.maxWidth / (72 * scale)).floor().clamp(1, 5);
+        return Wrap(
+          alignment: WrapAlignment.center,
+          runSpacing: 18,
+          children: [
+            for (final frequency in [60, 230, 910, 3600, 14000].indexed)
+              SizedBox(
+                width: size.maxWidth / columns,
+                child: Column(
+                  children: [
+                    Text(
+                      IkAlignmentSettingsStrings.gain(
+                        effects.effectiveEqualizerBandGains[frequency.$1],
+                      ),
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    const SizedBox(height: 6),
+                    SizedBox(
+                      key: ValueKey('ik-eq-slider-${frequency.$2}'),
+                      width: 48,
+                      height: 148,
+                      child: Semantics(
+                        label: IkStrings.band(frequency.$2),
+                        child: RotatedBox(
+                          quarterTurns: 3,
+                          child: Slider(
+                            value: effects
+                                .effectiveEqualizerBandGains[frequency.$1],
+                            min: -12,
+                            max: 12,
+                            divisions: 24,
+                            semanticFormatterCallback:
+                                IkAlignmentSettingsStrings.gain,
+                            onChanged:
+                                available &&
+                                    effects.equalizerEnabled &&
+                                    !_busy.contains('effects')
+                                ? (value) => _run(
+                                    'effects',
+                                    () => notifier.setEqualizerBandGain(
+                                      frequency.$1,
+                                      value,
+                                    ),
+                                  )
+                                : null,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      IkAlignmentSettingsStrings.frequency(frequency.$2),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
+    ),
+  );
+
+  Widget _themePreviews() => IkSettingCard(
+    children: [
+      Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              IkWorkspaceStrings.appearance,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              IkAlignmentSettingsStrings.themeHint,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 18),
+            LayoutBuilder(
+              builder: (context, size) {
+                final scale = MediaQuery.textScalerOf(context).scale(13) / 13;
+                final columns = ((size.maxWidth + 12) / (132 * scale + 12))
+                    .floor()
+                    .clamp(1, 3);
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: [
+                    for (final theme in {
+                      'light': VideoStrings.lightTheme,
+                      'dark': VideoStrings.darkTheme,
+                      'system': VideoStrings.systemTheme,
+                    }.entries)
+                      SizedBox(
+                        width: (size.maxWidth - 12 * (columns - 1)) / columns,
+                        child: _themePreview(theme.key, theme.value),
+                      ),
+                  ],
+                );
+              },
+            ),
+            if (_status('theme') != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Text(
+                  _status('theme')!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: _errors.containsKey('theme')
+                        ? Theme.of(context).colorScheme.error
+                        : Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget _themePreview(String mode, String label) {
+    final scheme = Theme.of(context).colorScheme;
+    final selected = widget.preferences.theme == mode;
+    return Semantics(
+      key: ValueKey('ik-theme-preview-$mode'),
+      selected: selected,
+      child: Material(
+        color: selected
+            ? scheme.primary.withValues(alpha: .06)
+            : scheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(
+            color: selected ? scheme.primary : scheme.outlineVariant,
+            width: selected ? 1.5 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: _busy.contains('theme')
+              ? null
+              : () => _run('theme', () async {
+                  await widget.preferences.setTheme(mode);
+                  widget.onThemeChanged();
+                }),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              children: [
+                ExcludeSemantics(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      height: 76,
+                      child: mode == 'system'
+                          ? Row(
+                              children: [
+                                Expanded(child: _themeMiniature(false)),
+                                Expanded(child: _themeMiniature(true)),
+                              ],
+                            )
+                          : _themeMiniature(mode == 'dark'),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(label, style: const TextStyle(fontSize: 13)),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      selected
+                          ? Icons.check_circle_rounded
+                          : Icons.circle_outlined,
+                      size: 17,
+                      color: selected ? scheme.primary : scheme.outlineVariant,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _themeMiniature(bool dark) {
+    final background = dark ? const Color(0xff202723) : const Color(0xfff7f9f6);
+    final line = dark ? const Color(0xff4a5650) : const Color(0xffdce5df);
+    return ColoredBox(
+      color: background,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            width: 22,
+            padding: const EdgeInsets.fromLTRB(5, 12, 5, 7),
+            color: line.withValues(alpha: .45),
+            child: Column(
+              children: [
+                Container(height: 8, color: const Color(0xff429887)),
+                const SizedBox(height: 8),
+                Container(height: 3, color: line),
+                const SizedBox(height: 6),
+                Container(height: 3, color: line),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(9),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(height: 5, color: line),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xff429887).withValues(alpha: .22),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Container(height: 4, color: line),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _appearance() {
     final appearance = widget.appearance;
     final selected =
@@ -556,34 +997,37 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        IkSettingCard(
-          children: [
-            _row(
-              IkWorkspaceStrings.appearance,
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final theme in {
-                    'light': VideoStrings.lightTheme,
-                    'dark': VideoStrings.darkTheme,
-                    'system': VideoStrings.systemTheme,
-                  }.entries)
-                    ChoiceChip(
-                      label: Text(theme.value),
-                      selected: widget.preferences.theme == theme.key,
-                      onSelected: _busy.contains('theme')
-                          ? null
-                          : (_) => _run('theme', () async {
-                              await widget.preferences.setTheme(theme.key);
-                              widget.onThemeChanged();
-                            }),
-                    ),
-                ],
+        if (widget.alignToDesign)
+          _themePreviews()
+        else
+          IkSettingCard(
+            children: [
+              _row(
+                IkWorkspaceStrings.appearance,
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final theme in {
+                      'light': VideoStrings.lightTheme,
+                      'dark': VideoStrings.darkTheme,
+                      'system': VideoStrings.systemTheme,
+                    }.entries)
+                      ChoiceChip(
+                        label: Text(theme.value),
+                        selected: widget.preferences.theme == theme.key,
+                        onSelected: _busy.contains('theme')
+                            ? null
+                            : (_) => _run('theme', () async {
+                                await widget.preferences.setTheme(theme.key);
+                                widget.onThemeChanged();
+                              }),
+                      ),
+                  ],
+                ),
+                key: 'theme',
               ),
-              key: 'theme',
-            ),
-          ],
-        ),
+            ],
+          ),
         IkSettingCard(
           children: [
             _row(
@@ -594,6 +1038,7 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
                 children: [
                   if (appearance != null && appearance.fonts.isNotEmpty)
                     IkSelect<String>(
+                      alignToDesign: widget.alignToDesign,
                       label: WindowsMusicStrings.font,
                       value: _systemFont ?? appearance.fontFamily,
                       items: {
@@ -967,6 +1412,7 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
             _row(
               IkWorkspaceStrings.cacheSize,
               IkSelect<int>(
+                alignToDesign: widget.alignToDesign,
                 label: IkWorkspaceStrings.cacheSize,
                 value: cache.sizeLimitMb,
                 items: {

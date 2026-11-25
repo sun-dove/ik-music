@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../../lyrics/models/lyrics_bundle.dart';
 import '../../models/song.dart';
 import '../../models/user.dart';
@@ -7,6 +9,7 @@ import '../../models/artist.dart';
 import '../../models/audio_quality.dart';
 import '../../models/toplist.dart';
 import '../../models/recommendation_source.dart';
+import '../../models/personal_daily_result.dart';
 import '../base/platform_enum.dart';
 import '../../core/storage/session_storage.dart';
 
@@ -242,4 +245,22 @@ abstract class MusicPlatform {
     final songs = await getDailyRecommendations();
     return RecommendationResult(songs: songs);
   }
+
+  /// 独立个人入口。旧推荐方法和缺省回退行为保持不变。
+  Future<PersonalDailyResult> getPersonalDailyRecommendations({
+    int limit = 30,
+    String? expectedAccountId,
+  }) async => PersonalDailyResult(
+    platform: platformType,
+    status: PersonalDailyStatus.unsupported,
+    fetchedAt: DateTime.now(),
+  );
+
+  bool get supportsPersonalDailyRecommendations => false;
+
+  /// 仅通知新个人路径；不暴露凭据，也不改变既有登录广播。
+  ValueListenable<int>? get personalDailySessionChanges => null;
+
+  int get personalDailySessionRevision =>
+      personalDailySessionChanges?.value ?? 0;
 }
