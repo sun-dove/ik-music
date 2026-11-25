@@ -65,6 +65,7 @@ import 'package:mconnect/platform/base/platform_registry.dart';
 import 'package:mconnect/video_app/data/video_catalog.dart';
 import 'package:mconnect/video_app/data/video_kugou_catalog.dart';
 import 'package:mconnect/video_app/ik/ik_home_page.dart';
+import 'package:mconnect/video_app/ik/ik_library_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_lyrics_action.dart';
 import 'package:mconnect/video_app/ik/ik_playback_bar.dart';
 import 'package:mconnect/video_app/ik/ik_theme.dart';
@@ -82,7 +83,8 @@ import 'package:mconnect/video_app/windows/windows_appearance.dart';
 import 'package:mconnect/video_app/windows/windows_music_preferences.dart';
 import 'package:mconnect/video_app/windows/windows_player_page.dart';
 import 'package:mconnect/video_app/windows/windows_window_controller.dart';
-import 'package:mconnect/video_app/ui/catalog_pages.dart' show videoSongKey;
+import 'package:mconnect/video_app/ui/catalog_pages.dart'
+    show videoPlatformLabel, videoSongKey;
 import 'package:mconnect/video_app/ui/video_theme.dart';
 
 import 'support/content_page_fakes.dart';
@@ -262,6 +264,7 @@ void main() {
     _Catalog? catalogOverride,
     bool realDiscovery = false,
     bool interactionIo = false,
+    bool pageInteractionRefinements = false,
   }) async {
     await _size(tester);
     if (viewport != null) tester.view.physicalSize = viewport;
@@ -380,6 +383,7 @@ void main() {
           redesign: true,
           workspace: true,
           alignToDesign: true,
+          pageInteractionRefinements: pageInteractionRefinements,
           expandedPlatforms: true,
           preferences: preferences,
           unifiedPreferences: unified,
@@ -1149,6 +1153,227 @@ void main() {
       expect(data.hasAction(SemanticsAction.decrease), isTrue);
       expect(tester.widget<Slider>(progress).max, 180000);
       binding.trace.expectValid();
+    } finally {
+      handle.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  _testWindows('E09 新交互开启真实根搜索分类与歌词自动恢复连续AX', (tester) async {
+    final longLyrics = [
+      for (var line = 0; line < 60; line++)
+        '[${(line * 3 ~/ 60).toString().padLeft(2, '0')}:'
+            '${(line * 3 % 60).toString().padLeft(2, '0')}.00]'
+            'E09歌词第$line句',
+    ].join('\n');
+    for (final platform in PlatformType.musicServices) {
+      PlatformRegistry.register(_Content(platform, lyrics: longLyrics));
+    }
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+      interactionIo: true,
+      pageInteractionRefinements: true,
+      restoredState: const PlayerState(
+        currentSong: _track,
+        duration: Duration(minutes: 3),
+        position: Duration(seconds: 90),
+        playlist: [_track],
+      ),
+      viewport: const Size(1186, 793),
+    );
+    app.recommendations.show(
+      RecommendationsState(
+        songsByPlatform: {
+          for (final platform in PlatformType.musicServices)
+            platform: [
+              for (var index = 1; index <= 31; index++)
+                Song(
+                  id: 'e09-${platform.name}-$index',
+                  name:
+                      'AX${platform.name}推荐${index.toString().padLeft(2, '0')}',
+                  platform: platform,
+                  artists: _track.artists,
+                  duration: const Duration(minutes: 3),
+                ),
+            ],
+        },
+        sourceByPlatform: {
+          for (final platform in PlatformType.musicServices)
+            platform: _R10Content(platform).source,
+        },
+      ),
+    );
+    final trace = binding.trace;
+    await _rootDrain(tester, trace);
+    expect(binding.renderViews.single.owner!.semanticsOwner, isNull);
+    trace.onIssue = () => _dumpMarkers(tester, trace);
+    trace.step = 'E09真实根已加载三平台完整推荐后迟启语义';
+    final handle = tester.ensureSemantics();
+    Future<void> tap(Finder target, String stage) =>
+        _r10Tap(tester, trace, target, stage);
+    Future<void> pump([Duration duration = Duration.zero]) =>
+        _pumpAndCheck(tester, trace, duration);
+    try {
+      await _rootDrain(tester, trace);
+      trace.expectValid();
+      await tap(
+        find.byKey(const ValueKey('ik-workspace-nav-1')),
+        'E09进入新版完整推荐',
+      );
+      final searchPage = find.byType(IkSearchWorkspace);
+      expect(
+        tester.widget<IkSearchWorkspace>(searchPage).fullRecommendations,
+        isTrue,
+      );
+      expect(find.text('查看全部推荐'), findsNothing);
+      final selector = find.descendant(
+        of: searchPage,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is IkSelect<PlatformType>,
+        ),
+      );
+      for (final platform in PlatformType.musicServices) {
+        trace.step = 'E09返回推荐平台选择器';
+        await tester.scrollUntilVisible(
+          selector,
+          -400,
+          scrollable: _verticalScrolls(searchPage).single,
+        );
+        await _rootDrain(tester, trace);
+        await tap(selector, 'E09打开推荐平台菜单');
+        await tap(
+          find.widgetWithText(MenuItemButton, videoPlatformLabel(platform)),
+          'E09切换${platform.name}',
+        );
+        expect(find.text('共 31 首'), findsOneWidget);
+        expect(find.text('播放全部').hitTestable(), findsOneWidget);
+        trace.step = 'E09${platform.name}完整推荐滚动至31首';
+        final lastSong = find.descendant(
+          of: searchPage,
+          matching: find.text('AX${platform.name}推荐31'),
+        );
+        await tester.scrollUntilVisible(
+          lastSong,
+          400,
+          scrollable: _verticalScrolls(searchPage).single,
+        );
+        await _rootDrain(tester, trace);
+        expect(lastSong.hitTestable(), findsOneWidget);
+      }
+      for (final query in ['E09查询', '']) {
+        trace.step = query.isEmpty ? 'E09清空查询恢复完整推荐' : 'E09提交查询重建结果列表';
+        await tester.enterText(
+          find.byKey(const ValueKey('ik-workspace-search')),
+          query,
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await _rootDrain(tester, trace);
+        final search = tester.widget<IkSearchWorkspace>(searchPage).search;
+        expect(search.query, query);
+        if (query.isEmpty) {
+          expect(search.groups, isEmpty);
+          expect(find.text('AXkugou推荐31').hitTestable(), findsOneWidget);
+        } else {
+          for (final platform in PlatformType.musicServices) {
+            expect(search.groups[platform]!.songs, hasLength(3));
+          }
+        }
+      }
+      await tap(find.byKey(const ValueKey('ik-workspace-nav-2')), 'E09进入固定分类');
+      expect(
+        tester
+            .widget<IkLibraryWorkspace>(find.byType(IkLibraryWorkspace))
+            .stableCategoryTabs,
+        isTrue,
+      );
+      for (final category in [
+        'likes',
+        'playlists',
+        'local',
+        'downloads',
+        'smart',
+        'likes',
+      ]) {
+        final tab = find.byKey(ValueKey('ik-library-category-$category'));
+        await tap(tab, 'E09分类$category');
+        expect(
+          tester.getSemantics(tab).flagsCollection.isSelected,
+          Tristate.isTrue,
+        );
+      }
+      await tap(
+        find
+            .descendant(
+              of: find.byType(IkPlaybackBar),
+              matching: find.text(_track.name),
+            )
+            .hitTestable(),
+        'E09进入三秒跟随详情',
+      );
+      final playerPage = find.byType(WindowsPlayerPage);
+      final page = tester.widget<WindowsPlayerPage>(playerPage);
+      expect(page.lyricsAutoResumeDelay, const Duration(seconds: 3));
+      expect(page.lyrics, hasLength(60));
+      final before = app.container.read(playerProvider);
+      final lyricsScroll = find.byKey(const ValueKey('windows-lyrics-scroll'));
+      final lyricsController = tester
+          .widget<SingleChildScrollView>(lyricsScroll)
+          .controller!;
+      final currentLine = find.descendant(
+        of: lyricsScroll,
+        matching: find.text('E09歌词第30句'),
+      );
+      expect(
+        tester.getRect(lyricsScroll).contains(tester.getCenter(currentLine)),
+        isTrue,
+      );
+      trace.step = 'E09实际滚轮浏览歌词并记录三秒恢复语义';
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: tester.getCenter(lyricsScroll),
+          scrollDelta: const Offset(0, -600),
+        ),
+      );
+      await pump();
+      final browsedOffset = lyricsController.offset;
+      expect(find.text(IkPlayerAlignmentStrings.browsing), findsOneWidget);
+      await pump(const Duration(milliseconds: 2900));
+      expect(lyricsController.offset, closeTo(browsedOffset, .001));
+      expect(find.text(IkPlayerAlignmentStrings.browsing), findsOneWidget);
+      await pump(const Duration(milliseconds: 100));
+      expect(find.text(IkPlayerAlignmentStrings.following), findsOneWidget);
+      // 三秒回位在帧尾启动动画；先建立动画首帧，再推进其250毫秒时长。
+      await pump();
+      await pump();
+      await pump(const Duration(milliseconds: 250));
+      await pump();
+      expect(find.text(IkPlayerAlignmentStrings.following), findsOneWidget);
+      expect(
+        tester.getRect(lyricsScroll).contains(tester.getCenter(currentLine)),
+        isTrue,
+      );
+      expect(lyricsController.offset, greaterThan(browsedOffset + 200));
+      await tap(
+        find.descendant(
+          of: playerPage,
+          matching: find.text(WindowsMusicStrings.back),
+        ),
+        'E09歌词自动恢复后返回音乐库',
+      );
+      expect(find.byType(WindowsPlayerPage), findsNothing);
+      expect(find.byType(IkDesktopWorkspace), findsOneWidget);
+      final after = app.container.read(playerProvider);
+      expect(after.currentSong, before.currentSong);
+      expect(after.position, before.position);
+      expect(after.isPlaying, before.isPlaying);
+      trace.expectValid();
     } finally {
       handle.dispose();
       await tester.pumpWidget(const SizedBox.shrink());

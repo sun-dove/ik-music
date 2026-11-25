@@ -108,6 +108,7 @@ class VideoMusicApp extends StatefulWidget {
     this.alignToDesign = false,
     this.mobileKeyboardLayout = false,
     this.dismissSourceMenuOnBack = false,
+    this.pageInteractionRefinements = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -124,6 +125,7 @@ class VideoMusicApp extends StatefulWidget {
   final bool alignToDesign;
   final bool mobileKeyboardLayout;
   final bool dismissSourceMenuOnBack;
+  final bool pageInteractionRefinements;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
@@ -266,6 +268,7 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
     alignToDesign: widget.alignToDesign,
     mobileKeyboardLayout: widget.mobileKeyboardLayout,
     dismissSourceMenuOnBack: widget.dismissSourceMenuOnBack,
+    pageInteractionRefinements: widget.pageInteractionRefinements,
     preferences: widget.preferences,
     customSourceCredentials:
         widget.customSourceCredentials ??
@@ -301,6 +304,7 @@ class _VideoHome extends ConsumerStatefulWidget {
     this.alignToDesign = false,
     this.mobileKeyboardLayout = false,
     this.dismissSourceMenuOnBack = false,
+    this.pageInteractionRefinements = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore customSourceCredentials;
@@ -318,12 +322,18 @@ class _VideoHome extends ConsumerStatefulWidget {
   final bool alignToDesign;
   final bool mobileKeyboardLayout;
   final bool dismissSourceMenuOnBack;
+  final bool pageInteractionRefinements;
   @override
   ConsumerState<_VideoHome> createState() => _VideoHomeState();
 }
 
 class _VideoHomeState extends ConsumerState<_VideoHome>
     with WidgetsBindingObserver {
+  bool get _refinePageInteractions =>
+      widget.workspace &&
+      widget.alignToDesign &&
+      widget.pageInteractionRefinements;
+
   WindowsMusicPreferences? get _unifiedPreferences =>
       widget.unifiedPreferences ?? widget.windowsAppearance?.preferences;
   AudioLevel _effectiveQuality(
@@ -871,6 +881,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         ].whereType<String>().where((id) => id.trim().isNotEmpty).firstOrNull;
         return WindowsPlayerPage(
           alignToDesign: widget.alignToDesign,
+          lyricsAutoResumeDelay: _refinePageInteractions
+              ? const Duration(seconds: 3)
+              : null,
           onAlbum:
               widget.alignToDesign &&
                   song.platform != PlatformType.local &&
@@ -2662,6 +2675,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (widget.workspace)
           IkSearchWorkspace(
             alignToDesign: widget.alignToDesign,
+            fullRecommendations: _refinePageInteractions,
             compactDiscovery: widget.alignToDesign,
             useSharedSearch: widget.alignToDesign,
             dismissSourceMenuOnBack: widget.dismissSourceMenuOnBack,
@@ -2715,6 +2729,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (widget.workspace)
           IkLibraryWorkspace(
             alignToDesign: widget.alignToDesign,
+            stableCategoryTabs: _refinePageInteractions,
             simplifySources: widget.alignToDesign,
             libraries: _libraries,
             syncing: _syncing,

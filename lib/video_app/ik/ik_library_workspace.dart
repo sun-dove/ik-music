@@ -34,6 +34,7 @@ class IkLibraryWorkspace extends StatefulWidget {
     this.currentSong,
     this.alignToDesign = false,
     this.simplifySources = false,
+    this.stableCategoryTabs = false,
     this.downloadsBuilder,
   });
   final Map<PlatformType, VideoLibrary> libraries;
@@ -50,6 +51,7 @@ class IkLibraryWorkspace extends StatefulWidget {
   final Song? currentSong;
   final bool alignToDesign;
   final bool simplifySources;
+  final bool stableCategoryTabs;
   final WidgetBuilder? downloadsBuilder;
   @override
   State<IkLibraryWorkspace> createState() => _IkLibraryWorkspaceState();
@@ -67,6 +69,65 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
     'smart': IkStrings.smart,
   };
 
+  Widget _stableCategory(BuildContext context, MapEntry<String, String> entry) {
+    final selected = entry.key == _category;
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      selected: selected,
+      button: selected ? null : true,
+      child: Material(
+        key: ValueKey('ik-library-category-${entry.key}'),
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: selected
+              ? null
+              : () {
+                  if (entry.key == 'downloads' &&
+                      widget.downloadsBuilder == null) {
+                    widget.onDownloads();
+                    return;
+                  }
+                  setState(() {
+                    _category = entry.key;
+                    _visited.add(entry.key);
+                  });
+                },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: selected ? colors.primary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    entry.value,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500,
+                      color: selected
+                          ? colors.primary
+                          : colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => widget.alignToDesign
       ? LayoutBuilder(
@@ -76,83 +137,90 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                 MediaQuery.textScalerOf(context).scale(600);
             final categories = [
               for (final entry in _categories.entries)
-                Semantics(
-                  selected: entry.key == _category,
-                  child: entry.key == _category
-                      ? Container(
-                          key: ValueKey('ik-library-category-${entry.key}'),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(
-                                entry.value,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      : TextButton(
-                          key: ValueKey('ik-library-category-${entry.key}'),
-                          onPressed: () {
-                            if (entry.key == 'downloads' &&
-                                widget.downloadsBuilder == null) {
-                              widget.onDownloads();
-                              return;
-                            }
-                            setState(() {
-                              _category = entry.key;
-                              _visited.add(entry.key);
-                            });
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: entry.key == _category
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                            ),
+                if (widget.stableCategoryTabs)
+                  _stableCategory(context, entry)
+                else
+                  Semantics(
+                    selected: entry.key == _category,
+                    child: entry.key == _category
+                        ? Container(
+                            key: ValueKey('ik-library-category-${entry.key}'),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 10,
                             ),
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: entry.key == _category
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.transparent,
-                                  width: 2,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  entry.value,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                  ),
                                 ),
                               ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(entry.value, maxLines: 1),
+                          )
+                        : TextButton(
+                            key: ValueKey('ik-library-category-${entry.key}'),
+                            onPressed: () {
+                              if (entry.key == 'downloads' &&
+                                  widget.downloadsBuilder == null) {
+                                widget.onDownloads();
+                                return;
+                              }
+                              setState(() {
+                                _category = entry.key;
+                                _visited.add(entry.key);
+                              });
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: entry.key == _category
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                            ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: entry.key == _category
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(entry.value, maxLines: 1),
+                              ),
                             ),
                           ),
-                        ),
-                ),
+                  ),
             ];
             return Column(
               children: [

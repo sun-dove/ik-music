@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -59,6 +60,7 @@ class WindowsPlayerPage extends StatefulWidget {
     this.onDesktopLyrics,
     this.desktopLyricsEnabled = false,
     this.alignToDesign = false,
+    this.lyricsAutoResumeDelay,
     this.onArtist,
     this.onAlbum,
   });
@@ -77,6 +79,9 @@ class WindowsPlayerPage extends StatefulWidget {
   final VoidCallback? onDesktopLyrics;
   final bool desktopLyricsEnabled;
   final bool alignToDesign;
+
+  /// 手动浏览结束后的恢复延时；缺省保持手动返回歌词的原行为。
+  final Duration? lyricsAutoResumeDelay;
   final VoidCallback? onArtist, onAlbum;
   @override
   State<WindowsPlayerPage> createState() => _WindowsPlayerPageState();
@@ -94,6 +99,17 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   Size _lastSize = Size.zero;
   double _lastFontSize = 0;
   int _revision = 0;
+  Timer? _autoResumeTimer;
+  final Set<int> _lyricsPointers = {};
+  bool _manualScrollActive = false;
+  bool _lyricsVisible = true;
+  bool get _canAutoResume =>
+      widget.lyricsAutoResumeDelay != null &&
+      widget.timedLyrics &&
+      widget.lyrics.isNotEmpty &&
+      !widget.lyricsLoading &&
+      !widget.isLoading &&
+      widget.duration > Duration.zero;
   int get _active => widget.timedLyrics
       ? widget.lyrics.lastIndexWhere(
           (line) => line.timestamp <= widget.position,
@@ -111,19 +127,67 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible =
+        TickerMode.valuesOf(context).enabled &&
+        (ModalRoute.isCurrentOf(context) ?? true);
+    if (_lyricsVisible == visible) return;
+    _lyricsVisible = visible;
+    if (widget.lyricsAutoResumeDelay == null) return;
+    _cancelAutoResume();
+    if (!visible) {
+      _lyricsPointers.clear();
+      _manualScrollActive = false;
+    } else if (_following) {
+      _follow();
+    } else {
+      _scheduleAutoResume();
+    }
+  }
+
+  @override
   void didUpdateWidget(WindowsPlayerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     final changedSong = widget.alignToDesign
         ? widget.song.id != oldWidget.song.id ||
               widget.song.platform != oldWidget.song.platform
         : widget.song.dedupeKey != oldWidget.song.dedupeKey;
-    if (changedSong || widget.lyrics != oldWidget.lyrics) _resetKeys();
+    final changedLyrics = widget.lyrics != oldWidget.lyrics;
+    if (changedSong || changedLyrics) _resetKeys();
     if (changedSong) {
+      _cancelAutoResume();
+      _lyricsPointers.clear();
+      _manualScrollActive = false;
       _following = true;
       _sourceExpanded = false;
     }
+    if (widget.lyricsAutoResumeDelay != oldWidget.lyricsAutoResumeDelay ||
+        changedLyrics ||
+        !_canAutoResume) {
+      _cancelAutoResume();
+    }
+    if (widget.lyricsAutoResumeDelay != null && widget.lyrics.isEmpty) {
+      _lyricsPointers.clear();
+      _manualScrollActive = false;
+    }
+    final becameReady =
+        _canAutoResume &&
+        (oldWidget.lyrics.isEmpty ||
+            !oldWidget.timedLyrics ||
+            oldWidget.lyricsLoading ||
+            oldWidget.isLoading ||
+            oldWidget.duration <= Duration.zero);
+    if (becameReady) {
+      _following = true;
+      _manualScrollActive = false;
+    } else if (changedLyrics ||
+        widget.lyricsAutoResumeDelay != oldWidget.lyricsAutoResumeDelay) {
+      _scheduleAutoResume();
+    }
     if (changedSong ||
-        widget.lyrics != oldWidget.lyrics ||
+        changedLyrics ||
+        becameReady ||
         _active !=
             oldWidget.lyrics.lastIndexWhere(
               (line) => line.timestamp <= oldWidget.position,
@@ -138,7 +202,11 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
       if (!mounted ||
           !_following ||
           revision != _revision ||
-          !widget.timedLyrics) {
+          !widget.timedLyrics ||
+          (widget.lyricsAutoResumeDelay != null &&
+              (!_lyricsVisible ||
+                  _lyricsPointers.isNotEmpty ||
+                  _manualScrollActive))) {
         return;
       }
       if (_active < 0) {
@@ -158,12 +226,65 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   }
 
   void _pauseFollow() {
-    if (!_following) return;
-    setState(() => _following = false);
+    if (_following) setState(() => _following = false);
+    _scheduleAutoResume();
+  }
+
+  void _cancelAutoResume() {
+    _autoResumeTimer?.cancel();
+    _autoResumeTimer = null;
+  }
+
+  void _scheduleAutoResume() {
+    _cancelAutoResume();
+    if (_following ||
+        !_canAutoResume ||
+        !_lyricsVisible ||
+        _manualScrollActive ||
+        _lyricsPointers.isNotEmpty) {
+      return;
+    }
+    final revision = _revision;
+    _autoResumeTimer = Timer(widget.lyricsAutoResumeDelay!, () {
+      _autoResumeTimer = null;
+      if (!mounted ||
+          !_canAutoResume ||
+          !_lyricsVisible ||
+          revision != _revision ||
+          _manualScrollActive ||
+          _lyricsPointers.isNotEmpty) {
+        return;
+      }
+      _resumeFollow();
+    });
+  }
+
+  void _resumeFollow() {
+    _cancelAutoResume();
+    _manualScrollActive = false;
+    setState(() => _following = true);
+    _follow();
+  }
+
+  void _lyricsPointerStart(int pointer) {
+    _lyricsPointers.add(pointer);
+    _cancelAutoResume();
+  }
+
+  void _lyricsPointerEnd(int pointer) {
+    _lyricsPointers.remove(pointer);
+    if (_following) {
+      _follow();
+    } else {
+      _scheduleAutoResume();
+    }
   }
 
   KeyEventResult _keyboard(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent || !_scroll.hasClients) {
+    if ((event is! KeyDownEvent &&
+            (widget.lyricsAutoResumeDelay == null ||
+                event is! KeyRepeatEvent)) ||
+        !_scroll.hasClients) {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
@@ -194,6 +315,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
 
   @override
   void dispose() {
+    _cancelAutoResume();
     _revision++;
     _scroll.dispose();
     _informationScroll.dispose();
@@ -608,6 +730,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
             onPressed: widget.lyrics.any((line) => line.hasTranslation)
                 ? () {
                     setState(() => _showTranslation = !_showTranslation);
+                    if (!_following) _scheduleAutoResume();
                     _follow();
                   }
                 : null,
@@ -638,23 +761,35 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                     Expanded(
                       child: Tooltip(
                         message: IkPlayerAlignmentStrings.lyricsSize,
-                        child: Semantics(
-                          container: true,
-                          child: Slider(
-                            key: const ValueKey('ik-player-lyrics-size'),
-                            value: _lyricsFontSize,
-                            min: 16,
-                            max: 30,
-                            divisions: 7,
-                            label: '${_lyricsFontSize.round()}',
-                            semanticFormatterCallback: (value) =>
-                                '${IkPlayerAlignmentStrings.lyricsSize} ${value.round()}',
-                            onChanged: widget.lyrics.isEmpty
-                                ? null
-                                : (value) {
-                                    setState(() => _lyricsFontSize = value);
-                                    _follow();
-                                  },
+                        child: Listener(
+                          onPointerDown: widget.lyricsAutoResumeDelay == null
+                              ? null
+                              : (event) => _lyricsPointerStart(event.pointer),
+                          onPointerUp: widget.lyricsAutoResumeDelay == null
+                              ? null
+                              : (event) => _lyricsPointerEnd(event.pointer),
+                          onPointerCancel: widget.lyricsAutoResumeDelay == null
+                              ? null
+                              : (event) => _lyricsPointerEnd(event.pointer),
+                          child: Semantics(
+                            container: true,
+                            child: Slider(
+                              key: const ValueKey('ik-player-lyrics-size'),
+                              value: _lyricsFontSize,
+                              min: 16,
+                              max: 30,
+                              divisions: 7,
+                              label: '${_lyricsFontSize.round()}',
+                              semanticFormatterCallback: (value) =>
+                                  '${IkPlayerAlignmentStrings.lyricsSize} ${value.round()}',
+                              onChanged: widget.lyrics.isEmpty
+                                  ? null
+                                  : (value) {
+                                      setState(() => _lyricsFontSize = value);
+                                      if (!_following) _scheduleAutoResume();
+                                      _follow();
+                                    },
+                            ),
                           ),
                         ),
                       ),
@@ -1173,17 +1308,41 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
             focusNode: _lyricsFocus,
             onKeyEvent: _keyboard,
             child: Listener(
-              onPointerDown: (_) => _lyricsFocus.requestFocus(),
-              onPointerSignal: (_) => _pauseFollow(),
+              onPointerDown: (event) {
+                _lyricsFocus.requestFocus();
+                if (widget.lyricsAutoResumeDelay != null) {
+                  _lyricsPointerStart(event.pointer);
+                }
+              },
+              onPointerUp: widget.lyricsAutoResumeDelay == null
+                  ? null
+                  : (event) => _lyricsPointerEnd(event.pointer),
+              onPointerCancel: widget.lyricsAutoResumeDelay == null
+                  ? null
+                  : (event) => _lyricsPointerEnd(event.pointer),
+              onPointerSignal: (event) {
+                if (widget.lyricsAutoResumeDelay == null ||
+                    event is PointerScrollEvent) {
+                  _pauseFollow();
+                }
+              },
               child: NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
-                  if (notification is UserScrollNotification &&
-                      notification.direction != ScrollDirection.idle) {
+                  if ((notification is UserScrollNotification &&
+                          notification.direction != ScrollDirection.idle) ||
+                      (notification is ScrollUpdateNotification &&
+                          notification.dragDetails != null) ||
+                      (widget.lyricsAutoResumeDelay != null &&
+                          notification is ScrollStartNotification &&
+                          notification.dragDetails != null)) {
+                    if (widget.lyricsAutoResumeDelay != null) {
+                      _manualScrollActive = true;
+                    }
                     _pauseFollow();
-                  }
-                  if (notification is ScrollUpdateNotification &&
-                      notification.dragDetails != null) {
-                    _pauseFollow();
+                  } else if (notification is ScrollEndNotification &&
+                      _manualScrollActive) {
+                    _manualScrollActive = false;
+                    _scheduleAutoResume();
                   }
                   return false;
                 },
@@ -1209,6 +1368,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                             widget.duration > Duration.zero))
                                 ? () {
                                     if (widget.alignToDesign) {
+                                      _cancelAutoResume();
+                                      _manualScrollActive = false;
                                       setState(() => _following = true);
                                     }
                                     widget.onSeek(widget.lyrics[i].timestamp);
@@ -1276,10 +1437,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
-              onPressed: () {
-                setState(() => _following = true);
-                _follow();
-              },
+              onPressed: _resumeFollow,
               icon: const Icon(Icons.my_location_outlined, size: 16),
               label: const Text(WindowsMusicStrings.returnToLyrics),
             ),

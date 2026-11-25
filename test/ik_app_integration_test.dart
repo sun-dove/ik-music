@@ -169,6 +169,7 @@ void main() {
     bool desktopAppearance = false,
     bool workspace = false,
     bool alignToDesign = false,
+    bool pageInteractionRefinements = false,
     DownloadState? downloads,
     double textScale = 1,
     PlayerAudioController? audioController,
@@ -270,6 +271,7 @@ void main() {
             redesign: true,
             workspace: workspace,
             alignToDesign: alignToDesign,
+            pageInteractionRefinements: pageInteractionRefinements,
             expandedPlatforms: true,
             preferences: preferences,
             unifiedPreferences: unified,
@@ -401,6 +403,57 @@ void main() {
     await drain(tester);
     expect(find.byType(ArtistPage).hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('E00 页面修订真实装配与原默认兼容', (tester) async {
+    for (final enabled in [false, true]) {
+      final app = await mount(
+        tester,
+        workspace: true,
+        alignToDesign: true,
+        pageInteractionRefinements: enabled,
+      );
+      await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-1')));
+      await drain(tester);
+      expect(
+        find.text('查看全部推荐').hitTestable(),
+        enabled ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.text('播放全部').hitTestable(),
+        enabled ? findsOneWidget : findsNothing,
+      );
+      await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-2')));
+      await drain(tester);
+      if (enabled) {
+        final likes = find.text('喜欢的音乐').hitTestable();
+        final before = tester.getTopLeft(likes).dy;
+        await tester.tap(
+          find.byKey(const ValueKey('ik-library-category-playlists')),
+        );
+        await drain(tester);
+        expect(tester.getTopLeft(likes).dy, moreOrLessEquals(before));
+      }
+      await app.container
+          .read(playerProvider.notifier)
+          .playSong(_song(PlatformType.qq));
+      await drain(tester);
+      final router = GoRouter.of(
+        tester.element(find.byType(IkDesktopWorkspace)),
+      );
+      unawaited(router.push<void>('/player'));
+      await drain(tester);
+      final playerPage = tester.widget<WindowsPlayerPage>(
+        find.byType(WindowsPlayerPage),
+      );
+      expect(
+        playerPage.lyricsAutoResumeDelay,
+        enabled ? const Duration(seconds: 3) : null,
+      );
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await drain(tester);
+    }
   });
 
   testWidgets('A06 新下载路由与曲库入口共用新工作页和播放栏', (tester) async {
