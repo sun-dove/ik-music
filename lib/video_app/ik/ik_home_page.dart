@@ -12,6 +12,7 @@ import '../../l10n/ik_personal_daily_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
+import '../../models/recommendation_source.dart';
 import '../../models/song.dart';
 import '../ui/catalog_pages.dart';
 import '../ui/video_shell.dart';
@@ -33,6 +34,7 @@ class IkHomePage extends ConsumerStatefulWidget {
     this.onMoreWithContext,
     this.workspace = false,
     this.alignToDesign = false,
+    this.recommendationsInDiscovery = false,
   });
   final ValueChanged<String> onNavigate;
   final VoidCallback onPlayer;
@@ -41,6 +43,7 @@ class IkHomePage extends ConsumerStatefulWidget {
   final void Function(BuildContext, Song)? onMoreWithContext;
   final bool workspace;
   final bool alignToDesign;
+  final bool recommendationsInDiscovery;
   @override
   ConsumerState<IkHomePage> createState() => _IkHomePageState();
 }
@@ -66,13 +69,22 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
   @override
   Widget build(BuildContext context) {
     final aligned = widget.workspace && widget.alignToDesign;
+    final publicRecommendations = aligned && widget.recommendationsInDiscovery;
     final player = ref.watch(playerProvider);
     final auth = ref.watch(authProvider);
     final recommendations = ref.watch(recommendationsProvider);
-    final platforms = {
+    final allPlatforms = {
       ...recommendations.songsByPlatform.keys,
       ...recommendations.errorsByPlatform.keys,
     };
+    final platforms = publicRecommendations
+        ? allPlatforms.where((platform) {
+            final source = recommendations.sourceForPlatform(platform);
+            return source?.platform == platform &&
+                (source?.kind == RecommendationKind.fallbackToplist ||
+                    source?.kind == RecommendationKind.fallbackHomepage);
+          }).toSet()
+        : allPlatforms;
     return RefreshIndicator(
       onRefresh: ref.read(recommendationsProvider.notifier).loadRecommendations,
       child: CustomScrollView(
@@ -208,43 +220,50 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                       ],
                     ),
                   SizedBox(height: aligned ? 0 : 24),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          aligned
-                              ? IkDiscoveryRevisionStrings.recommendations
-                              : IkStrings.recommendations,
-                          style: aligned
-                              ? const TextStyle(
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w600,
-                                )
-                              : Theme.of(context).textTheme.titleLarge,
+                  if (!publicRecommendations ||
+                      platforms.isNotEmpty ||
+                      recommendations.isLoading)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            aligned
+                                ? IkDiscoveryRevisionStrings.recommendations
+                                : IkStrings.recommendations,
+                            style: aligned
+                                ? const TextStyle(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w600,
+                                  )
+                                : Theme.of(context).textTheme.titleLarge,
+                          ),
                         ),
-                      ),
-                      if (aligned)
-                        TextButton(
-                          onPressed: () =>
-                              widget.onNavigate('/recommendations'),
-                          child: const Text(IkStrings.browse),
+                        if (aligned && !publicRecommendations)
+                          TextButton(
+                            onPressed: () =>
+                                widget.onNavigate('/recommendations'),
+                            child: const Text(IkStrings.browse),
+                          ),
+                        IconButton(
+                          tooltip: VideoStrings.retry,
+                          onPressed: recommendations.isLoading
+                              ? null
+                              : ref
+                                    .read(recommendationsProvider.notifier)
+                                    .loadRecommendations,
+                          icon: const Icon(Icons.refresh),
                         ),
-                      IconButton(
-                        tooltip: VideoStrings.retry,
-                        onPressed: recommendations.isLoading
-                            ? null
-                            : ref
-                                  .read(recommendationsProvider.notifier)
-                                  .loadRecommendations,
-                        icon: const Icon(Icons.refresh),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                   if (recommendations.isLoading)
                     const LinearProgressIndicator(),
-                  if (recommendations.error != null && platforms.isEmpty)
+                  if (!publicRecommendations &&
+                      recommendations.error != null &&
+                      platforms.isEmpty)
                     Text(recommendations.error!),
-                  if (!recommendations.isLoading && platforms.isEmpty) ...[
+                  if (!publicRecommendations &&
+                      !recommendations.isLoading &&
+                      platforms.isEmpty) ...[
                     if (recommendations.error == null)
                       const Text(IkStrings.noRecommendations),
                     if (!aligned)
@@ -295,6 +314,7 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                                 IkStrings.recommendations,
                     ),
                     if (widget.workspace &&
+                        !publicRecommendations &&
                         recommendations.songsForPlatform(platform).length > 6)
                       Text(IkWorkspaceStrings.previewTracks(6)),
                     if ((aligned
@@ -371,6 +391,7 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                 recommendations.songsForPlatform(platform).isNotEmpty)
               _DiscoverySongGrid(
                 songs: recommendations.songsForPlatform(platform),
+                fullList: publicRecommendations,
                 onPlay: widget.onPlay,
                 onMore: widget.onMore,
                 onMoreWithContext: widget.onMoreWithContext,
@@ -390,7 +411,8 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
                   );
                 },
               ),
-            if (recommendations.songsForPlatform(platform).isNotEmpty)
+            if (!publicRecommendations &&
+                recommendations.songsForPlatform(platform).isNotEmpty)
               SliverToBoxAdapter(
                 child: TextButton(
                   onPressed: () => widget.onNavigate('/recommendations'),
@@ -650,11 +672,13 @@ class _DiscoverySongGrid extends StatelessWidget {
     required this.onPlay,
     required this.onMore,
     this.onMoreWithContext,
+    this.fullList = false,
   });
   final List<Song> songs;
   final void Function(Song, List<Song>) onPlay;
   final ValueChanged<Song> onMore;
   final void Function(BuildContext, Song)? onMoreWithContext;
+  final bool fullList;
 
   @override
   Widget build(BuildContext context) {
@@ -678,7 +702,7 @@ class _DiscoverySongGrid extends StatelessWidget {
               mainAxisSpacing: 20,
               mainAxisExtent: coverHeight + 66 * scale + 22,
             ),
-            itemCount: songs.length.clamp(0, 6),
+            itemCount: fullList ? songs.length : songs.length.clamp(0, 6),
             itemBuilder: (context, index) {
               final song = songs[index];
               final identity = '${song.platform.name}-$index';

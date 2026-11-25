@@ -369,6 +369,7 @@ Future<void> main() async {
         workspace: true,
         alignToDesign: true,
         pageInteractionRefinements: true,
+        workspacePageRefinements: true,
         mobileKeyboardLayout: !PlatformUtils.isDesktop,
         dismissSourceMenuOnBack: !PlatformUtils.isDesktop,
         expandedPlatforms: true,

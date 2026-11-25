@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,8 +9,11 @@ import '../../../../core/transfer/playlist_codec.dart';
 import '../../../../core/transfer/transfer_providers.dart';
 import '../../../../core/transfer/transfer_report.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
+import '../../../../l10n/expanded_strings.dart';
+import '../../../../l10n/workspace_draft_strings.dart';
 import '../../../../models/song.dart';
 import '../../../../platform/base/platform_registry.dart';
+import '../../../../video_app/ik/ik_workspace_navigation.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../../data/my_playlists_repository.dart';
 import '../providers/my_playlists_provider.dart';
@@ -20,8 +24,10 @@ class ImportPlaylistPage extends ConsumerStatefulWidget {
     super.key,
     this.formatHint,
     this.localImportFailure,
+    this.protectWorkspaceDraft = false,
   });
   final String? formatHint, localImportFailure;
+  final bool protectWorkspaceDraft;
 
   @override
   ConsumerState<ImportPlaylistPage> createState() => _ImportPlaylistPageState();
@@ -43,14 +49,114 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
   /// same document twice (the slot itself is cleared as soon as it is consumed,
   /// but two builds can happen inside one frame).
   String? _pendingInFlight;
+  String? _resultInput;
+  late String _savedSnapshot;
+  IkWorkspaceNavigation? _workspaceNavigation;
+  Future<bool>? _pendingLeave;
+  bool _leaving = false;
+
+  String _snapshot({String? input}) => jsonEncode([
+    input ?? _controller.text,
+    _playlistName,
+    _parsedSongs?.map((song) => [song.platform.name, song.id]).toList(),
+    _report?.playlistName,
+    _report?.matches
+        .map(
+          (match) => [
+            match.entryIndex,
+            match.entry.display,
+            match.kind.name,
+            match.song?.platform.name,
+            match.song?.id,
+            match.reason,
+            _draft?.isAccepted(match),
+          ],
+        )
+        .toList(),
+  ]);
+
+  bool get _dirty => _snapshot() != _savedSnapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    _savedSnapshot = _snapshot();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bindWorkspaceNavigation();
+  }
+
+  @override
+  void didUpdateWidget(covariant ImportPlaylistPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.protectWorkspaceDraft != widget.protectWorkspaceDraft) {
+      _bindWorkspaceNavigation();
+    }
+  }
+
+  void _bindWorkspaceNavigation() {
+    final navigation = widget.protectWorkspaceDraft
+        ? IkWorkspaceNavigation.maybeOf(context)
+        : null;
+    if (identical(navigation, _workspaceNavigation)) return;
+    _workspaceNavigation?.unregister(this);
+    _workspaceNavigation = navigation;
+    navigation?.register(this, _confirmLeave);
+  }
+
+  Future<bool> _confirmLeave() =>
+      _pendingLeave ??= _checkLeave().whenComplete(() => _pendingLeave = null);
+
+  Future<bool> _checkLeave() async {
+    if (!mounted || _isParsing || _isSaving) return false;
+    if (!_dirty) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text(ExpandedStrings.dirty),
+        content: const Text(WorkspaceDraftStrings.importPlaylistLeave),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text(ExpandedStrings.keepEditing),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text(WorkspaceDraftStrings.discard),
+          ),
+        ],
+      ),
+    );
+    return mounted && discard == true;
+  }
+
+  Future<void> _return() async {
+    if (!await _confirmLeave() || !mounted) return;
+    if (ModalRoute.of(context)?.isCurrent != true) return;
+    setState(() => _leaving = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ModalRoute.of(context)?.isCurrent == true) {
+        Navigator.pop(context);
+      } else {
+        setState(() => _leaving = false);
+      }
+    });
+  }
 
   @override
   void dispose() {
+    _workspaceNavigation?.unregister(this);
     _controller.dispose();
     super.dispose();
   }
 
   Future<void> _parseLink() async {
+    if (widget.protectWorkspaceDraft && (_isParsing || _isSaving)) return;
+    final submittedInput = _controller.text;
     final url = _controller.text.trim();
     if (url.isEmpty) {
       setState(() => _error = '请输入分享链接');
@@ -63,6 +169,7 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
       _parsedSongs = null;
       _report = null;
       _draft = null;
+      if (widget.protectWorkspaceDraft) _resultInput = submittedInput;
     });
 
     // A playlist *document* (m3u8 / our own JSON / `歌名 - 歌手` lines) is a
@@ -93,6 +200,9 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
         _parsedSongs = songs;
         _playlistName = localPlaylist.name;
         _isParsing = false;
+        if (widget.protectWorkspaceDraft) {
+          _savedSnapshot = _snapshot(input: submittedInput);
+        }
       });
       showSuccessSnackBar(context, '已导入到我的歌单');
       return;
@@ -141,12 +251,20 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
     final songs = _parsedSongs;
     final name = _playlistName;
     if (songs == null || songs.isEmpty || name == null || _isSaving) return;
+    final submitted = widget.protectWorkspaceDraft
+        ? _snapshot(input: _resultInput)
+        : null;
     setState(() => _isSaving = true);
     final playlist = await ref
         .read(myPlaylistsProvider.notifier)
         .importPlaylist(name: name, songs: songs);
     if (!mounted) return;
-    setState(() => _isSaving = false);
+    setState(() {
+      _isSaving = false;
+      if (widget.protectWorkspaceDraft && playlist != null) {
+        _savedSnapshot = submitted!;
+      }
+    });
     showInfoSnackBar(context, playlist == null ? '保存失败' : '已保存到我的歌单');
   }
 
@@ -179,12 +297,20 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
   ) async {
     final songs = draft.songsToImport;
     if (songs.isEmpty || _isSaving) return;
+    final submitted = widget.protectWorkspaceDraft
+        ? _snapshot(input: _resultInput)
+        : null;
     setState(() => _isSaving = true);
     final playlist = await ref
         .read(myPlaylistsProvider.notifier)
         .importPlaylist(name: report.playlistName, songs: songs);
     if (!mounted) return;
-    setState(() => _isSaving = false);
+    setState(() {
+      _isSaving = false;
+      if (widget.protectWorkspaceDraft && playlist != null) {
+        _savedSnapshot = submitted!;
+      }
+    });
     showInfoSnackBar(context, playlist == null ? '保存失败' : '已保存到我的歌单');
   }
 
@@ -378,8 +504,13 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
       });
     }
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('导入歌单')),
+    final page = Scaffold(
+      appBar: AppBar(
+        leading: widget.protectWorkspaceDraft && Navigator.canPop(context)
+            ? BackButton(onPressed: _return)
+            : null,
+        title: const Text('导入歌单'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -440,7 +571,10 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: _isParsing ? null : _parseLink,
+                  onPressed:
+                      _isParsing || (widget.protectWorkspaceDraft && _isSaving)
+                      ? null
+                      : _parseLink,
                   child: _isParsing
                       ? const SizedBox(
                           width: 20,
@@ -543,6 +677,14 @@ class _ImportPlaylistPageState extends ConsumerState<ImportPlaylistPage> {
           ],
         ),
       ),
+    );
+    if (!widget.protectWorkspaceDraft) return page;
+    return PopScope(
+      canPop: _leaving,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _return();
+      },
+      child: page,
     );
   }
 }

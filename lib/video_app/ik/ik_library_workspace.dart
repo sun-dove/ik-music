@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/library/presentation/pages/platform_playlists_page.dart';
 import '../../features/local_music/presentation/pages/local_music_page.dart';
 import '../../features/smart_playlists/presentation/pages/smart_playlists_page.dart';
+import '../../l10n/ik_contextual_error_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
@@ -35,6 +36,8 @@ class IkLibraryWorkspace extends StatefulWidget {
     this.alignToDesign = false,
     this.simplifySources = false,
     this.stableCategoryTabs = false,
+    this.contextualErrors = false,
+    this.expiredPlatform,
     this.downloadsBuilder,
   });
   final Map<PlatformType, VideoLibrary> libraries;
@@ -52,6 +55,8 @@ class IkLibraryWorkspace extends StatefulWidget {
   final bool alignToDesign;
   final bool simplifySources;
   final bool stableCategoryTabs;
+  final bool contextualErrors;
+  final PlatformType? expiredPlatform;
   final WidgetBuilder? downloadsBuilder;
   @override
   State<IkLibraryWorkspace> createState() => _IkLibraryWorkspaceState();
@@ -485,13 +490,33 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                   ),
                 for (final platform in widget.loggedIn)
                   if (widget.libraries[platform]?.error case final error?)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(
-                        '${videoPlatformLabel(platform)} · ${error.message}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                    if (widget.contextualErrors)
+                      _syncIssue(context, platform, error)
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          '${videoPlatformLabel(platform)} · ${error.message}',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
+                      ),
+                if (widget.contextualErrors)
+                  if (widget.expiredPlatform case final platform?
+                      when platform.isMusicService &&
+                          !widget.loggedIn.contains(platform))
+                    _issueNotice(
+                      context,
+                      key: ValueKey('ik-library-expired-${platform.name}'),
+                      title: IkContextualErrorStrings.syncNeedsAccount(
+                        videoPlatformLabel(platform),
+                      ),
+                      action: TextButton(
+                        onPressed: widget.syncing.contains(platform)
+                            ? null
+                            : widget.onAccounts,
+                        child: const Text(IkContextualErrorStrings.reconnect),
                       ),
                     ),
                 if (songs.isEmpty && !loading)
@@ -632,6 +657,78 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
         ),
         const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
       ],
+    );
+  }
+
+  Widget _syncIssue(
+    BuildContext context,
+    PlatformType platform,
+    VideoFailure error,
+  ) {
+    final needsAccount =
+        error.kind == VideoFailureKind.notLoggedIn ||
+        error.kind == VideoFailureKind.sessionExpired;
+    return _issueNotice(
+      context,
+      key: ValueKey('ik-library-error-${platform.name}'),
+      title: IkContextualErrorStrings.syncFailed(videoPlatformLabel(platform)),
+      reason: error.message,
+      action: needsAccount || error.canRetry
+          ? TextButton(
+              onPressed: widget.syncing.contains(platform)
+                  ? null
+                  : needsAccount
+                  ? widget.onAccounts
+                  : () => widget.onSync(platform),
+              child: Text(
+                needsAccount
+                    ? IkContextualErrorStrings.reconnect
+                    : IkContextualErrorStrings.retrySync,
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _issueNotice(
+    BuildContext context, {
+    required Key key,
+    required String title,
+    String? reason,
+    Widget? action,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: key,
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.error,
+            ),
+          ),
+          if (reason != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              reason,
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+          ],
+          if (action != null) ...[const SizedBox(height: 4), action],
+        ],
+      ),
     );
   }
 }

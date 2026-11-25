@@ -33,6 +33,7 @@ class IkSearchWorkspace extends StatefulWidget {
     this.alignToDesign = false,
     this.compactDiscovery = false,
     this.fullRecommendations = false,
+    this.recommendationsInDiscovery = false,
     this.useSharedSearch = false,
     this.dismissSourceMenuOnBack = false,
     this.hotTerms = const [],
@@ -54,6 +55,7 @@ class IkSearchWorkspace extends StatefulWidget {
   final bool alignToDesign, useSharedSearch;
   final bool compactDiscovery;
   final bool fullRecommendations;
+  final bool recommendationsInDiscovery;
   final bool dismissSourceMenuOnBack;
   final List<String> hotTerms;
   final bool hotLoading;
@@ -254,13 +256,17 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
   );
 
   Widget _aligned(BuildContext context) {
+    final preserveScroll =
+        widget.fullRecommendations || widget.recommendationsInDiscovery;
     final key = widget.search.query.isEmpty
-        ? 'ik-search-recommendations'
+        ? widget.recommendationsInDiscovery
+              ? 'ik-search-hot-terms'
+              : 'ik-search-recommendations'
         : 'ik-search-results-${widget.search.query}';
-    if (widget.fullRecommendations) _restoreSearchScroll(key);
+    if (preserveScroll) _restoreSearchScroll(key);
     final scrollView = CustomScrollView(
-      key: widget.fullRecommendations ? ValueKey(key) : null,
-      controller: widget.fullRecommendations ? _scroll : null,
+      key: preserveScroll ? ValueKey(key) : null,
+      controller: preserveScroll ? _scroll : null,
       slivers: [
         SliverPadding(
           padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
@@ -295,7 +301,8 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                   ),
                 ],
                 if (!widget.compactDiscovery &&
-                    (!widget.fullRecommendations ||
+                    ((!widget.fullRecommendations &&
+                            !widget.recommendationsInDiscovery) ||
                         widget.search.query.isNotEmpty)) ...[
                   const SizedBox(height: 18),
                   IkSelect<String>(
@@ -425,7 +432,7 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
             ],
       ],
     );
-    if (!widget.fullRecommendations) return scrollView;
+    if (!preserveScroll) return scrollView;
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if ((notification is UserScrollNotification &&
@@ -452,7 +459,9 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
         ),
-        if (!widget.fullRecommendations || widget.search.query.isNotEmpty) ...[
+        if ((!widget.fullRecommendations &&
+                !widget.recommendationsInDiscovery) ||
+            widget.search.query.isNotEmpty) ...[
           const SizedBox(width: 12),
           SizedBox(
             width: constraints.maxWidth < 460 ? 140 : 180,
@@ -479,7 +488,9 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
   );
 
   List<Widget> _discoverySlivers(BuildContext context) {
-    final recommendations = widget.recommendations;
+    final recommendations = widget.recommendationsInDiscovery
+        ? null
+        : widget.recommendations;
     final colors = Theme.of(context).colorScheme;
     final globalError =
         (widget.compactDiscovery || widget.fullRecommendations) &&

@@ -20,6 +20,7 @@ import 'ik/ik_catalog_pages.dart';
 import 'ik/ik_home_page.dart';
 import 'ik/ik_shell.dart';
 import 'ik/ik_router.dart';
+import 'ik/ik_workspace_navigation.dart';
 import 'ik/ik_runtime.dart';
 import 'ik/ik_theme.dart';
 import 'ik/ik_workspace.dart';
@@ -86,8 +87,13 @@ IkPlaybackBar _workspacePlaybackBar({
   required bool alignToDesign,
   required VoidCallback? onOpen,
   required VoidCallback onAudio,
+  bool contextualErrors = false,
 }) => alignToDesign
-    ? IkPlaybackBar.aligned(onOpen: onOpen, onAudio: onAudio)
+    ? IkPlaybackBar.aligned(
+        onOpen: onOpen,
+        onAudio: onAudio,
+        contextualErrors: contextualErrors,
+      )
     : IkPlaybackBar(onOpen: onOpen, onAudio: onAudio);
 
 class VideoMusicApp extends StatefulWidget {
@@ -109,6 +115,7 @@ class VideoMusicApp extends StatefulWidget {
     this.mobileKeyboardLayout = false,
     this.dismissSourceMenuOnBack = false,
     this.pageInteractionRefinements = false,
+    this.workspacePageRefinements = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -126,65 +133,92 @@ class VideoMusicApp extends StatefulWidget {
   final bool mobileKeyboardLayout;
   final bool dismissSourceMenuOnBack;
   final bool pageInteractionRefinements;
+  final bool workspacePageRefinements;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
 
 class _VideoMusicAppState extends State<VideoMusicApp> {
   final _homeKey = GlobalKey<_VideoHomeState>();
-  late final _router = createIkRouter(
-    alignToDesign: widget.workspace && widget.alignToDesign,
-    home: (_) => _routeContent(_home()),
-    player: (_) => _routeContent(
-      _homeKey.currentState?._playerPage() ?? const IkRouteError(),
-    ),
-    downloads: widget.alignToDesign && widget.workspace
-        ? (_) =>
+  final _workspaceNavigator = GlobalKey<NavigatorState>();
+  bool get _newPages =>
+      widget.workspace &&
+      widget.alignToDesign &&
+      widget.workspacePageRefinements;
+  late final _router = _newPages
+      ? createIkWorkspaceRouter(
+          navigatorKey: _workspaceNavigator,
+          workspace: (_, child, path) =>
+              _routeContent(_home(routeBody: child, routePath: path)),
+          player: (_) => _routeContent(
+            _homeKey.currentState?._playerPage() ?? const IkRouteError(),
+          ),
+          downloads: (_) =>
               _homeKey.currentState?._alignedDownloadsPage() ??
-              const IkRouteError()
-        : null,
-    settings: widget.workspace
-        ? (_, section) => Scaffold(
+              const IkRouteError(),
+          settings: (_, section) => Scaffold(
             appBar: AppBar(leading: const BackButton()),
             body:
                 _homeKey.currentState?._workspaceSettings(section) ??
                 const IkRouteError(),
-          )
-        : null,
-    detailShell: (context, page) => _routeContent(
-      Scaffold(
-        body: Column(
-          children: [
-            Expanded(child: page),
-            Padding(
-              padding: const EdgeInsets.all(8),
-              child: Consumer(
-                builder: (context, ref, _) {
-                  if (widget.workspace) {
-                    return _workspacePlaybackBar(
-                      alignToDesign: widget.alignToDesign,
-                      onOpen: () => context.push('/player'),
-                      onAudio: () => context.push('/settings/audio'),
-                    );
-                  }
-                  final player = ref.watch(playerProvider);
-                  return VideoMiniPlayer(
-                    song: player.currentSong,
-                    isPlaying: player.isPlaying,
-                    isLoading: player.isTransitioning,
-                    error: player.error,
-                    onOpen: () => context.push('/player'),
-                    onToggle: ref.read(playerProvider.notifier).togglePlay,
-                    onQueue: () => context.push('/queue'),
-                  );
-                },
+          ),
+        )
+      : createIkRouter(
+          alignToDesign: widget.workspace && widget.alignToDesign,
+          home: (_) => _routeContent(_home()),
+          player: (_) => _routeContent(
+            _homeKey.currentState?._playerPage() ?? const IkRouteError(),
+          ),
+          downloads: widget.alignToDesign && widget.workspace
+              ? (_) =>
+                    _homeKey.currentState?._alignedDownloadsPage() ??
+                    const IkRouteError()
+              : null,
+          settings: widget.workspace
+              ? (_, section) => Scaffold(
+                  appBar: AppBar(leading: const BackButton()),
+                  body:
+                      _homeKey.currentState?._workspaceSettings(section) ??
+                      const IkRouteError(),
+                )
+              : null,
+          detailShell: (context, page) => _routeContent(
+            Scaffold(
+              body: Column(
+                children: [
+                  Expanded(child: page),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        if (widget.workspace) {
+                          return _workspacePlaybackBar(
+                            alignToDesign: widget.alignToDesign,
+                            contextualErrors: _newPages,
+                            onOpen: () => context.push('/player'),
+                            onAudio: () => context.push('/settings/audio'),
+                          );
+                        }
+                        final player = ref.watch(playerProvider);
+                        return VideoMiniPlayer(
+                          song: player.currentSong,
+                          isPlaying: player.isPlaying,
+                          isLoading: player.isTransitioning,
+                          error: player.error,
+                          onOpen: () => context.push('/player'),
+                          onToggle: ref
+                              .read(playerProvider.notifier)
+                              .togglePlay,
+                          onQueue: () => context.push('/queue'),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
-    ),
-  );
+          ),
+        );
 
   Widget _routeContent(Widget page) => widget.workspace && widget.alignToDesign
       ? Overlay.wrap(clipBehavior: Clip.none, child: page)
@@ -261,7 +295,7 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
             : IkWorkspaceTheme.from(base)
       : IkTheme.from(base);
 
-  Widget _home() => _VideoHome(
+  Widget _home({Widget? routeBody, String routePath = '/'}) => _VideoHome(
     key: _homeKey,
     redesign: widget.redesign,
     workspace: widget.workspace,
@@ -269,6 +303,10 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
     mobileKeyboardLayout: widget.mobileKeyboardLayout,
     dismissSourceMenuOnBack: widget.dismissSourceMenuOnBack,
     pageInteractionRefinements: widget.pageInteractionRefinements,
+    workspacePageRefinements: _newPages,
+    routeBody: routeBody,
+    routePath: routePath,
+    workspaceNavigator: _newPages ? _workspaceNavigator : null,
     preferences: widget.preferences,
     customSourceCredentials:
         widget.customSourceCredentials ??
@@ -305,6 +343,10 @@ class _VideoHome extends ConsumerStatefulWidget {
     this.mobileKeyboardLayout = false,
     this.dismissSourceMenuOnBack = false,
     this.pageInteractionRefinements = false,
+    this.workspacePageRefinements = false,
+    this.routeBody,
+    this.routePath = '/',
+    this.workspaceNavigator,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore customSourceCredentials;
@@ -323,12 +365,78 @@ class _VideoHome extends ConsumerStatefulWidget {
   final bool mobileKeyboardLayout;
   final bool dismissSourceMenuOnBack;
   final bool pageInteractionRefinements;
+  final bool workspacePageRefinements;
+  final Widget? routeBody;
+  final String routePath;
+  final GlobalKey<NavigatorState>? workspaceNavigator;
   @override
   ConsumerState<_VideoHome> createState() => _VideoHomeState();
 }
 
 class _VideoHomeState extends ConsumerState<_VideoHome>
     with WidgetsBindingObserver {
+  final _leaveChecks = <Object, Future<bool> Function()>{};
+  bool _leavingWorkspacePage = false;
+  int _imperativePages = 0;
+
+  Future<bool> _returnToWorkspace() async {
+    if (!widget.workspacePageRefinements) return true;
+    if (_leavingWorkspacePage) return false;
+    final router = GoRouter.of(context);
+    final origin = router.routerDelegate.currentConfiguration;
+    _leavingWorkspacePage = true;
+    try {
+      for (final check in List.of(_leaveChecks.values).reversed) {
+        if (!await check() || !mounted) return false;
+        if (!identical(router.routerDelegate.currentConfiguration, origin)) {
+          return false;
+        }
+      }
+      final navigator = widget.workspaceNavigator?.currentState;
+      if (navigator == null) return false;
+      navigator.popUntil((route) => route.isFirst);
+      if (widget.routePath != '/') router.go('/');
+      return mounted;
+    } finally {
+      _leavingWorkspacePage = false;
+    }
+  }
+
+  Future<void> _selectWorkspace(int index, {String? section}) async {
+    if (!await _returnToWorkspace() || !mounted) return;
+    setState(() {
+      if (section != null) {
+        _settingsSection = section;
+        _settingsSectionRequest++;
+      }
+      _index = index;
+    });
+  }
+
+  Future<void> _searchWorkspace(String query) async {
+    if (!await _returnToWorkspace() || !mounted) return;
+    unawaited(_ikSearch.submit(query));
+    setState(() => _index = 1);
+  }
+
+  NavigatorState get _contentNavigator =>
+      widget.workspaceNavigator?.currentState ?? Navigator.of(context);
+
+  Future<T?> _pushContent<T>(WidgetBuilder builder) async {
+    if (!widget.workspacePageRefinements) {
+      return Navigator.of(context)
+          .push<T>(MaterialPageRoute<T>(builder: builder));
+    }
+    setState(() => _imperativePages++);
+    try {
+      return await _contentNavigator.push<T>(
+        MaterialPageRoute<T>(builder: builder),
+      );
+    } finally {
+      if (mounted) setState(() => _imperativePages--);
+    }
+  }
+
   bool get _refinePageInteractions =>
       widget.workspace &&
       widget.alignToDesign &&
@@ -637,9 +745,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   Future<void> _account(PlatformType platform) async {
     final user = ref.read(authProvider).userFor(platform);
     if (user == null) {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => LoginPage(platform: platform)),
-      );
+      await _pushContent<void>((_) => LoginPage(platform: platform));
       if (mounted && ref.read(authProvider).isLoggedIn(platform)) {
         await _sync(platform);
       }
@@ -881,6 +987,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         ].whereType<String>().where((id) => id.trim().isNotEmpty).firstOrNull;
         return WindowsPlayerPage(
           alignToDesign: widget.alignToDesign,
+          compactLayout: widget.workspacePageRefinements,
           lyricsAutoResumeDelay: _refinePageInteractions
               ? const Duration(seconds: 3)
               : null,
@@ -908,6 +1015,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           playbackBar: widget.workspace
               ? _workspacePlaybackBar(
                   alignToDesign: widget.alignToDesign,
+                  contextualErrors: widget.workspacePageRefinements,
                   onOpen: null,
                   onAudio: () => context.push('/settings/audio'),
                 )
@@ -2397,46 +2505,44 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     final engine = LxSourceRuntime();
     final importerDio = createLxDio();
     try {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute<void>(
-          builder: (_) => VideoLxSourcePage(
-            initial: widget.preferences.lxSource,
-            onImport: (link, token) => LxSourceImporter(
-              dio: importerDio,
-              engine: engine,
-            ).importLink(link, cancelToken: token),
-            onTest: (source) async {
-              await engine.inspect(source.script);
-            },
-            onSave: (source) async {
-              widget.onCustomSourceChanged?.call();
-              if (source.enabled &&
-                  widget.preferences.customSource?.enabled == true) {
-                await widget.preferences.setCustomSource(
-                  widget.preferences.customSource!.copyWith(enabled: false),
-                );
-              }
-              await widget.preferences.setLxSource(source);
-              if (mounted) {
-                setState(() {});
-                Navigator.pop(context);
-              }
-            },
-            onDelete: widget.preferences.lxSource == null
-                ? null
-                : () async {
-                    widget.onCustomSourceChanged?.call();
-                    await widget.preferences.deleteLxSource();
-                    if (mounted) {
-                      setState(() {});
-                      Navigator.pop(context);
-                    }
-                  },
-            onHttp: () async {
-              Navigator.pop(context);
-              await _httpCustomSource();
-            },
-          ),
+      await _pushContent<void>(
+        (_) => VideoLxSourcePage(
+          initial: widget.preferences.lxSource,
+          onImport: (link, token) => LxSourceImporter(
+            dio: importerDio,
+            engine: engine,
+          ).importLink(link, cancelToken: token),
+          onTest: (source) async {
+            await engine.inspect(source.script);
+          },
+          onSave: (source) async {
+            widget.onCustomSourceChanged?.call();
+            if (source.enabled &&
+                widget.preferences.customSource?.enabled == true) {
+              await widget.preferences.setCustomSource(
+                widget.preferences.customSource!.copyWith(enabled: false),
+              );
+            }
+            await widget.preferences.setLxSource(source);
+            if (mounted) {
+              setState(() {});
+              _contentNavigator.pop();
+            }
+          },
+          onDelete: widget.preferences.lxSource == null
+              ? null
+              : () async {
+                  widget.onCustomSourceChanged?.call();
+                  await widget.preferences.deleteLxSource();
+                  if (mounted) {
+                    setState(() {});
+                    _contentNavigator.pop();
+                  }
+                },
+          onHttp: () async {
+            _contentNavigator.pop();
+            await _httpCustomSource();
+          },
         ),
       );
     } finally {
@@ -2450,42 +2556,19 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     final engine = widget.sourceEngine!;
     final dio = createLxDio();
     try {
-      await Navigator.of(context).push<void>(
-        MaterialPageRoute(
-          builder: (_) => widget.expandedPlatforms
-              ? IkSourceEditingScope(
-                  child: SourceManagerPage(
-                    initial: settings.value,
-                    warning: settings.loadError,
-                    runtimeId: '${Theme.of(context).platform.name}-lx3',
-                    initialChecks: SourceCheckStore(widget.preferences.box)
-                        .load(),
-                    onChecksChanged: SourceCheckStore(widget.preferences.box)
-                        .save,
-                    onImport: (link, token) => LxSourceImporterV3(
-                      dio: dio,
-                      engine: engine,
-                    ).importLink(link, cancelToken: token),
-                    onInspect: (config, token) async {
-                      await engine.inspect(config.script, cancelToken: token);
-                    },
-                    onSave: (value) async {
-                      await settings.save(value);
-                      widget.onCustomSourceChanged?.call();
-                      if (mounted) {
-                        setState(() {});
-                      }
-                    },
-                    onHttp: () {
-                      Navigator.pop(context);
-                      unawaited(_httpCustomSource());
-                    },
-                  ),
-                )
-              : SourceCollectionPage(
+      await _pushContent<void>(
+        (_) => widget.expandedPlatforms
+            ? IkSourceEditingScope(
+                child: SourceManagerPage(
+                  modernPolicyMenu: widget.workspacePageRefinements,
                   initial: settings.value,
                   warning: settings.loadError,
-                  onImport: (link, token) => LxSourceImporter(
+                  runtimeId: '${Theme.of(context).platform.name}-lx3',
+                  initialChecks: SourceCheckStore(widget.preferences.box)
+                      .load(),
+                  onChecksChanged: SourceCheckStore(widget.preferences.box)
+                      .save,
+                  onImport: (link, token) => LxSourceImporterV3(
                     dio: dio,
                     engine: engine,
                   ).importLink(link, cancelToken: token),
@@ -2497,15 +2580,37 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                     widget.onCustomSourceChanged?.call();
                     if (mounted) {
                       setState(() {});
-                      Navigator.pop(context);
                     }
                   },
                   onHttp: () {
-                    Navigator.pop(context);
+                    _contentNavigator.pop();
                     unawaited(_httpCustomSource());
                   },
                 ),
-        ),
+              )
+            : SourceCollectionPage(
+                initial: settings.value,
+                warning: settings.loadError,
+                onImport: (link, token) => LxSourceImporter(
+                  dio: dio,
+                  engine: engine,
+                ).importLink(link, cancelToken: token),
+                onInspect: (config, token) async {
+                  await engine.inspect(config.script, cancelToken: token);
+                },
+                onSave: (value) async {
+                  await settings.save(value);
+                  widget.onCustomSourceChanged?.call();
+                  if (mounted) {
+                    setState(() {});
+                    _contentNavigator.pop();
+                  }
+                },
+                onHttp: () {
+                  _contentNavigator.pop();
+                  unawaited(_httpCustomSource());
+                },
+              ),
       );
     } finally {
       dio.close(force: true);
@@ -2521,80 +2626,126 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               ) ??
               '';
     if (!mounted) return;
-    await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => VideoCustomSourcePage(
-          initialDraft: current == null
-              ? const VideoCustomSourceDraft()
-              : VideoCustomSourceDraft(
-                  name: current.name,
-                  endpoint: current.endpoint.toString(),
-                  platforms: current.platforms,
-                  timeoutSeconds: current.timeoutSeconds,
-                  token: token,
-                  allowForDownloads: current.allowForDownloads,
-                  enabled: current.enabled,
+    await _pushContent<void>(
+      (_) => VideoCustomSourcePage(
+        protectWorkspaceDraft: widget.workspacePageRefinements,
+        onCommit: widget.workspacePageRefinements ? _commitHttpSource : null,
+        onRemove: widget.workspacePageRefinements && current != null
+            ? () => _removeHttpSource(current)
+            : null,
+        initialDraft: current == null
+            ? const VideoCustomSourceDraft()
+            : VideoCustomSourceDraft(
+                name: current.name,
+                endpoint: current.endpoint.toString(),
+                platforms: current.platforms,
+                timeoutSeconds: current.timeoutSeconds,
+                token: token,
+                allowForDownloads: current.allowForDownloads,
+                enabled: current.enabled,
+              ),
+        onTest: _testCustomSource,
+        onSave: (draft) async {
+          try {
+            final config = _configFromDraft(draft);
+            config.validate();
+            final sources = widget.sourceSettings;
+            if (config.enabled && sources != null) {
+              await sources.save(
+                sources.value.copyWith(
+                  autoSwitch: false,
+                  highestQuality: false,
+                  sourceFirst: false,
+                  entries: [
+                    for (final e in sources.value.entries)
+                      SourceEntry(e.id, e.config.copyWith(enabled: false)),
+                  ],
                 ),
-          onTest: _testCustomSource,
-          onSave: (draft) async {
-            try {
-              final config = _configFromDraft(draft);
-              config.validate();
-              final sources = widget.sourceSettings;
-              if (config.enabled && sources != null) {
-                await sources.save(
-                  sources.value.copyWith(
-                    autoSwitch: false,
-                    highestQuality: false,
-                    sourceFirst: false,
-                    entries: [
-                      for (final e in sources.value.entries)
-                        SourceEntry(e.id, e.config.copyWith(enabled: false)),
-                    ],
-                  ),
-                );
-              }
-              if (config.enabled &&
-                  widget.preferences.lxSource?.enabled == true) {
-                await widget.preferences.setLxSource(
-                  widget.preferences.lxSource!.copyWith(enabled: false),
-                );
-              }
-              await widget.preferences.setCustomSource(config);
-              widget.onCustomSourceChanged?.call();
-              if (draft.token.trim().isEmpty) {
-                await widget.customSourceCredentials.deleteToken(config.id);
-              } else {
-                await widget.customSourceCredentials.writeToken(
-                  config.id,
-                  draft.token,
-                );
-              }
-              if (mounted) {
-                setState(() {});
-                Navigator.pop(context);
-              }
-            } on CustomSourceConfigurationException catch (error) {
-              _notice(error.message);
+              );
             }
-          },
-          onDelete: current == null
-              ? null
-              : () async {
-                  await widget.customSourceCredentials.deleteToken(
-                    current.credentialRef ?? current.id,
-                  );
-                  await widget.preferences.deleteCustomSource();
-                  widget.onCustomSourceChanged?.call();
-                  if (mounted) {
-                    setState(() {});
-                    Navigator.pop(context);
-                  }
-                },
-        ),
+            if (config.enabled &&
+                widget.preferences.lxSource?.enabled == true) {
+              await widget.preferences.setLxSource(
+                widget.preferences.lxSource!.copyWith(enabled: false),
+              );
+            }
+            await widget.preferences.setCustomSource(config);
+            widget.onCustomSourceChanged?.call();
+            if (draft.token.trim().isEmpty) {
+              await widget.customSourceCredentials.deleteToken(config.id);
+            } else {
+              await widget.customSourceCredentials.writeToken(
+                config.id,
+                draft.token,
+              );
+            }
+            if (mounted) {
+              setState(() {});
+              _contentNavigator.pop();
+            }
+          } on CustomSourceConfigurationException catch (error) {
+            _notice(error.message);
+          }
+        },
+        onDelete: current == null
+            ? null
+            : () async {
+                await widget.customSourceCredentials.deleteToken(
+                  current.credentialRef ?? current.id,
+                );
+                await widget.preferences.deleteCustomSource();
+                widget.onCustomSourceChanged?.call();
+                if (mounted) {
+                  setState(() {});
+                  _contentNavigator.pop();
+                }
+              },
       ),
     );
     if (mounted) setState(() {});
+  }
+
+  Future<bool> _commitHttpSource(VideoCustomSourceDraft draft) async {
+    final config = _configFromDraft(draft);
+    config.validate();
+    final sources = widget.sourceSettings;
+    if (config.enabled && sources != null) {
+      await sources.save(
+        sources.value.copyWith(
+          autoSwitch: false,
+          highestQuality: false,
+          sourceFirst: false,
+          entries: [
+            for (final entry in sources.value.entries)
+              SourceEntry(entry.id, entry.config.copyWith(enabled: false)),
+          ],
+        ),
+      );
+    }
+    if (config.enabled && widget.preferences.lxSource?.enabled == true) {
+      await widget.preferences.setLxSource(
+        widget.preferences.lxSource!.copyWith(enabled: false),
+      );
+    }
+    await widget.preferences.setCustomSource(config);
+    widget.onCustomSourceChanged?.call();
+    if (draft.token.trim().isEmpty) {
+      await widget.customSourceCredentials.deleteToken(config.id);
+    } else {
+      await widget.customSourceCredentials.writeToken(config.id, draft.token);
+    }
+    if (mounted) setState(() {});
+    return true;
+  }
+
+  Future<bool> _removeHttpSource(CustomSourceConfig current) async {
+    await widget.customSourceCredentials.deleteToken(
+      current.credentialRef ?? current.id,
+    );
+    await widget.preferences.deleteCustomSource();
+    widget.onCustomSourceChanged?.call();
+    if (mounted) setState(() {});
+    return true;
   }
 
   Future<void> _local() async {
@@ -2663,6 +2814,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         IkHomePage(
           workspace: widget.workspace,
           alignToDesign: widget.alignToDesign,
+          recommendationsInDiscovery: widget.workspacePageRefinements,
           onNavigate: (path) => context.push(path),
           onPlayer: _openPlayer,
           onPlay: _play,
@@ -2675,6 +2827,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (widget.workspace)
           IkSearchWorkspace(
             alignToDesign: widget.alignToDesign,
+            recommendationsInDiscovery: widget.workspacePageRefinements,
             fullRecommendations: _refinePageInteractions,
             compactDiscovery: widget.alignToDesign,
             useSharedSearch: widget.alignToDesign,
@@ -2693,7 +2846,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             onRetryHot: widget.alignToDesign
                 ? () => unawaited(_loadAlignedHotTerms())
                 : null,
-            recommendations: widget.alignToDesign
+            recommendations:
+                widget.alignToDesign && !widget.workspacePageRefinements
                 ? ref.watch(recommendationsProvider)
                 : null,
             loggedIn: widget.alignToDesign
@@ -2702,10 +2856,12 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                       if (auth.isLoggedIn(platform)) platform,
                   }
                 : const {},
-            onBrowseRecommendations: widget.alignToDesign
+            onBrowseRecommendations:
+                widget.alignToDesign && !widget.workspacePageRefinements
                 ? () => context.push('/recommendations')
                 : null,
-            onRetryRecommendation: widget.alignToDesign
+            onRetryRecommendation:
+                widget.alignToDesign && !widget.workspacePageRefinements
                 ? (platform) => unawaited(
                     ref
                         .read(recommendationsProvider.notifier)
@@ -2730,6 +2886,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           IkLibraryWorkspace(
             alignToDesign: widget.alignToDesign,
             stableCategoryTabs: _refinePageInteractions,
+            contextualErrors: widget.workspacePageRefinements,
+            expiredPlatform: widget.workspacePageRefinements
+                ? auth.expiredPlatform
+                : null,
             simplifySources: widget.alignToDesign,
             libraries: _libraries,
             syncing: _syncing,
@@ -2749,10 +2909,12 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                 : null,
             onNavigate: (path) => context.push(path),
             onDownloads: _downloads,
-            onAccounts: () => setState(() {
-              _settingsSection = 'accounts';
-              _index = 4;
-            }),
+            onAccounts: widget.workspacePageRefinements
+                ? () => unawaited(_selectWorkspace(4, section: 'accounts'))
+                : () => setState(() {
+                    _settingsSection = 'accounts';
+                    _index = 4;
+                  }),
             localLikes: localLikes.songs,
             localLoading: localLikes.isLoading,
             localError: localLikes.error,
@@ -2795,32 +2957,48 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         widget.workspace ? _workspaceSettings() : _settingsPage(),
       ];
       if (widget.workspace) {
-        return Listener(
-          onPointerDown: (event) => _workspacePointer = event.position,
-          child: IkDesktopWorkspace(
-            alignToDesign: widget.alignToDesign,
-            mobileKeyboardLayout: widget.mobileKeyboardLayout,
-            onSearch: widget.alignToDesign
-                ? (query) {
-                    unawaited(_ikSearch.submit(query));
-                    setState(() => _index = 1);
-                  }
-                : null,
-            index: _index,
-            onSelect: (index) => setState(() => _index = index),
-            onAccount: () => setState(() {
-              _settingsSection = 'accounts';
-              _index = 4;
-            }),
-            pages: pages,
-            playbackBar: _workspacePlaybackBar(
+        return IkWorkspaceNavigation(
+          register: (owner, check) => _leaveChecks[owner] = check,
+          unregister: (owner) => _leaveChecks.remove(owner),
+          child: Listener(
+            onPointerDown: (event) => _workspacePointer = event.position,
+            child: IkDesktopWorkspace(
               alignToDesign: widget.alignToDesign,
-              onOpen: _openPlayer,
-              onAudio: () => setState(() {
-                _settingsSection = 'audio';
-                if (widget.alignToDesign) _settingsSectionRequest++;
-                _index = 4;
-              }),
+              routeBody: widget.routeBody,
+              showRouteBody: widget.routePath != '/' || _imperativePages > 0,
+              fullPage: widget.routePath == '/player',
+              mobileKeyboardLayout: widget.mobileKeyboardLayout,
+              onSearch: widget.alignToDesign
+                  ? widget.workspacePageRefinements
+                        ? (query) => unawaited(_searchWorkspace(query))
+                        : (query) {
+                            unawaited(_ikSearch.submit(query));
+                            setState(() => _index = 1);
+                          }
+                  : null,
+              index: _index,
+              onSelect: widget.workspacePageRefinements
+                  ? (index) => unawaited(_selectWorkspace(index))
+                  : (index) => setState(() => _index = index),
+              onAccount: widget.workspacePageRefinements
+                  ? () => unawaited(_selectWorkspace(4, section: 'accounts'))
+                  : () => setState(() {
+                      _settingsSection = 'accounts';
+                      _index = 4;
+                    }),
+              pages: pages,
+              playbackBar: _workspacePlaybackBar(
+                alignToDesign: widget.alignToDesign,
+                contextualErrors: widget.workspacePageRefinements,
+                onOpen: _openPlayer,
+                onAudio: widget.workspacePageRefinements
+                    ? () => unawaited(_selectWorkspace(4, section: 'audio'))
+                    : () => setState(() {
+                        _settingsSection = 'audio';
+                        if (widget.alignToDesign) _settingsSectionRequest++;
+                        _index = 4;
+                      }),
+              ),
             ),
           ),
         );

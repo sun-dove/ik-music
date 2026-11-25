@@ -4,8 +4,10 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../l10n/source_strings.dart';
+import '../ik/ik_workspace_navigation.dart';
 import '../lx_source/lx_source.dart';
 import '../multi_source/source_checks.dart';
 import '../multi_source/source_collection.dart';
@@ -22,6 +24,7 @@ class SourceManagerPage extends StatefulWidget {
     this.initialChecks = const {},
     this.onChecksChanged,
     this.runtimeId = 'lx3',
+    this.modernPolicyMenu = false,
   });
   final SourceCollection initial;
   final Future<LxSourceConfig> Function(String, CancelToken) onImport;
@@ -32,6 +35,7 @@ class SourceManagerPage extends StatefulWidget {
   final Map<String, SourceCheckRecord> initialChecks;
   final Future<void> Function(Map<String, SourceCheckRecord>)? onChecksChanged;
   final String runtimeId;
+  final bool modernPolicyMenu;
   @override
   State<SourceManagerPage> createState() => _SourceManagerPageState();
 }
@@ -45,6 +49,11 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   final _search = TextEditingController();
   final _link = TextEditingController();
   final _notChecked = <String>{};
+  final _policyMenu = MenuController();
+  final _policyFocus = FocusNode();
+  final _policyOptions = [FocusNode(), FocusNode()];
+  IkWorkspaceNavigation? _workspaceNavigation;
+  Future<bool>? _pendingLeave;
   CancelToken? _token;
   String _platform = 'all';
   bool _enabledOnly = false, _busy = false, _leaving = false;
@@ -65,10 +74,39 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       .toList();
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bindWorkspaceNavigation();
+  }
+
+  @override
+  void didUpdateWidget(covariant SourceManagerPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.modernPolicyMenu != widget.modernPolicyMenu) {
+      _bindWorkspaceNavigation();
+    }
+  }
+
+  void _bindWorkspaceNavigation() {
+    final navigation = widget.modernPolicyMenu
+        ? IkWorkspaceNavigation.maybeOf(context)
+        : null;
+    if (identical(navigation, _workspaceNavigation)) return;
+    _workspaceNavigation?.unregister(this);
+    _workspaceNavigation = navigation;
+    navigation?.register(this, _confirmLeave);
+  }
+
+  @override
   void dispose() {
+    _workspaceNavigation?.unregister(this);
     _token?.cancel();
     _search.dispose();
     _link.dispose();
+    _policyFocus.dispose();
+    for (final focus in _policyOptions) {
+      focus.dispose();
+    }
     super.dispose();
   }
 
@@ -116,12 +154,51 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     return saved;
   }
 
+  Future<bool> _confirmLeave() =>
+      _pendingLeave ??= _checkLeave().whenComplete(() => _pendingLeave = null);
+
+  Future<bool> _checkLeave() async {
+    if (_policyMenu.isOpen) _policyMenu.close();
+    if (!mounted || _busy) return false;
+    if (!_dirty) return true;
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text(ExpandedStrings.dirty),
+        content: const Text(ExpandedStrings.saveToApply),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, 'cancel'),
+            child: const Text(ExpandedStrings.keepEditing),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, 'discard'),
+            child: const Text(ExpandedStrings.discard),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, 'save'),
+            child: const Text(ExpandedStrings.saveAndReturn),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || choice == null || choice == 'cancel') return false;
+    return choice != 'save' || await _save();
+  }
+
   Future<void> _return() async {
+    final route = widget.modernPolicyMenu ? ModalRoute.of(context) : null;
+    if (widget.modernPolicyMenu && _policyMenu.isOpen) {
+      _policyMenu.close();
+      return;
+    }
     if (_busy) {
       _token?.cancel();
       return;
     }
-    if (_dirty) {
+    if (widget.modernPolicyMenu) {
+      if (!await _confirmLeave()) return;
+    } else if (_dirty) {
       final choice = await showDialog<String>(
         context: context,
         builder: (dialog) => AlertDialog(
@@ -147,9 +224,15 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       if (choice == 'save' && !await _save()) return;
     }
     if (!mounted) return;
+    if (widget.modernPolicyMenu && route?.isCurrent != true) return;
     setState(() => _leaving = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) Navigator.pop(context);
+      if (!mounted) return;
+      if (!widget.modernPolicyMenu || route?.isCurrent == true) {
+        Navigator.pop(context);
+      } else {
+        setState(() => _leaving = false);
+      }
     });
   }
 
@@ -304,11 +387,236 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     'kg': ExpandedStrings.kugou,
   };
 
+  Widget _modernPolicy() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            const Text(SourceStrings.playOrder),
+            _policySelect(),
+            TextButton(
+              onPressed: _busy
+                  ? null
+                  : () => setState(
+                      () => _value = _value.copyWith(
+                        autoSwitch: true,
+                        sourceFirst: true,
+                        highestQuality: true,
+                      ),
+                    ),
+              child: const Text(SourceStrings.recommended),
+            ),
+          ],
+        ),
+      ),
+      SwitchListTile(
+        key: const ValueKey('manager-auto-switch'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text(SourceStrings.autoSwitch),
+        subtitle: const Text(SourceStrings.autoSwitchHint),
+        value: _value.autoSwitch,
+        onChanged: _busy
+            ? null
+            : (value) =>
+                  setState(() => _value = _value.copyWith(autoSwitch: value)),
+      ),
+      SwitchListTile(
+        key: const ValueKey('manager-highest'),
+        contentPadding: EdgeInsets.zero,
+        title: const Text(SourceStrings.highest),
+        subtitle: const Text(SourceStrings.highestSourceHint),
+        value: _value.highestQuality,
+        onChanged: _busy
+            ? null
+            : (value) => setState(
+                () => _value = _value.copyWith(highestQuality: value),
+              ),
+      ),
+      const SizedBox(height: 12),
+    ],
+  );
+
+  Widget _policySelect() {
+    final theme = Theme.of(context);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 232),
+      child: LayoutBuilder(
+        builder: (context, constraints) => MenuAnchor(
+          controller: _policyMenu,
+          childFocusNode: _policyFocus,
+          crossAxisUnconstrained: false,
+          onOpen: () => setState(() {}),
+          onClose: () {
+            if (mounted) setState(() {});
+          },
+          alignmentOffset: const Offset(0, 6),
+          style: MenuStyle(
+            fixedSize: WidgetStatePropertyAll(
+              Size.fromWidth(constraints.maxWidth),
+            ),
+            elevation: const WidgetStatePropertyAll(8),
+            backgroundColor: WidgetStatePropertyAll(theme.colorScheme.surface),
+            surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+            padding: const WidgetStatePropertyAll(EdgeInsets.all(6)),
+            shape: WidgetStatePropertyAll(
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: theme.colorScheme.outlineVariant),
+              ),
+            ),
+          ),
+          menuChildren: [
+            for (final sourceFirst in [false, true])
+              Semantics(
+                selected: _value.sourceFirst == sourceFirst,
+                child: MenuItemButton(
+                  key: ValueKey('manager-policy-option-$sourceFirst'),
+                  focusNode: _policyOptions[sourceFirst ? 1 : 0],
+                  onPressed: _busy
+                      ? null
+                      : () {
+                          setState(
+                            () => _value = _value.copyWith(
+                              sourceFirst: sourceFirst,
+                            ),
+                          );
+                          _policyFocus.requestFocus();
+                        },
+                  trailingIcon: _value.sourceFirst == sourceFirst
+                      ? Icon(
+                          Icons.check_rounded,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        )
+                      : const SizedBox(width: 18),
+                  style: ButtonStyle(
+                    minimumSize: const WidgetStatePropertyAll(Size(0, 62)),
+                    padding: const WidgetStatePropertyAll(EdgeInsets.all(10)),
+                    backgroundColor: _value.sourceFirst == sourceFirst
+                        ? WidgetStatePropertyAll(
+                            theme.colorScheme.primary.withValues(alpha: .09),
+                          )
+                        : null,
+                    foregroundColor: _value.sourceFirst == sourceFirst
+                        ? WidgetStatePropertyAll(theme.colorScheme.primary)
+                        : null,
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        sourceFirst
+                            ? SourceStrings.customFirst
+                            : ExpandedStrings.officialFirst,
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        sourceFirst
+                            ? SourceStrings.sourceFirstHint
+                            : SourceStrings.officialFirstHint,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+          builder: (context, controller, _) => Focus(
+            canRequestFocus: false,
+            onKeyEvent: (_, event) {
+              if (!_busy &&
+                  event is KeyDownEvent &&
+                  (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+                      event.logicalKey == LogicalKeyboardKey.arrowUp)) {
+                controller.open();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && controller.isOpen) {
+                    _policyOptions[_value.sourceFirst ? 1 : 0].requestFocus();
+                  }
+                });
+                return KeyEventResult.handled;
+              }
+              return KeyEventResult.ignored;
+            },
+            child: Semantics(
+              label: SourceStrings.playOrder,
+              child: OutlinedButton(
+                key: const ValueKey('manager-policy-trigger'),
+                focusNode: _policyFocus,
+                onPressed: _busy
+                    ? null
+                    : () => controller.isOpen
+                          ? controller.close()
+                          : controller.open(),
+                style: OutlinedButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 42),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  backgroundColor: theme.colorScheme.surface,
+                  foregroundColor: theme.colorScheme.onSurface,
+                  side: BorderSide(
+                    color: controller.isOpen
+                        ? theme.colorScheme.primary
+                        : theme.colorScheme.outlineVariant,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  textStyle: theme.textTheme.labelLarge?.copyWith(fontSize: 13),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _value.sourceFirst
+                            ? SourceStrings.customFirst
+                            : ExpandedStrings.officialFirst,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Icon(
+                      controller.isOpen
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      size: 18,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries = _visible;
     return PopScope(
-      canPop: _leaving || (!_dirty && !_busy),
+      canPop:
+          !(widget.modernPolicyMenu && _policyMenu.isOpen) &&
+          (_leaving || (!_dirty && !_busy)),
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _return();
       },
@@ -371,69 +679,76 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
                                     ),
                                   ],
                                 ),
-                                ExpansionTile(
-                                  tilePadding: EdgeInsets.zero,
-                                  title: const Text(ExpandedStrings.playPolicy),
-                                  subtitle: Text(
-                                    '${_value.sourceFirst ? ExpandedStrings.sourceFirst : ExpandedStrings.officialFirst} · ${_value.highestQuality ? ExpandedStrings.highest : ExpandedStrings.fixed}',
+                                if (widget.modernPolicyMenu)
+                                  _modernPolicy()
+                                else
+                                  ExpansionTile(
+                                    tilePadding: EdgeInsets.zero,
+                                    title: const Text(
+                                      ExpandedStrings.playPolicy,
+                                    ),
+                                    subtitle: Text(
+                                      '${_value.sourceFirst ? ExpandedStrings.sourceFirst : ExpandedStrings.officialFirst} · ${_value.highestQuality ? ExpandedStrings.highest : ExpandedStrings.fixed}',
+                                    ),
+                                    children: [
+                                      TextButton(
+                                        onPressed: _busy
+                                            ? null
+                                            : () => setState(
+                                                () => _value = _value.copyWith(
+                                                  autoSwitch: true,
+                                                  sourceFirst: true,
+                                                  highestQuality: true,
+                                                ),
+                                              ),
+                                        child: const Text(
+                                          SourceStrings.recommended,
+                                        ),
+                                      ),
+                                      SwitchListTile(
+                                        title: const Text(
+                                          SourceStrings.autoSwitch,
+                                        ),
+                                        value: _value.autoSwitch,
+                                        onChanged: _busy
+                                            ? null
+                                            : (value) => setState(
+                                                () => _value = _value.copyWith(
+                                                  autoSwitch: value,
+                                                ),
+                                              ),
+                                      ),
+                                      SwitchListTile(
+                                        title: const Text(
+                                          SourceStrings.sourceFirst,
+                                        ),
+                                        value: _value.sourceFirst,
+                                        onChanged: _busy
+                                            ? null
+                                            : (value) => setState(
+                                                () => _value = _value.copyWith(
+                                                  sourceFirst: value,
+                                                ),
+                                              ),
+                                      ),
+                                      SwitchListTile(
+                                        title: const Text(
+                                          SourceStrings.highest,
+                                        ),
+                                        subtitle: const Text(
+                                          SourceStrings.highestSourceHint,
+                                        ),
+                                        value: _value.highestQuality,
+                                        onChanged: _busy
+                                            ? null
+                                            : (value) => setState(
+                                                () => _value = _value.copyWith(
+                                                  highestQuality: value,
+                                                ),
+                                              ),
+                                      ),
+                                    ],
                                   ),
-                                  children: [
-                                    TextButton(
-                                      onPressed: _busy
-                                          ? null
-                                          : () => setState(
-                                              () => _value = _value.copyWith(
-                                                autoSwitch: true,
-                                                sourceFirst: true,
-                                                highestQuality: true,
-                                              ),
-                                            ),
-                                      child: const Text(
-                                        SourceStrings.recommended,
-                                      ),
-                                    ),
-                                    SwitchListTile(
-                                      title: const Text(
-                                        SourceStrings.autoSwitch,
-                                      ),
-                                      value: _value.autoSwitch,
-                                      onChanged: _busy
-                                          ? null
-                                          : (value) => setState(
-                                              () => _value = _value.copyWith(
-                                                autoSwitch: value,
-                                              ),
-                                            ),
-                                    ),
-                                    SwitchListTile(
-                                      title: const Text(
-                                        SourceStrings.sourceFirst,
-                                      ),
-                                      value: _value.sourceFirst,
-                                      onChanged: _busy
-                                          ? null
-                                          : (value) => setState(
-                                              () => _value = _value.copyWith(
-                                                sourceFirst: value,
-                                              ),
-                                            ),
-                                    ),
-                                    SwitchListTile(
-                                      title: const Text(SourceStrings.highest),
-                                      subtitle: const Text(
-                                        SourceStrings.highestSourceHint,
-                                      ),
-                                      value: _value.highestQuality,
-                                      onChanged: _busy
-                                          ? null
-                                          : (value) => setState(
-                                              () => _value = _value.copyWith(
-                                                highestQuality: value,
-                                              ),
-                                            ),
-                                    ),
-                                  ],
-                                ),
                                 TextField(
                                   key: const ValueKey('manager-search'),
                                   controller: _search,
