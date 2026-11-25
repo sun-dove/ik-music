@@ -25,6 +25,8 @@ abstract final class SourceStrings {
   static const autoSwitchHint = '保持当前歌曲，继续尝试其他已启用音源';
   static const highestSourceHint = '先在各源尝试高音质，再明确提示降档';
   static const sourceFirst = '音源优先';
+  static const playOrder = '播放顺序';
+  static const customFirst = '备用音源优先';
   static const sourceFirstHint = '同档位先尝试自定义源，再尝试官方';
   static const officialFirstHint = '同档位先尝试官方，再尝试自定义源';
   static const empty = '尚未导入音源，仍可尝试官方播放。';

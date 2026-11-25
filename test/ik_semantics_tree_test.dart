@@ -18,6 +18,7 @@ import 'package:mconnect/core/database/app_database.dart';
 import 'package:mconnect/core/network/api_exception.dart';
 import 'package:mconnect/core/platform/platform_utils.dart';
 import 'package:mconnect/core/widgets/song_actions_sheet.dart';
+import 'package:mconnect/features/album/presentation/pages/album_page.dart';
 import 'package:mconnect/features/audio_effects/presentation/providers/audio_effects_provider.dart';
 import 'package:mconnect/features/auth/presentation/providers/auth_provider.dart';
 import 'package:mconnect/features/discovery/presentation/pages/recommendations_page.dart';
@@ -44,13 +45,17 @@ import 'package:mconnect/features/new_songs/presentation/pages/new_songs_page.da
 import 'package:mconnect/features/new_songs/presentation/providers/new_songs_provider.dart';
 import 'package:mconnect/features/player/data/playback_keep_alive_service.dart';
 import 'package:mconnect/features/player/data/playback_notification_service.dart';
+import 'package:mconnect/features/player/presentation/pages/queue_page.dart';
 import 'package:mconnect/features/player/presentation/providers/player_provider.dart';
 import 'package:mconnect/features/smart_playlists/presentation/pages/smart_playlists_page.dart';
 import 'package:mconnect/features/toplist/presentation/pages/toplists_page.dart';
 import 'package:mconnect/features/toplist/presentation/providers/toplists_provider.dart';
 import 'package:mconnect/l10n/ik_discovery_revision_strings.dart';
 import 'package:mconnect/l10n/ik_player_alignment_strings.dart';
+import 'package:mconnect/l10n/ik_source_catalog_strings.dart';
 import 'package:mconnect/l10n/ik_strings.dart';
+import 'package:mconnect/l10n/expanded_strings.dart';
+import 'package:mconnect/l10n/source_strings.dart';
 import 'package:mconnect/l10n/video_strings.dart';
 import 'package:mconnect/l10n/windows_music_strings.dart';
 import 'package:mconnect/models/album.dart';
@@ -64,25 +69,38 @@ import 'package:mconnect/platform/base/music_platform.dart';
 import 'package:mconnect/platform/base/platform_registry.dart';
 import 'package:mconnect/video_app/data/video_catalog.dart';
 import 'package:mconnect/video_app/data/video_kugou_catalog.dart';
+import 'package:mconnect/video_app/built_in/catalog.dart';
+import 'package:mconnect/video_app/built_in/catalog_coordinator.dart';
+import 'package:mconnect/video_app/built_in/fixed_importer.dart';
+import 'package:mconnect/video_app/built_in/managed_settings.dart';
+import 'package:mconnect/video_app/ik/ik_downloads_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_home_page.dart';
+import 'package:mconnect/video_app/ik/ik_library_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_lyrics_action.dart';
 import 'package:mconnect/video_app/ik/ik_playback_bar.dart';
+import 'package:mconnect/video_app/ik/ik_recent_page.dart';
+import 'package:mconnect/video_app/ik/ik_runtime.dart';
 import 'package:mconnect/video_app/ik/ik_theme.dart';
 import 'package:mconnect/video_app/ik/ik_workspace.dart';
+import 'package:mconnect/video_app/ik/ik_workspace_navigation.dart';
 import 'package:mconnect/video_app/ik/ik_controls.dart';
 import 'package:mconnect/video_app/ik/ik_search_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_song_table.dart';
 import 'package:mconnect/video_app/ik/ik_settings_workspace.dart';
 import 'package:mconnect/video_app/ik/ik_spatial_runtime.dart';
 import 'package:mconnect/video_app/ik/ik_strict_settings.dart';
+import 'package:mconnect/video_app/lx_source/lx_source.dart';
 import 'package:mconnect/video_app/multi_source/multi_source_player.dart';
+import 'package:mconnect/video_app/ui/source_manager_page.dart';
+import 'package:mconnect/video_app/ui/video_shell.dart';
 import 'package:mconnect/video_app/video_app.dart';
 import 'package:mconnect/video_app/video_preferences.dart';
 import 'package:mconnect/video_app/windows/windows_appearance.dart';
 import 'package:mconnect/video_app/windows/windows_music_preferences.dart';
 import 'package:mconnect/video_app/windows/windows_player_page.dart';
 import 'package:mconnect/video_app/windows/windows_window_controller.dart';
-import 'package:mconnect/video_app/ui/catalog_pages.dart' show videoSongKey;
+import 'package:mconnect/video_app/ui/catalog_pages.dart'
+    show videoPlatformLabel, videoSongKey;
 import 'package:mconnect/video_app/ui/video_theme.dart';
 
 import 'support/content_page_fakes.dart';
@@ -262,11 +280,17 @@ void main() {
     _Catalog? catalogOverride,
     bool realDiscovery = false,
     bool interactionIo = false,
+    bool pageInteractionRefinements = false,
+    bool workspacePageRefinements = false,
+    bool withSourceManager = false,
   }) async {
     await _size(tester);
     if (viewport != null) tester.view.physicalSize = viewport;
     final db = suiteDb;
     final preferences = VideoPreferences(settings);
+    final sourceSettings = withSourceManager
+        ? (IkManagedSourceSettings(preferences)..load())
+        : null;
     final unified = WindowsMusicPreferences(
       preferences,
       write: (values) => ioZone.run(() async {
@@ -294,6 +318,25 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         authProvider.overrideWith((_) => _Auth()),
+        if (sourceSettings != null)
+          ikSourceCatalogProvider.overrideWith((ref) {
+            final coordinator = IkSourceCatalogCoordinator(
+              catalog: IkSourceCatalog.fromJson(
+                jsonDecode(
+                  File('assets/source-catalog/pdone-v1.json')
+                      .readAsStringSync(),
+                ) as Map<String, dynamic>,
+              ),
+              settings: sourceSettings,
+              runtimeId: 'windows-lx3',
+              importer: IkFixedSourceImporter(engine: _UnusedSourceEngine()),
+            );
+            ref.onDispose(() {
+              coordinator.dispose();
+              sourceSettings.dispose();
+            });
+            return coordinator;
+          }),
         playerProvider.overrideWith(
           (_) => _Player(
             hasSong: hasSong,
@@ -380,6 +423,10 @@ void main() {
           redesign: true,
           workspace: true,
           alignToDesign: true,
+          pageInteractionRefinements: pageInteractionRefinements,
+          workspacePageRefinements: workspacePageRefinements,
+          sourceSettings: sourceSettings,
+          sourceEngine: withSourceManager ? _UnusedSourceEngine() : null,
           expandedPlatforms: true,
           preferences: preferences,
           unifiedPreferences: unified,
@@ -1149,6 +1196,701 @@ void main() {
       expect(data.hasAction(SemanticsAction.decrease), isTrue);
       expect(tester.widget<Slider>(progress).max, 180000);
       binding.trace.expectValid();
+    } finally {
+      handle.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  _testWindows('E09 新交互开启真实根搜索分类与歌词自动恢复连续AX', (tester) async {
+    final longLyrics = [
+      for (var line = 0; line < 60; line++)
+        '[${(line * 3 ~/ 60).toString().padLeft(2, '0')}:'
+            '${(line * 3 % 60).toString().padLeft(2, '0')}.00]'
+            'E09歌词第$line句',
+    ].join('\n');
+    for (final platform in PlatformType.musicServices) {
+      PlatformRegistry.register(_Content(platform, lyrics: longLyrics));
+    }
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+      interactionIo: true,
+      pageInteractionRefinements: true,
+      restoredState: const PlayerState(
+        currentSong: _track,
+        duration: Duration(minutes: 3),
+        position: Duration(seconds: 90),
+        playlist: [_track],
+      ),
+      viewport: const Size(1186, 793),
+    );
+    app.recommendations.show(
+      RecommendationsState(
+        songsByPlatform: {
+          for (final platform in PlatformType.musicServices)
+            platform: [
+              for (var index = 1; index <= 31; index++)
+                Song(
+                  id: 'e09-${platform.name}-$index',
+                  name:
+                      'AX${platform.name}推荐${index.toString().padLeft(2, '0')}',
+                  platform: platform,
+                  artists: _track.artists,
+                  duration: const Duration(minutes: 3),
+                ),
+            ],
+        },
+        sourceByPlatform: {
+          for (final platform in PlatformType.musicServices)
+            platform: _R10Content(platform).source,
+        },
+      ),
+    );
+    final trace = binding.trace;
+    await _rootDrain(tester, trace);
+    expect(binding.renderViews.single.owner!.semanticsOwner, isNull);
+    trace.onIssue = () => _dumpMarkers(tester, trace);
+    trace.step = 'E09真实根已加载三平台完整推荐后迟启语义';
+    final handle = tester.ensureSemantics();
+    Future<void> tap(Finder target, String stage) =>
+        _r10Tap(tester, trace, target, stage);
+    Future<void> pump([Duration duration = Duration.zero]) =>
+        _pumpAndCheck(tester, trace, duration);
+    try {
+      await _rootDrain(tester, trace);
+      trace.expectValid();
+      await tap(
+        find.byKey(const ValueKey('ik-workspace-nav-1')),
+        'E09进入新版完整推荐',
+      );
+      final searchPage = find.byType(IkSearchWorkspace);
+      expect(
+        tester.widget<IkSearchWorkspace>(searchPage).fullRecommendations,
+        isTrue,
+      );
+      expect(find.text('查看全部推荐'), findsNothing);
+      final selector = find.descendant(
+        of: searchPage,
+        matching: find.byWidgetPredicate(
+          (widget) => widget is IkSelect<PlatformType>,
+        ),
+      );
+      for (final platform in PlatformType.musicServices) {
+        trace.step = 'E09返回推荐平台选择器';
+        await tester.scrollUntilVisible(
+          selector,
+          -400,
+          scrollable: _verticalScrolls(searchPage).single,
+        );
+        await _rootDrain(tester, trace);
+        await tap(selector, 'E09打开推荐平台菜单');
+        await tap(
+          find.widgetWithText(MenuItemButton, videoPlatformLabel(platform)),
+          'E09切换${platform.name}',
+        );
+        expect(find.text('共 31 首'), findsOneWidget);
+        expect(find.text('播放全部').hitTestable(), findsOneWidget);
+        trace.step = 'E09${platform.name}完整推荐滚动至31首';
+        final lastSong = find.descendant(
+          of: searchPage,
+          matching: find.text('AX${platform.name}推荐31'),
+        );
+        await tester.scrollUntilVisible(
+          lastSong,
+          400,
+          scrollable: _verticalScrolls(searchPage).single,
+        );
+        await _rootDrain(tester, trace);
+        expect(lastSong.hitTestable(), findsOneWidget);
+      }
+      for (final query in ['E09查询', '']) {
+        trace.step = query.isEmpty ? 'E09清空查询恢复完整推荐' : 'E09提交查询重建结果列表';
+        await tester.enterText(
+          find.byKey(const ValueKey('ik-workspace-search')),
+          query,
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await _rootDrain(tester, trace);
+        final search = tester.widget<IkSearchWorkspace>(searchPage).search;
+        expect(search.query, query);
+        if (query.isEmpty) {
+          expect(search.groups, isEmpty);
+          expect(find.text('AXkugou推荐31').hitTestable(), findsOneWidget);
+        } else {
+          for (final platform in PlatformType.musicServices) {
+            expect(search.groups[platform]!.songs, hasLength(3));
+          }
+        }
+      }
+      await tap(find.byKey(const ValueKey('ik-workspace-nav-2')), 'E09进入固定分类');
+      expect(
+        tester
+            .widget<IkLibraryWorkspace>(find.byType(IkLibraryWorkspace))
+            .stableCategoryTabs,
+        isTrue,
+      );
+      for (final category in [
+        'likes',
+        'playlists',
+        'local',
+        'downloads',
+        'smart',
+        'likes',
+      ]) {
+        final tab = find.byKey(ValueKey('ik-library-category-$category'));
+        await tap(tab, 'E09分类$category');
+        expect(
+          tester.getSemantics(tab).flagsCollection.isSelected,
+          Tristate.isTrue,
+        );
+      }
+      await tap(
+        find
+            .descendant(
+              of: find.byType(IkPlaybackBar),
+              matching: find.text(_track.name),
+            )
+            .hitTestable(),
+        'E09进入三秒跟随详情',
+      );
+      final playerPage = find.byType(WindowsPlayerPage);
+      final page = tester.widget<WindowsPlayerPage>(playerPage);
+      expect(page.lyricsAutoResumeDelay, const Duration(seconds: 3));
+      expect(page.lyrics, hasLength(60));
+      final before = app.container.read(playerProvider);
+      final lyricsScroll = find.byKey(const ValueKey('windows-lyrics-scroll'));
+      final lyricsController = tester
+          .widget<SingleChildScrollView>(lyricsScroll)
+          .controller!;
+      final currentLine = find.descendant(
+        of: lyricsScroll,
+        matching: find.text('E09歌词第30句'),
+      );
+      expect(
+        tester.getRect(lyricsScroll).contains(tester.getCenter(currentLine)),
+        isTrue,
+      );
+      trace.step = 'E09实际滚轮浏览歌词并记录三秒恢复语义';
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          kind: PointerDeviceKind.mouse,
+          position: tester.getCenter(lyricsScroll),
+          scrollDelta: const Offset(0, -600),
+        ),
+      );
+      await pump();
+      final browsedOffset = lyricsController.offset;
+      expect(find.text(IkPlayerAlignmentStrings.browsing), findsOneWidget);
+      await pump(const Duration(milliseconds: 2900));
+      expect(lyricsController.offset, closeTo(browsedOffset, .001));
+      expect(find.text(IkPlayerAlignmentStrings.browsing), findsOneWidget);
+      await pump(const Duration(milliseconds: 100));
+      expect(find.text(IkPlayerAlignmentStrings.following), findsOneWidget);
+      // 三秒回位在帧尾启动动画；先建立动画首帧，再推进其250毫秒时长。
+      await pump();
+      await pump();
+      await pump(const Duration(milliseconds: 250));
+      await pump();
+      expect(find.text(IkPlayerAlignmentStrings.following), findsOneWidget);
+      expect(
+        tester.getRect(lyricsScroll).contains(tester.getCenter(currentLine)),
+        isTrue,
+      );
+      expect(lyricsController.offset, greaterThan(browsedOffset + 200));
+      await tap(
+        find.descendant(
+          of: playerPage,
+          matching: find.text(WindowsMusicStrings.back),
+        ),
+        'E09歌词自动恢复后返回音乐库',
+      );
+      expect(find.byType(WindowsPlayerPage), findsNothing);
+      expect(find.byType(IkDesktopWorkspace), findsOneWidget);
+      final after = app.container.read(playerProvider);
+      expect(after.currentSong, before.currentSong);
+      expect(after.position, before.position);
+      expect(after.isPlaying, before.isPlaying);
+      trace.expectValid();
+    } finally {
+      handle.dispose();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  _testWindows('E16 全开真实根五主区、连续内嵌路由、独立播放器与音源草稿完整AX', (tester) async {
+    PlatformRegistry.register(_E16Content());
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+      interactionIo: true,
+      pageInteractionRefinements: true,
+      workspacePageRefinements: true,
+      withSourceManager: true,
+      viewport: const Size(1186, 793),
+      catalogOverride: _Catalog(hotTerms: const ['E16热门搜索']),
+      restoredState: const PlayerState(
+        currentSong: _track,
+        duration: Duration(minutes: 3),
+        position: Duration(seconds: 30),
+        playlist: [_track],
+      ),
+    );
+    final counts = {
+      PlatformType.netease: 2,
+      PlatformType.qq: 9,
+      PlatformType.kugou: 3,
+    };
+    app.recommendations.show(
+      RecommendationsState(
+        songsByPlatform: {
+          for (final entry in counts.entries)
+            entry.key: [
+              for (var index = 0; index < entry.value; index++)
+                Song(
+                  id: 'e16-${entry.key.name}-$index',
+                  name: 'E16${entry.key.name}推荐$index',
+                  platform: entry.key,
+                  artists: _track.artists,
+                ),
+            ],
+        },
+        sourceByPlatform: {
+          for (final platform in counts.keys)
+            platform: _R10Content(platform).source,
+        },
+      ),
+    );
+    await tester.runAsync(() async {
+      await app.container.read(likesProvider.notifier).toggleLike(_track);
+      await app.container.read(historyProvider.notifier).recordListen(_track);
+    });
+    final trace = binding.trace;
+    await _rootDrain(tester, trace);
+    expect(binding.renderViews.single.owner!.semanticsOwner, isNull);
+    trace.onIssue = () => _dumpMarkers(tester, trace);
+    trace.step = 'E16实际新页面已装配，迟启语义后连续记录全部原始批次';
+    final handle = tester.ensureSemantics();
+    Future<void> tap(Finder target, String stage) =>
+        _r10Tap(tester, trace, target, stage);
+    final workspace = find.byType(IkDesktopWorkspace);
+    final search = find.byType(IkSearchWorkspace);
+    final home = find.byType(IkHomePage);
+    final manager = find.byType(SourceManagerPage);
+    void expectFrame({bool player = false}) {
+      expect(workspace, findsOneWidget);
+      expect(tester.widget<IkDesktopWorkspace>(workspace).fullPage, player);
+      expect(
+        find.text('IK Music').hitTestable(),
+        player ? findsNothing : findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('ik-workspace-search')).hitTestable(),
+        player ? findsNothing : findsOneWidget,
+      );
+      expect(find.byType(IkPlaybackBar).hitTestable(), findsOneWidget);
+    }
+
+    try {
+      await _rootDrain(tester, trace);
+      trace.expectValid();
+      final root = tester.widget<VideoMusicApp>(find.byType(VideoMusicApp));
+      expect(root.workspacePageRefinements, isTrue);
+      expect(root.pageInteractionRefinements, isTrue);
+      final retained = {
+        for (var page = 0; page < 5; page++)
+          page: find
+              .byKey(
+                ValueKey('ik-workspace-page-overlay-$page'),
+                skipOffstage: false,
+              )
+              .evaluate()
+              .single,
+      };
+      final mainPages = [
+        IkHomePage,
+        IkSearchWorkspace,
+        IkLibraryWorkspace,
+        IkRecentPage,
+        IkSettingsWorkspace,
+      ];
+      for (var page = 0; page < mainPages.length; page++) {
+        final nav = find.byKey(ValueKey('ik-workspace-nav-$page'));
+        await tap(nav, 'E16五主区逐一进入$page');
+        expectFrame();
+        expect(find.byType(mainPages[page]).hitTestable(), findsOneWidget);
+        expect(
+          tester.getSemantics(nav).flagsCollection.isSelected,
+          Tristate.isTrue,
+        );
+        for (final entry in retained.entries) {
+          expect(
+            find
+                .byKey(
+                  ValueKey('ik-workspace-page-overlay-${entry.key}'),
+                  skipOffstage: false,
+                )
+                .evaluate()
+                .single,
+            same(entry.value),
+            reason: 'E16主区${entry.key}在新正文导航中仍须保留Element',
+          );
+        }
+        if (page == 0) {
+          expect(
+            tester.widget<IkHomePage>(home).recommendationsInDiscovery,
+            isTrue,
+          );
+          expect(
+            find.byKey(const Key('ik-personal-daily-entry')).hitTestable(),
+            findsOneWidget,
+          );
+          // SliverLayoutBuilder仅布局抵达的网格；逐首实际滚动后核验各平台，
+          // 不能把首屏未构造的酷狗网格当作缺失，也不能只检查首屏QQ样本。
+          final renderedCounts = <PlatformType, int?>{};
+          final inspectedRows = <String>{};
+          for (final platform in [PlatformType.qq, PlatformType.kugou]) {
+            for (var index = 0; index < counts[platform]!; index++) {
+              trace.step = 'E16逐首可见核验${platform.name}公共推荐$index';
+              final row = find.byKey(
+                ValueKey('ik-discovery-song-${platform.name}-$index'),
+              );
+              await tester.scrollUntilVisible(
+                row,
+                300,
+                scrollable: _verticalScrolls(home).single,
+              );
+              await _rootDrain(tester, trace);
+              expect(row.hitTestable(), findsOneWidget);
+              final grid = tester.widget<SliverGrid>(
+                find.ancestor(of: row, matching: find.byType(SliverGrid)),
+              );
+              expect(
+                grid.delegate.estimatedChildCount,
+                counts[platform],
+                reason: '${platform.name}实际网格必须完整呈现该平台全部公共推荐',
+              );
+              renderedCounts[platform] = grid.delegate.estimatedChildCount;
+              expect(
+                find.descendant(
+                  of: row,
+                  matching: find.text('E16${platform.name}推荐$index'),
+                ),
+                findsOneWidget,
+              );
+              inspectedRows.add('${platform.name}-$index');
+              for (
+                var personal = 0;
+                personal < counts[PlatformType.netease]!;
+                personal++
+              ) {
+                expect(find.text('E16netease推荐$personal'), findsNothing);
+              }
+            }
+          }
+          expect(renderedCounts, {PlatformType.qq: 9, PlatformType.kugou: 3});
+          expect(
+            inspectedRows,
+            unorderedEquals([
+              for (final platform in [PlatformType.qq, PlatformType.kugou])
+                for (var index = 0; index < counts[platform]!; index++)
+                  '${platform.name}-$index',
+            ]),
+            reason: '两平台全部12首均须在滚动后实际可见，不允许截断或抽样',
+          );
+          trace.step = 'E16发现完整遍历后回到顶部';
+          final position = tester
+              .state<ScrollableState>(_verticalScrolls(home).single)
+              .position;
+          position.jumpTo(position.minScrollExtent);
+          await _rootDrain(tester, trace);
+        } else if (page == 1) {
+          expect(
+            tester.widget<IkSearchWorkspace>(search).recommendationsInDiscovery,
+            isTrue,
+          );
+          expect(
+            find.byKey(const ValueKey('ik-search-hot-terms')).hitTestable(),
+            findsOneWidget,
+          );
+          expect(find.text('E16热门搜索').hitTestable(), findsOneWidget);
+          expect(
+            find.byKey(const ValueKey('ik-search-recommendations')),
+            findsNothing,
+          );
+          expect(find.textContaining('E16qq推荐'), findsNothing);
+          expect(find.text('查看全部推荐'), findsNothing);
+        } else if (page == 2) {
+          expect(
+            tester
+                .widget<IkLibraryWorkspace>(find.byType(IkLibraryWorkspace))
+                .stableCategoryTabs,
+            isTrue,
+          );
+          expect(
+            find
+                .byKey(const ValueKey('ik-library-content-likes'))
+                .hitTestable(),
+            findsOneWidget,
+          );
+        }
+        trace.expectValid();
+      }
+
+      await tap(
+        find.byKey(const ValueKey('ik-workspace-nav-1')),
+        'E16准备搜索状态，随后连续跨正文与独立页',
+      );
+      trace.step = 'E16实际提交共享搜索框';
+      await tester.enterText(
+        find.byKey(const ValueKey('ik-workspace-search')),
+        'E16连续导航',
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.search);
+      await _rootDrain(tester, trace);
+      final searchState = tester.state(search);
+      final beforePlayer = app.container.read(playerProvider);
+      final router = GoRouter.of(tester.element(workspace));
+      trace.step = 'E16普通下载正文进入：保留侧栏、搜索和播放栏';
+      unawaited(router.push<void>('/downloads'));
+      await _rootDrain(tester, trace);
+      expect(find.byType(IkDownloadsWorkspace).hitTestable(), findsOneWidget);
+      expectFrame();
+      await tap(
+        find.descendant(
+          of: find.byType(IkPlaybackBar),
+          matching: find.text(_track.name),
+        ),
+        'E16由正文播放栏实际进入独立紧凑播放器',
+      );
+      expectFrame(player: true);
+      final playerPage = find.byType(WindowsPlayerPage);
+      expect(
+        tester.widget<WindowsPlayerPage>(playerPage).compactLayout,
+        isTrue,
+      );
+      expect(find.byKey(const ValueKey('ik-player-divider')), findsNothing);
+      final information = find.byKey(const ValueKey('ik-player-information'));
+      final lyricsPane = find.byKey(const ValueKey('ik-player-lyrics-pane'));
+      expect(information.hitTestable(), findsOneWidget);
+      expect(lyricsPane.hitTestable(), findsOneWidget);
+      final informationRect = tester.getRect(information);
+      final lyricsRect = tester.getRect(lyricsPane);
+      expect(lyricsRect.left - informationRect.right, inInclusiveRange(24, 40));
+      expect(informationRect.top, closeTo(lyricsRect.top, .01));
+      expect(
+        tester
+            .widget<VideoCover>(
+              find.descendant(
+                of: information,
+                matching: find.byType(VideoCover),
+              ),
+            )
+            .size,
+        greaterThan(330),
+        reason: '实际紧凑宽屏封面需使用新布局空间，不能只有compact参数为真',
+      );
+      await tap(find.byKey(const ValueKey('ik-bar-queue')), 'E16播放器实际待播放浮层展开');
+      expect(find.byType(IkQueuePanel).hitTestable(), findsOneWidget);
+      expect(find.byType(BottomSheet), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byType(IkQueuePanel),
+          matching: find.text(_track.name),
+        ),
+        findsOneWidget,
+      );
+      await tap(find.byTooltip(IkStrings.close).hitTestable(), 'E16播放器待播放浮层关闭');
+      expect(find.byType(IkQueuePanel), findsNothing);
+      expectFrame(player: true);
+      trace.step = 'E16播放器之上继续进入内嵌queue路由';
+      unawaited(router.push<void>('/queue'));
+      await _rootDrain(tester, trace);
+      expect(find.byType(QueuePage).hitTestable(), findsOneWidget);
+      expectFrame();
+      trace.step = 'E16queue之上继续进入真实专辑正文';
+      unawaited(router.push<void>('/album/qq/semantics-album'));
+      await _rootDrain(tester, trace);
+      final album = find.byType(AlbumPage);
+      expect(album.hitTestable(), findsOneWidget);
+      expect(
+        find.descendant(of: album, matching: find.text(_track.name)),
+        findsOneWidget,
+      );
+      expectFrame();
+      for (final back in [
+        (leaving: AlbumPage, arriving: QueuePage, player: false),
+        (leaving: QueuePage, arriving: WindowsPlayerPage, player: true),
+        (
+          leaving: WindowsPlayerPage,
+          arriving: IkDownloadsWorkspace,
+          player: false,
+        ),
+        (
+          leaving: IkDownloadsWorkspace,
+          arriving: IkSearchWorkspace,
+          player: false,
+        ),
+      ]) {
+        final target = back.leaving == WindowsPlayerPage
+            ? find.descendant(
+                of: find.byType(WindowsPlayerPage),
+                matching: find.text(WindowsMusicStrings.back),
+              )
+            : find.byType(BackButton).hitTestable();
+        await tap(target, 'E16连续返回${back.leaving}→${back.arriving}');
+        expect(find.byType(back.arriving).hitTestable(), findsOneWidget);
+        expectFrame(player: back.player);
+        trace.expectValid();
+      }
+      expect(tester.state(search), same(searchState));
+      expect(tester.widget<IkSearchWorkspace>(search).search.query, 'E16连续导航');
+
+      await tap(find.byKey(const ValueKey('ik-workspace-nav-4')), 'E16进入实际设置');
+      await tap(
+        find.byKey(const ValueKey('ik-settings-sources')),
+        'E16进入音源设置区',
+      );
+      await tap(
+        find.descendant(
+          of: find.byType(IkSettingsWorkspace),
+          matching: find.text(IkSourceCatalogStrings.manage),
+        ),
+        'E16实际进入音源管理正文',
+      );
+      expect(manager.hitTestable(), findsOneWidget);
+      expect(
+        tester.widget<SourceManagerPage>(manager).modernPolicyMenu,
+        isTrue,
+      );
+      expect(IkWorkspaceNavigation.maybeOf(tester.element(manager)), isNotNull);
+      expectFrame();
+      expect(
+        find.descendant(of: manager, matching: find.byType(ExpansionTile)),
+        findsNothing,
+      );
+      final sourceSettings = app.container
+          .read(ikSourceCatalogProvider)!
+          .settings;
+      final savedPolicy = sourceSettings.value.toJson();
+      final managerState = tester.state(manager);
+      final trigger = find.byKey(const ValueKey('manager-policy-trigger'));
+      final option = find.byKey(const ValueKey('manager-policy-option-false'));
+      trace.step = 'E16策略菜单展开前定位新触发框';
+      await tester.ensureVisible(trigger);
+      await _pumpAndCheck(tester, trace);
+      final listRect = tester.getRect(
+        find.byKey(const ValueKey('manager-search')),
+      );
+      trace.step = 'E16实际新下拉展开并检查可见尺寸与不透明背景';
+      await tester.tap(trigger.hitTestable());
+      await _rootDrain(tester, trace);
+      expect(find.byType(MenuItemButton).hitTestable(), findsNWidgets(2));
+      final anchor = tester.widget<MenuAnchor>(
+        find.descendant(of: manager, matching: find.byType(MenuAnchor)),
+      );
+      final menu = find
+          .ancestor(of: option, matching: find.byType(Material))
+          .first;
+      expect(anchor.crossAxisUnconstrained, isFalse);
+      expect(anchor.style!.backgroundColor!.resolve({})!.a, 1);
+      expect(
+        tester.getSize(menu).width,
+        closeTo(tester.getSize(trigger).width, 1),
+      );
+      expect(
+        tester.getRect(find.byKey(const ValueKey('manager-search'))),
+        listRect,
+      );
+      expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+      trace.step = 'E16音源新菜单Esc关闭，仍停在正文';
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _rootDrain(tester, trace);
+      expect(find.byType(MenuItemButton), findsNothing);
+      expect(manager.hitTestable(), findsOneWidget);
+      await tap(trigger, 'E16音源新菜单再次展开');
+      await tap(
+        find.byKey(const ValueKey('manager-policy-option-true')),
+        'E16选择备用音源优先，形成真实未保存草稿',
+      );
+      expect(find.byType(MenuItemButton), findsNothing);
+      final auto = find.byKey(const ValueKey('manager-auto-switch'));
+      await tap(auto, 'E16修改独立自动切换策略');
+      expect(tester.widget<SwitchListTile>(auto).value, isTrue);
+      expect(sourceSettings.value.toJson(), savedPolicy);
+      await tap(
+        find.byKey(const ValueKey('ik-workspace-nav-1')),
+        'E16草稿主导航离开弹出保护提示',
+      );
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        find.widgetWithText(AlertDialog, ExpandedStrings.dirty),
+        findsOneWidget,
+      );
+      await tap(find.text(ExpandedStrings.keepEditing), 'E16取消离开保留策略草稿');
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(tester.state(manager), same(managerState));
+      expect(
+        find.descendant(
+          of: trigger,
+          matching: find.text(SourceStrings.customFirst),
+        ),
+        findsOneWidget,
+      );
+      expect(tester.widget<SwitchListTile>(auto).value, isTrue);
+      expectFrame();
+      await tap(
+        find.byKey(const ValueKey('ik-workspace-nav-1')),
+        'E16再次请求离开音源草稿',
+      );
+      await tap(find.text(ExpandedStrings.discard), 'E16放弃草稿返回原搜索状态');
+      expect(manager, findsNothing);
+      expect(search.hitTestable(), findsOneWidget);
+      expect(tester.state(search), same(searchState));
+      expect(tester.widget<IkSearchWorkspace>(search).search.query, 'E16连续导航');
+      expect(sourceSettings.value.toJson(), savedPolicy);
+      await tap(
+        find.byKey(const ValueKey('ik-workspace-nav-4')),
+        'E16返回保留的音源设置区',
+      );
+      await tap(
+        find.descendant(
+          of: find.byType(IkSettingsWorkspace),
+          matching: find.text(IkSourceCatalogStrings.manage),
+        ),
+        'E16重开音源正文确认放弃未落盘',
+      );
+      expect(tester.widget<SwitchListTile>(auto).value, isFalse);
+      expect(
+        find.descendant(
+          of: trigger,
+          matching: find.text(ExpandedStrings.officialFirst),
+        ),
+        findsOneWidget,
+      );
+      await tap(
+        find.descendant(of: manager, matching: find.byType(BackButton)),
+        'E16无草稿页内返回设置，连续AX收尾',
+      );
+      expect(find.byType(IkSettingsWorkspace).hitTestable(), findsOneWidget);
+      expect(manager, findsNothing);
+      expectFrame();
+      final afterPlayer = app.container.read(playerProvider);
+      expect(afterPlayer.currentSong, beforePlayer.currentSong);
+      expect(afterPlayer.position, beforePlayer.position);
+      expect(afterPlayer.isPlaying, beforePlayer.isPlaying);
+      expect(afterPlayer.playlist, beforePlayer.playlist);
+      trace.expectValid();
     } finally {
       handle.dispose();
       await tester.pumpWidget(const SizedBox.shrink());
@@ -2829,6 +3571,20 @@ class _Window extends WindowsWindowController {
 class _Auth extends AuthNotifier {
   @override
   Future<void> init() async {}
+}
+
+class _UnusedSourceEngine extends Fake implements LxSourceEngine {}
+
+class _E16Content extends FakeContentPlatform {
+  _E16Content()
+    : super(
+        type: PlatformType.qq,
+        album: _track.album,
+        albumSongs: const [_track],
+      );
+  @override
+  Future<String?> getLyrics(String songId) async =>
+      '[00:00.00]E16连续路由歌词\n[00:30.00]E16当前播放歌词';
 }
 
 class _Content extends FakeContentPlatform {

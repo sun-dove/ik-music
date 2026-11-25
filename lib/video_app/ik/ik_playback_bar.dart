@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import '../../features/library/presentation/providers/likes_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
+import '../../l10n/ik_contextual_error_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_runtime_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
@@ -52,15 +53,18 @@ Future<void> showIkQueue(BuildContext context) => showGeneralDialog<void>(
 
 class IkPlaybackBar extends ConsumerWidget {
   const IkPlaybackBar({super.key, required this.onOpen, required this.onAudio})
-    : _stableSeekSemantics = false;
+    : _stableSeekSemantics = false,
+      contextualErrors = false;
   const IkPlaybackBar.aligned({
     super.key,
     required this.onOpen,
     required this.onAudio,
+    this.contextualErrors = false,
   }) : _stableSeekSemantics = true;
   final VoidCallback? onOpen;
   final VoidCallback onAudio;
   final bool _stableSeekSemantics;
+  final bool contextualErrors;
   Widget _seekSemantics(Slider slider) =>
       _stableSeekSemantics ? Semantics(container: true, child: slider) : slider;
   String _time(Duration value) =>
@@ -347,7 +351,9 @@ class IkPlaybackBar extends ConsumerWidget {
                 likeAction.issue!,
                 style: TextStyle(fontSize: 12, color: scheme.error),
               ),
-            if (player.error != null)
+            if (contextualErrors && (player.error?.isNotEmpty ?? false))
+              _errorNotice(context, player, notifier)
+            else if (!contextualErrors && player.error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Text(
@@ -388,6 +394,70 @@ class IkPlaybackBar extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _errorNotice(
+    BuildContext context,
+    PlayerState player,
+    PlayerNotifier notifier,
+  ) {
+    final colors = Theme.of(context).colorScheme;
+    final reset = player.error == IkContextualErrorStrings.playerResetReason;
+    final song = player.currentSong;
+    return Container(
+      key: const ValueKey('ik-playback-error'),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  reset
+                      ? IkContextualErrorStrings.playbackRecoveryIncomplete
+                      : IkContextualErrorStrings.playbackNotice,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: colors.error,
+                  ),
+                ),
+              ),
+              if (reset && song != null) ...[
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: player.isTransitioning
+                      ? null
+                      : () => notifier.playSong(song),
+                  child: const Text(IkContextualErrorStrings.replay),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 96),
+            child: SingleChildScrollView(
+              key: const ValueKey('ik-playback-error-reason-scroll'),
+              primary: false,
+              child: Text(
+                player.error!,
+                key: const ValueKey('ik-playback-error-reason'),
+                style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

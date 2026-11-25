@@ -1,19 +1,29 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/app_scrollbar.dart';
+import '../../../../l10n/expanded_strings.dart';
+import '../../../../l10n/workspace_draft_strings.dart';
 import '../../../../models/platform_type.dart';
 import '../../../../video_app/ik/ik_controls.dart';
+import '../../../../video_app/ik/ik_workspace_navigation.dart';
 import '../../domain/smart_playlist_rule.dart';
 import '../providers/smart_playlists_provider.dart';
 import '../../../../core/utils/snackbar_helper.dart';
 
 class SmartPlaylistEditorPage extends ConsumerStatefulWidget {
   final String? ruleId;
+  final bool protectWorkspaceDraft;
 
-  const SmartPlaylistEditorPage({super.key, this.ruleId});
+  const SmartPlaylistEditorPage({
+    super.key,
+    this.ruleId,
+    this.protectWorkspaceDraft = false,
+  });
 
   @override
   ConsumerState<SmartPlaylistEditorPage> createState() =>
@@ -42,6 +52,35 @@ class _SmartPlaylistEditorPageState
   var _match = SmartPlaylistMatch.all;
   var _sortBy = SmartPlaylistSortOrder.mostListened;
   String? _loadedRuleId;
+  String? _createdRuleId;
+  late String _savedSnapshot;
+  IkWorkspaceNavigation? _workspaceNavigation;
+  Future<bool>? _pendingLeave;
+  bool _leaving = false;
+
+  String _snapshot() => jsonEncode([
+    _nameController.text,
+    _keywordController.text,
+    _artistIdsController.text,
+    _albumIdsController.text,
+    _platforms.map((platform) => platform.name).toList()..sort(),
+    _minPlayCount,
+    _maxPlayCount,
+    _recentlyPlayedDays,
+    _notPlayedSinceDays,
+    _likedOnly,
+    _excludeLiked,
+    _cachedOnly,
+    _downloadedOnly,
+    _localOnly,
+    _maxSongs,
+    _minDurationMs,
+    _maxDurationMs,
+    _match.name,
+    _sortBy.name,
+  ]);
+
+  bool get _dirty => _snapshot() != _savedSnapshot;
 
   @override
   void initState() {
@@ -50,10 +89,79 @@ class _SmartPlaylistEditorPageState
     _keywordController = TextEditingController();
     _artistIdsController = TextEditingController();
     _albumIdsController = TextEditingController();
+    _savedSnapshot = _snapshot();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _bindWorkspaceNavigation();
+  }
+
+  @override
+  void didUpdateWidget(covariant SmartPlaylistEditorPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.protectWorkspaceDraft != widget.protectWorkspaceDraft) {
+      _bindWorkspaceNavigation();
+    }
+  }
+
+  void _bindWorkspaceNavigation() {
+    final navigation = widget.protectWorkspaceDraft
+        ? IkWorkspaceNavigation.maybeOf(context)
+        : null;
+    if (identical(navigation, _workspaceNavigation)) return;
+    _workspaceNavigation?.unregister(this);
+    _workspaceNavigation = navigation;
+    navigation?.register(this, _confirmLeave);
+  }
+
+  Future<bool> _confirmLeave() =>
+      _pendingLeave ??= _checkLeave().whenComplete(() => _pendingLeave = null);
+
+  Future<bool> _checkLeave() async {
+    if (!mounted || ref.read(smartPlaylistsProvider).isSaving) return false;
+    if (!_dirty) return true;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text(ExpandedStrings.dirty),
+        content: const Text(WorkspaceDraftStrings.smartPlaylistLeave),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text(ExpandedStrings.keepEditing),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text(WorkspaceDraftStrings.discard),
+          ),
+        ],
+      ),
+    );
+    return mounted && discard == true;
+  }
+
+  Future<void> _return() async {
+    if (await _confirmLeave()) _popCurrentPage();
+  }
+
+  void _popCurrentPage() {
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    setState(() => _leaving = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ModalRoute.of(context)?.isCurrent == true) {
+        context.pop();
+      } else {
+        setState(() => _leaving = false);
+      }
+    });
   }
 
   @override
   void dispose() {
+    _workspaceNavigation?.unregister(this);
     _nameController.dispose();
     _keywordController.dispose();
     _artistIdsController.dispose();
@@ -83,6 +191,7 @@ class _SmartPlaylistEditorPageState
     _maxDurationMs = rule.maxDurationMs;
     _match = rule.match;
     _sortBy = rule.sortBy;
+    _savedSnapshot = _snapshot();
   }
 
   Set<String> _parseIds(TextEditingController controller) {
@@ -93,13 +202,18 @@ class _SmartPlaylistEditorPageState
   }
 
   Future<void> _save(SmartPlaylistRule? existing) async {
+    final submitted = widget.protectWorkspaceDraft ? _snapshot() : null;
     final notifier = ref.read(smartPlaylistsProvider.notifier);
+    final platforms = widget.protectWorkspaceDraft
+        ? Set<PlatformType>.of(_platforms)
+        : _platforms;
     final artistIds = _parseIds(_artistIdsController);
     final albumIds = _parseIds(_albumIdsController);
+    SmartPlaylistRule? created;
     if (existing == null) {
-      await notifier.createRule(
+      created = await notifier.createRule(
         name: _nameController.text,
-        platforms: _platforms,
+        platforms: platforms,
         keyword: _keywordController.text,
         minPlayCount: _minPlayCount,
         maxPlayCount: _maxPlayCount,
@@ -122,7 +236,7 @@ class _SmartPlaylistEditorPageState
       await notifier.updateRule(
         existing.copyWith(
           name: _nameController.text,
-          platforms: _platforms,
+          platforms: platforms,
           keyword: _keywordController.text,
           minPlayCount: _minPlayCount,
           maxPlayCount: _maxPlayCount,
@@ -150,17 +264,38 @@ class _SmartPlaylistEditorPageState
       showErrorSnackBar(context, error);
       return;
     }
-    context.pop();
+    if (widget.protectWorkspaceDraft) {
+      if (created != null) {
+        _createdRuleId = created.id;
+        _loadedRuleId = created.id;
+      }
+      _savedSnapshot = submitted!;
+      if (_dirty) {
+        setState(() {});
+      } else {
+        _popCurrentPage();
+      }
+    } else {
+      context.pop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(smartPlaylistsProvider);
-    final existing = _findRule(state.rules, widget.ruleId);
+    final existing = _findRule(
+      state.rules,
+      widget.protectWorkspaceDraft
+          ? _createdRuleId ?? widget.ruleId
+          : widget.ruleId,
+    );
     _syncFromRule(existing);
 
-    return Scaffold(
+    final page = Scaffold(
       appBar: AppBar(
+        leading: widget.protectWorkspaceDraft && Navigator.canPop(context)
+            ? BackButton(onPressed: _return)
+            : null,
         title: Text(existing == null ? '新建智能歌单' : '编辑智能歌单'),
         actions: [
           TextButton(
@@ -369,6 +504,14 @@ class _SmartPlaylistEditorPageState
           ],
         ),
       ),
+    );
+    if (!widget.protectWorkspaceDraft) return page;
+    return PopScope(
+      canPop: _leaving,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _return();
+      },
+      child: page,
     );
   }
 

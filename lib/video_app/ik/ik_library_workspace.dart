@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/library/presentation/pages/platform_playlists_page.dart';
 import '../../features/local_music/presentation/pages/local_music_page.dart';
 import '../../features/smart_playlists/presentation/pages/smart_playlists_page.dart';
+import '../../l10n/ik_contextual_error_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
@@ -34,6 +35,9 @@ class IkLibraryWorkspace extends StatefulWidget {
     this.currentSong,
     this.alignToDesign = false,
     this.simplifySources = false,
+    this.stableCategoryTabs = false,
+    this.contextualErrors = false,
+    this.expiredPlatform,
     this.downloadsBuilder,
   });
   final Map<PlatformType, VideoLibrary> libraries;
@@ -50,6 +54,9 @@ class IkLibraryWorkspace extends StatefulWidget {
   final Song? currentSong;
   final bool alignToDesign;
   final bool simplifySources;
+  final bool stableCategoryTabs;
+  final bool contextualErrors;
+  final PlatformType? expiredPlatform;
   final WidgetBuilder? downloadsBuilder;
   @override
   State<IkLibraryWorkspace> createState() => _IkLibraryWorkspaceState();
@@ -67,6 +74,65 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
     'smart': IkStrings.smart,
   };
 
+  Widget _stableCategory(BuildContext context, MapEntry<String, String> entry) {
+    final selected = entry.key == _category;
+    final colors = Theme.of(context).colorScheme;
+    return Semantics(
+      selected: selected,
+      button: selected ? null : true,
+      child: Material(
+        key: ValueKey('ik-library-category-${entry.key}'),
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: selected
+              ? null
+              : () {
+                  if (entry.key == 'downloads' &&
+                      widget.downloadsBuilder == null) {
+                    widget.onDownloads();
+                    return;
+                  }
+                  setState(() {
+                    _category = entry.key;
+                    _visited.add(entry.key);
+                  });
+                },
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: selected ? colors.primary : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    entry.value,
+                    maxLines: 1,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      fontWeight: FontWeight.w500,
+                      color: selected
+                          ? colors.primary
+                          : colors.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => widget.alignToDesign
       ? LayoutBuilder(
@@ -76,83 +142,90 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                 MediaQuery.textScalerOf(context).scale(600);
             final categories = [
               for (final entry in _categories.entries)
-                Semantics(
-                  selected: entry.key == _category,
-                  child: entry.key == _category
-                      ? Container(
-                          key: ValueKey('ik-library-category-${entry.key}'),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: Theme.of(context).colorScheme.primary,
-                                  width: 2,
-                                ),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(
-                                entry.value,
-                                maxLines: 1,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      : TextButton(
-                          key: ValueKey('ik-library-category-${entry.key}'),
-                          onPressed: () {
-                            if (entry.key == 'downloads' &&
-                                widget.downloadsBuilder == null) {
-                              widget.onDownloads();
-                              return;
-                            }
-                            setState(() {
-                              _category = entry.key;
-                              _visited.add(entry.key);
-                            });
-                          },
-                          style: TextButton.styleFrom(
-                            foregroundColor: entry.key == _category
-                                ? Theme.of(context).colorScheme.primary
-                                : Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                            shape: const RoundedRectangleBorder(
-                              borderRadius: BorderRadius.zero,
-                            ),
+                if (widget.stableCategoryTabs)
+                  _stableCategory(context, entry)
+                else
+                  Semantics(
+                    selected: entry.key == _category,
+                    child: entry.key == _category
+                        ? Container(
+                            key: ValueKey('ik-library-category-${entry.key}'),
                             padding: const EdgeInsets.symmetric(
                               horizontal: 12,
                               vertical: 10,
                             ),
-                          ),
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: entry.key == _category
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.transparent,
-                                  width: 2,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(
+                                  entry.value,
+                                  maxLines: 1,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                  ),
                                 ),
                               ),
                             ),
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: Text(entry.value, maxLines: 1),
+                          )
+                        : TextButton(
+                            key: ValueKey('ik-library-category-${entry.key}'),
+                            onPressed: () {
+                              if (entry.key == 'downloads' &&
+                                  widget.downloadsBuilder == null) {
+                                widget.onDownloads();
+                                return;
+                              }
+                              setState(() {
+                                _category = entry.key;
+                                _visited.add(entry.key);
+                              });
+                            },
+                            style: TextButton.styleFrom(
+                              foregroundColor: entry.key == _category
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                              shape: const RoundedRectangleBorder(
+                                borderRadius: BorderRadius.zero,
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
+                            ),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  bottom: BorderSide(
+                                    color: entry.key == _category
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.transparent,
+                                    width: 2,
+                                  ),
+                                ),
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Text(entry.value, maxLines: 1),
+                              ),
                             ),
                           ),
-                        ),
-                ),
+                  ),
             ];
             return Column(
               children: [
@@ -417,13 +490,33 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                   ),
                 for (final platform in widget.loggedIn)
                   if (widget.libraries[platform]?.error case final error?)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: Text(
-                        '${videoPlatformLabel(platform)} · ${error.message}',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                    if (widget.contextualErrors)
+                      _syncIssue(context, platform, error)
+                    else
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          '${videoPlatformLabel(platform)} · ${error.message}',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
+                      ),
+                if (widget.contextualErrors)
+                  if (widget.expiredPlatform case final platform?
+                      when platform.isMusicService &&
+                          !widget.loggedIn.contains(platform))
+                    _issueNotice(
+                      context,
+                      key: ValueKey('ik-library-expired-${platform.name}'),
+                      title: IkContextualErrorStrings.syncNeedsAccount(
+                        videoPlatformLabel(platform),
+                      ),
+                      action: TextButton(
+                        onPressed: widget.syncing.contains(platform)
+                            ? null
+                            : widget.onAccounts,
+                        child: const Text(IkContextualErrorStrings.reconnect),
                       ),
                     ),
                 if (songs.isEmpty && !loading)
@@ -564,6 +657,78 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
         ),
         const SliverPadding(padding: EdgeInsets.only(bottom: 24)),
       ],
+    );
+  }
+
+  Widget _syncIssue(
+    BuildContext context,
+    PlatformType platform,
+    VideoFailure error,
+  ) {
+    final needsAccount =
+        error.kind == VideoFailureKind.notLoggedIn ||
+        error.kind == VideoFailureKind.sessionExpired;
+    return _issueNotice(
+      context,
+      key: ValueKey('ik-library-error-${platform.name}'),
+      title: IkContextualErrorStrings.syncFailed(videoPlatformLabel(platform)),
+      reason: error.message,
+      action: needsAccount || error.canRetry
+          ? TextButton(
+              onPressed: widget.syncing.contains(platform)
+                  ? null
+                  : needsAccount
+                  ? widget.onAccounts
+                  : () => widget.onSync(platform),
+              child: Text(
+                needsAccount
+                    ? IkContextualErrorStrings.reconnect
+                    : IkContextualErrorStrings.retrySync,
+              ),
+            )
+          : null,
+    );
+  }
+
+  Widget _issueNotice(
+    BuildContext context, {
+    required Key key,
+    required String title,
+    String? reason,
+    Widget? action,
+  }) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: key,
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerLow,
+        border: Border.all(color: colors.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: colors.error,
+            ),
+          ),
+          if (reason != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              reason,
+              style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+            ),
+          ],
+          if (action != null) ...[const SizedBox(height: 4), action],
+        ],
+      ),
     );
   }
 }

@@ -9,7 +9,7 @@ void main() {
   test('品牌：IK Music在独立入口文案与Windows预览中统一', () {
     expect(VideoStrings.appName, 'IK Music');
     expect(ExpandedStrings.appName, 'IK Music');
-    expect(VideoStrings.appVersion, 'IK Music · 0.6.1');
+    expect(VideoStrings.appVersion, 'IK Music · 0.6.2');
     expect(WindowsMusicStrings.brandShortName, 'IK Music');
     expect(WindowsMusicStrings.fontSample, contains('IK Music'));
   });
@@ -58,7 +58,7 @@ void main() {
     expect(installer, contains('#include "ik_version.iss"'));
     final version = File('installer/ik_version.iss').readAsStringSync();
     expect(version, contains('MyAppName "IK Music"'));
-    expect(version, contains('MyAppVersion "0.6.1"'));
+    expect(version, contains('MyAppVersion "0.6.2"'));
     expect(installer, contains('MZ Music.lnk'));
     expect(installer, contains('DJ Music.lnk'));
     expect(installer, contains("'{autodesktop}\\ik.lnk'"));
@@ -163,7 +163,7 @@ void main() {
       windowsWorkflow,
       contains(r'ik-$($version.version)-windows-x64.zip'),
     );
-    expect(windowsWorkflow, contains('ik 061 使用与构建.md'));
+    expect(windowsWorkflow, contains('ik 062 使用与构建.md'));
     final releaseWorkflow = File('scripts/build_video_apk.ps1')
         .readAsStringSync();
     expect(
@@ -181,8 +181,8 @@ void main() {
     final resource = File('windows/runner/Yueyin.rc').readAsStringSync();
     expect(resource, contains('VERSION_AS_NUMBER IK_VERSION_NUMBER'));
     final version = File('windows/runner/ik_version.h').readAsStringSync();
-    expect(version, contains('IK_VERSION_NUMBER 0,6,1,12'));
-    expect(version, contains('IK_VERSION_STRING "0.6.1"'));
+    expect(version, contains('IK_VERSION_NUMBER 0,6,2,13'));
+    expect(version, contains('IK_VERSION_STRING "0.6.2"'));
     // path_provider_windows 从 CompanyName/ProductName 推导账号和数据库目录。
     expect(resource, contains('"CompanyName", "sun-dove"'));
     expect(resource, contains('"ProductName", "YueyinMusic"'));
@@ -363,7 +363,7 @@ void main() {
       File('pubspec.yaml').readAsStringSync(),
       contains('assets/branding/dj-music/source/windows/yangyin-256.png'),
     );
-    expect(File('docs/交付文档/ik 061 使用与构建.md').existsSync(), isTrue);
+    expect(File('docs/交付文档/ik 062 使用与构建.md').existsSync(), isTrue);
     expect(
       File('lib/video_app/ui/video_shell.dart').readAsStringSync(),
       contains('assets/branding/dj-music/source/windows/yangyin-256.png'),

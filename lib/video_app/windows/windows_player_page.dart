@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -59,6 +60,8 @@ class WindowsPlayerPage extends StatefulWidget {
     this.onDesktopLyrics,
     this.desktopLyricsEnabled = false,
     this.alignToDesign = false,
+    this.compactLayout = false,
+    this.lyricsAutoResumeDelay,
     this.onArtist,
     this.onAlbum,
   });
@@ -77,6 +80,12 @@ class WindowsPlayerPage extends StatefulWidget {
   final VoidCallback? onDesktopLyrics;
   final bool desktopLyricsEnabled;
   final bool alignToDesign;
+
+  /// 独立播放详情的紧凑排版；缺省保留既有页面布局。
+  final bool compactLayout;
+
+  /// 手动浏览结束后的恢复延时；缺省保持手动返回歌词的原行为。
+  final Duration? lyricsAutoResumeDelay;
   final VoidCallback? onArtist, onAlbum;
   @override
   State<WindowsPlayerPage> createState() => _WindowsPlayerPageState();
@@ -92,8 +101,20 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   bool _sourceExpanded = false;
   double _lyricsFontSize = 22;
   Size _lastSize = Size.zero;
+  Size? _compactPageSize;
   double _lastFontSize = 0;
   int _revision = 0;
+  Timer? _autoResumeTimer;
+  final Set<int> _lyricsPointers = {};
+  bool _manualScrollActive = false;
+  bool _lyricsVisible = true;
+  bool get _canAutoResume =>
+      widget.lyricsAutoResumeDelay != null &&
+      widget.timedLyrics &&
+      widget.lyrics.isNotEmpty &&
+      !widget.lyricsLoading &&
+      !widget.isLoading &&
+      widget.duration > Duration.zero;
   int get _active => widget.timedLyrics
       ? widget.lyrics.lastIndexWhere(
           (line) => line.timestamp <= widget.position,
@@ -111,19 +132,67 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible =
+        TickerMode.valuesOf(context).enabled &&
+        (ModalRoute.isCurrentOf(context) ?? true);
+    if (_lyricsVisible == visible) return;
+    _lyricsVisible = visible;
+    if (widget.lyricsAutoResumeDelay == null) return;
+    _cancelAutoResume();
+    if (!visible) {
+      _lyricsPointers.clear();
+      _manualScrollActive = false;
+    } else if (_following) {
+      _follow();
+    } else {
+      _scheduleAutoResume();
+    }
+  }
+
+  @override
   void didUpdateWidget(WindowsPlayerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     final changedSong = widget.alignToDesign
         ? widget.song.id != oldWidget.song.id ||
               widget.song.platform != oldWidget.song.platform
         : widget.song.dedupeKey != oldWidget.song.dedupeKey;
-    if (changedSong || widget.lyrics != oldWidget.lyrics) _resetKeys();
+    final changedLyrics = widget.lyrics != oldWidget.lyrics;
+    if (changedSong || changedLyrics) _resetKeys();
     if (changedSong) {
+      _cancelAutoResume();
+      _lyricsPointers.clear();
+      _manualScrollActive = false;
       _following = true;
       _sourceExpanded = false;
     }
+    if (widget.lyricsAutoResumeDelay != oldWidget.lyricsAutoResumeDelay ||
+        changedLyrics ||
+        !_canAutoResume) {
+      _cancelAutoResume();
+    }
+    if (widget.lyricsAutoResumeDelay != null && widget.lyrics.isEmpty) {
+      _lyricsPointers.clear();
+      _manualScrollActive = false;
+    }
+    final becameReady =
+        _canAutoResume &&
+        (oldWidget.lyrics.isEmpty ||
+            !oldWidget.timedLyrics ||
+            oldWidget.lyricsLoading ||
+            oldWidget.isLoading ||
+            oldWidget.duration <= Duration.zero);
+    if (becameReady) {
+      _following = true;
+      _manualScrollActive = false;
+    } else if (changedLyrics ||
+        widget.lyricsAutoResumeDelay != oldWidget.lyricsAutoResumeDelay) {
+      _scheduleAutoResume();
+    }
     if (changedSong ||
-        widget.lyrics != oldWidget.lyrics ||
+        changedLyrics ||
+        becameReady ||
         _active !=
             oldWidget.lyrics.lastIndexWhere(
               (line) => line.timestamp <= oldWidget.position,
@@ -138,7 +207,11 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
       if (!mounted ||
           !_following ||
           revision != _revision ||
-          !widget.timedLyrics) {
+          !widget.timedLyrics ||
+          (widget.lyricsAutoResumeDelay != null &&
+              (!_lyricsVisible ||
+                  _lyricsPointers.isNotEmpty ||
+                  _manualScrollActive))) {
         return;
       }
       if (_active < 0) {
@@ -158,12 +231,65 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   }
 
   void _pauseFollow() {
-    if (!_following) return;
-    setState(() => _following = false);
+    if (_following) setState(() => _following = false);
+    _scheduleAutoResume();
+  }
+
+  void _cancelAutoResume() {
+    _autoResumeTimer?.cancel();
+    _autoResumeTimer = null;
+  }
+
+  void _scheduleAutoResume() {
+    _cancelAutoResume();
+    if (_following ||
+        !_canAutoResume ||
+        !_lyricsVisible ||
+        _manualScrollActive ||
+        _lyricsPointers.isNotEmpty) {
+      return;
+    }
+    final revision = _revision;
+    _autoResumeTimer = Timer(widget.lyricsAutoResumeDelay!, () {
+      _autoResumeTimer = null;
+      if (!mounted ||
+          !_canAutoResume ||
+          !_lyricsVisible ||
+          revision != _revision ||
+          _manualScrollActive ||
+          _lyricsPointers.isNotEmpty) {
+        return;
+      }
+      _resumeFollow();
+    });
+  }
+
+  void _resumeFollow() {
+    _cancelAutoResume();
+    _manualScrollActive = false;
+    setState(() => _following = true);
+    _follow();
+  }
+
+  void _lyricsPointerStart(int pointer) {
+    _lyricsPointers.add(pointer);
+    _cancelAutoResume();
+  }
+
+  void _lyricsPointerEnd(int pointer) {
+    _lyricsPointers.remove(pointer);
+    if (_following) {
+      _follow();
+    } else {
+      _scheduleAutoResume();
+    }
   }
 
   KeyEventResult _keyboard(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent || !_scroll.hasClients) {
+    if ((event is! KeyDownEvent &&
+            (widget.lyricsAutoResumeDelay == null ||
+                event is! KeyRepeatEvent)) ||
+        !_scroll.hasClients) {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
@@ -194,6 +320,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
 
   @override
   void dispose() {
+    _cancelAutoResume();
     _revision++;
     _scroll.dispose();
     _informationScroll.dispose();
@@ -203,15 +330,205 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final page = widget.alignToDesign
+        ? (widget.compactLayout ? _compactAlignedPage : _alignedPage)
+        : _page;
     if (Theme.of(context).extension<IkThemeColors>() == null) {
-      return widget.alignToDesign ? _alignedPage(context) : _page(context);
+      return page(context);
     }
     final cover = widget.song.coverUrl;
     return IkCoverTheme(
       cover: cover == null || cover.isEmpty ? null : NetworkImage(cover),
-      child: Builder(builder: widget.alignToDesign ? _alignedPage : _page),
+      child: Builder(builder: page),
     );
   }
+
+  Widget _compactAlignedPage(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      if ((ModalRoute.isCurrentOf(context) ?? true) ||
+          _compactPageSize == null) {
+        _compactPageSize = constraints.biggest;
+      }
+      final size = _compactPageSize!;
+      // 主壳先恢复时，退场页按原尺寸布局，并整体适配收缩后的正文。
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.topLeft,
+        child: SizedBox(
+          width: size.width,
+          height: size.height,
+          child: Overlay.wrap(
+            clipBehavior: Clip.none,
+            child: _compactAlignedContent(context),
+          ),
+        ),
+      );
+    },
+  );
+
+  Widget _compactAlignedContent(BuildContext context) => Scaffold(
+    backgroundColor: VideoTheme.canvas(context),
+    body: SafeArea(
+      child: Column(
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => Navigator.maybePop(context),
+                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                        label: const Text(WindowsMusicStrings.back),
+                      ),
+                      const Spacer(),
+                      if (widget.onDesktopLyrics != null)
+                        TextButton.icon(
+                          onPressed: widget.onDesktopLyrics,
+                          icon: Icon(
+                            Icons.subtitles_outlined,
+                            size: 20,
+                            color: widget.desktopLyricsEnabled
+                                ? VideoTheme.accent(context)
+                                : null,
+                          ),
+                          label: const Text(IkStrings.floating),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 1240),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final fontSize = MediaQuery.textScalerOf(context)
+                                .scale(_lyricsFontSize);
+                            if (_lastSize != constraints.biggest ||
+                                _lastFontSize != fontSize) {
+                              _lastSize = constraints.biggest;
+                              _lastFontSize = fontSize;
+                              _follow();
+                            }
+                            final wide = constraints.maxWidth >= 800;
+                            final gap = (constraints.maxWidth * .03).clamp(
+                              24.0,
+                              40.0,
+                            );
+                            final informationWidth = wide
+                                ? (constraints.maxWidth - gap) * .4
+                                : constraints.maxWidth;
+                            final coverSize = wide
+                                ? math.min(
+                                    math.min(420.0, informationWidth * .92),
+                                    math.max(
+                                      160.0,
+                                      constraints.maxHeight - 210,
+                                    ),
+                                  )
+                                : 68.0;
+                            final information = Scrollbar(
+                              key: const ValueKey(
+                                'ik-player-information-scrollbar',
+                              ),
+                              controller: _informationScroll,
+                              thumbVisibility: true,
+                              thickness: 3,
+                              child: SingleChildScrollView(
+                                key: const ValueKey('ik-player-information'),
+                                controller: _informationScroll,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    minHeight: wide ? constraints.maxHeight : 0,
+                                  ),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      if (wide) ...[
+                                        Center(
+                                          child: VideoCover(
+                                            url: widget.song.coverUrl,
+                                            size: coverSize,
+                                            radius: 18,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 14),
+                                        _alignedMetadata(
+                                          context,
+                                          centered: true,
+                                        ),
+                                      ] else
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            VideoCover(
+                                              url: widget.song.coverUrl,
+                                              size: coverSize,
+                                              radius: 10,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: _alignedMetadata(context),
+                                            ),
+                                          ],
+                                        ),
+                                      const SizedBox(height: 10),
+                                      _compactSourceInfo(context),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                            final lyrics = _alignedLyricsPane(
+                              context,
+                              compact: true,
+                            );
+                            return wide
+                                ? Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      SizedBox(
+                                        width: informationWidth,
+                                        child: information,
+                                      ),
+                                      SizedBox(width: gap),
+                                      Expanded(child: lyrics),
+                                    ],
+                                  )
+                                : Column(
+                                    children: [
+                                      SizedBox(
+                                        height: math.min(
+                                          300,
+                                          constraints.maxHeight * .43,
+                                        ),
+                                        child: information,
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Expanded(child: lyrics),
+                                    ],
+                                  );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          widget.playbackBar ?? _alignedTransport(context),
+        ],
+      ),
+    ),
+  );
 
   Widget _alignedPage(BuildContext context) => Scaffold(
     backgroundColor: VideoTheme.canvas(context),
@@ -571,106 +888,244 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
     ],
   );
 
-  Widget _alignedLyricsPane(BuildContext context) => Column(
-    key: const ValueKey('ik-player-lyrics-pane'),
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Row(
-        children: [
-          const Text(
-            IkPlayerAlignmentStrings.lyrics,
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(width: 12),
-          if (widget.lyrics.isNotEmpty && widget.timedLyrics)
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  _following
-                      ? IkPlayerAlignmentStrings.following
-                      : IkPlayerAlignmentStrings.browsing,
-                  maxLines: 1,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: VideoTheme.secondaryText(context),
+  Widget _compactSourceInfo(BuildContext context) {
+    final details = widget.sourceDetails;
+    final source = details?.sourceName?.trim();
+    final format = details?.format?.trim();
+    final formatParts = [
+      if (format != null && format.isNotEmpty) format.toUpperCase(),
+      if (details?.bitrate != null && details!.bitrate! > 0)
+        '${(details.bitrate! / 1000).round()} kbps',
+    ];
+    final platform =
+        '${widget.song.platform == PlatformType.local ? VideoStrings.localAudio : videoPlatformLabel(widget.song.platform)}${widget.isPreview ? VideoStrings.previewSuffix : ''}';
+    return Column(
+      key: const ValueKey('ik-player-source-inline'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Divider(color: Theme.of(context).colorScheme.outlineVariant),
+        Tooltip(
+          message: _sourceExpanded
+              ? IkPlayerAlignmentStrings.collapseSource
+              : IkPlayerAlignmentStrings.expandSource,
+          child: TextButton(
+            key: const ValueKey('ik-player-source-expand'),
+            onPressed: () => setState(() => _sourceExpanded = !_sourceExpanded),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '$platform · ${source == null || source.isEmpty ? IkStrings.sourceUnknown : source}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
                   ),
                 ),
-              ),
-            ),
-        ],
-      ),
-      const SizedBox(height: 4),
-      Row(
-        children: [
-          TextButton.icon(
-            key: const ValueKey('ik-player-translation'),
-            onPressed: widget.lyrics.any((line) => line.hasTranslation)
-                ? () {
-                    setState(() => _showTranslation = !_showTranslation);
-                    _follow();
-                  }
-                : null,
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              foregroundColor: _showTranslation
-                  ? VideoTheme.accent(context)
-                  : VideoTheme.secondaryText(context),
-            ),
-            icon: Icon(
-              _showTranslation ? Icons.check_rounded : Icons.translate_rounded,
-              size: 17,
-            ),
-            label: const Text(
-              IkPlayerAlignmentStrings.translation,
-              style: TextStyle(fontSize: 12),
+                const SizedBox(width: 8),
+                Icon(
+                  _sourceExpanded
+                      ? Icons.expand_less_rounded
+                      : Icons.expand_more_rounded,
+                  size: 18,
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Align(
-              alignment: Alignment.centerRight,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 270),
-                child: Row(
-                  children: [
-                    const Icon(Icons.text_fields_rounded, size: 19),
-                    Expanded(
-                      child: Tooltip(
-                        message: IkPlayerAlignmentStrings.lyricsSize,
-                        child: Semantics(
-                          container: true,
-                          child: Slider(
-                            key: const ValueKey('ik-player-lyrics-size'),
-                            value: _lyricsFontSize,
-                            min: 16,
-                            max: 30,
-                            divisions: 7,
-                            label: '${_lyricsFontSize.round()}',
-                            semanticFormatterCallback: (value) =>
-                                '${IkPlayerAlignmentStrings.lyricsSize} ${value.round()}',
-                            onChanged: widget.lyrics.isEmpty
-                                ? null
-                                : (value) {
-                                    setState(() => _lyricsFontSize = value);
-                                    _follow();
-                                  },
-                          ),
+        ),
+        if (_sourceExpanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _sourceValue(
+                  context,
+                  IkPlayerAlignmentStrings.songSource,
+                  platform,
+                ),
+                const SizedBox(height: 8),
+                _sourceValue(
+                  context,
+                  IkStrings.sourceName,
+                  source == null || source.isEmpty
+                      ? IkStrings.sourceUnknown
+                      : source,
+                ),
+                const SizedBox(height: 8),
+                _sourceValue(
+                  context,
+                  IkPlayerAlignmentStrings.audioFormat,
+                  formatParts.isEmpty
+                      ? IkStrings.sourceUnknown
+                      : formatParts.join(' · '),
+                ),
+                const SizedBox(height: 12),
+                if (widget.sourceStatus != null)
+                  widget.sourceStatus!
+                else if (details?.note case final note?)
+                  Text(note, style: const TextStyle(fontSize: 12)),
+                if (widget.song.platform != PlatformType.local &&
+                    widget.onQuality != null)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton(
+                      onPressed: widget.onQuality,
+                      child: const Text(IkStrings.changeQuality),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _alignedLyricsPane(BuildContext context, {bool compact = false}) =>
+      Column(
+        key: const ValueKey('ik-player-lyrics-pane'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!compact)
+            Row(
+              children: [
+                const Text(
+                  IkPlayerAlignmentStrings.lyrics,
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 12),
+                if (widget.lyrics.isNotEmpty && widget.timedLyrics)
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        _following
+                            ? IkPlayerAlignmentStrings.following
+                            : IkPlayerAlignmentStrings.browsing,
+                        maxLines: 1,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: VideoTheme.secondaryText(context),
                         ),
                       ),
                     ),
+                  ),
+              ],
+            ),
+          if (!compact) const SizedBox(height: 4),
+          if (compact)
+            LayoutBuilder(
+              builder: (context, constraints) => Wrap(
+                spacing: 12,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  const Text(
+                    IkPlayerAlignmentStrings.lyrics,
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                  ),
+                  _translationControl(context),
+                  SizedBox(
+                    width: math.min(190, constraints.maxWidth),
+                    child: _lyricsSizeControl(context),
+                  ),
+                  if (widget.lyrics.isNotEmpty && widget.timedLyrics)
                     Text(
-                      '${_lyricsFontSize.round()}',
-                      style: const TextStyle(fontSize: 12),
+                      _following
+                          ? IkPlayerAlignmentStrings.following
+                          : IkPlayerAlignmentStrings.browsing,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: VideoTheme.secondaryText(context),
+                      ),
                     ),
-                  ],
+                ],
+              ),
+            )
+          else
+            Row(
+              children: [
+                _translationControl(context),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 270),
+                      child: _lyricsSizeControl(context),
+                    ),
+                  ),
                 ),
+              ],
+            ),
+          Expanded(child: _lyrics(context)),
+        ],
+      );
+
+  Widget _translationControl(BuildContext context) => TextButton.icon(
+    key: const ValueKey('ik-player-translation'),
+    onPressed: widget.lyrics.any((line) => line.hasTranslation)
+        ? () {
+            setState(() => _showTranslation = !_showTranslation);
+            if (!_following) _scheduleAutoResume();
+            _follow();
+          }
+        : null,
+    style: TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      foregroundColor: _showTranslation
+          ? VideoTheme.accent(context)
+          : VideoTheme.secondaryText(context),
+    ),
+    icon: Icon(
+      _showTranslation ? Icons.check_rounded : Icons.translate_rounded,
+      size: 17,
+    ),
+    label: const Text(
+      IkPlayerAlignmentStrings.translation,
+      style: TextStyle(fontSize: 12),
+    ),
+  );
+
+  Widget _lyricsSizeControl(BuildContext context) => Row(
+    children: [
+      const Icon(Icons.text_fields_rounded, size: 19),
+      Expanded(
+        child: Tooltip(
+          message: IkPlayerAlignmentStrings.lyricsSize,
+          child: Listener(
+            onPointerDown: widget.lyricsAutoResumeDelay == null
+                ? null
+                : (event) => _lyricsPointerStart(event.pointer),
+            onPointerUp: widget.lyricsAutoResumeDelay == null
+                ? null
+                : (event) => _lyricsPointerEnd(event.pointer),
+            onPointerCancel: widget.lyricsAutoResumeDelay == null
+                ? null
+                : (event) => _lyricsPointerEnd(event.pointer),
+            child: Semantics(
+              container: true,
+              child: Slider(
+                key: const ValueKey('ik-player-lyrics-size'),
+                value: _lyricsFontSize,
+                min: 16,
+                max: 30,
+                divisions: 7,
+                label: '${_lyricsFontSize.round()}',
+                semanticFormatterCallback: (value) =>
+                    '${IkPlayerAlignmentStrings.lyricsSize} ${value.round()}',
+                onChanged: widget.lyrics.isEmpty
+                    ? null
+                    : (value) {
+                        setState(() => _lyricsFontSize = value);
+                        if (!_following) _scheduleAutoResume();
+                        _follow();
+                      },
               ),
             ),
           ),
-        ],
+        ),
       ),
-      Expanded(child: _lyrics(context)),
+      Text('${_lyricsFontSize.round()}', style: const TextStyle(fontSize: 12)),
     ],
   );
 
@@ -1173,17 +1628,41 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
             focusNode: _lyricsFocus,
             onKeyEvent: _keyboard,
             child: Listener(
-              onPointerDown: (_) => _lyricsFocus.requestFocus(),
-              onPointerSignal: (_) => _pauseFollow(),
+              onPointerDown: (event) {
+                _lyricsFocus.requestFocus();
+                if (widget.lyricsAutoResumeDelay != null) {
+                  _lyricsPointerStart(event.pointer);
+                }
+              },
+              onPointerUp: widget.lyricsAutoResumeDelay == null
+                  ? null
+                  : (event) => _lyricsPointerEnd(event.pointer),
+              onPointerCancel: widget.lyricsAutoResumeDelay == null
+                  ? null
+                  : (event) => _lyricsPointerEnd(event.pointer),
+              onPointerSignal: (event) {
+                if (widget.lyricsAutoResumeDelay == null ||
+                    event is PointerScrollEvent) {
+                  _pauseFollow();
+                }
+              },
               child: NotificationListener<ScrollNotification>(
                 onNotification: (notification) {
-                  if (notification is UserScrollNotification &&
-                      notification.direction != ScrollDirection.idle) {
+                  if ((notification is UserScrollNotification &&
+                          notification.direction != ScrollDirection.idle) ||
+                      (notification is ScrollUpdateNotification &&
+                          notification.dragDetails != null) ||
+                      (widget.lyricsAutoResumeDelay != null &&
+                          notification is ScrollStartNotification &&
+                          notification.dragDetails != null)) {
+                    if (widget.lyricsAutoResumeDelay != null) {
+                      _manualScrollActive = true;
+                    }
                     _pauseFollow();
-                  }
-                  if (notification is ScrollUpdateNotification &&
-                      notification.dragDetails != null) {
-                    _pauseFollow();
+                  } else if (notification is ScrollEndNotification &&
+                      _manualScrollActive) {
+                    _manualScrollActive = false;
+                    _scheduleAutoResume();
                   }
                   return false;
                 },
@@ -1209,6 +1688,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                             widget.duration > Duration.zero))
                                 ? () {
                                     if (widget.alignToDesign) {
+                                      _cancelAutoResume();
+                                      _manualScrollActive = false;
                                       setState(() => _following = true);
                                     }
                                     widget.onSeek(widget.lyrics[i].timestamp);
@@ -1276,10 +1757,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
-              onPressed: () {
-                setState(() => _following = true);
-                _follow();
-              },
+              onPressed: _resumeFollow,
               icon: const Icon(Icons.my_location_outlined, size: 16),
               label: const Text(WindowsMusicStrings.returnToLyrics),
             ),

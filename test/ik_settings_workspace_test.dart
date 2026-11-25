@@ -85,6 +85,7 @@ void main() {
     bool qualityPlayback = false,
     bool localPlayback = false,
     bool failQualityWrites = false,
+    Future<void>? qualityWriteGate,
     bool alignToDesign = false,
     Brightness brightness = Brightness.light,
   }) async {
@@ -95,15 +96,28 @@ void main() {
         ? (WindowsSourceSettings(prefs)
             ..value = const SourceCollection(autoSwitch: true))
         : null;
+    Completer<void>? qualityWriteFinished;
     final unified = WindowsMusicPreferences(
       prefs,
       sources: sources,
-      write: (values) => failQualityWrites
-          ? Future.error(StateError('save'))
-          : ioZone.run(() async {
-              await box.putAll(values);
-              await box.flush();
-            }),
+      write: (values) {
+        final finished = ioZone.run(Completer<void>.new);
+        qualityWriteFinished = finished;
+        if (failQualityWrites) {
+          finished.complete();
+          return Future.error(StateError('save'));
+        }
+        return ioZone.run(() async {
+          try {
+            await qualityWriteGate;
+            await box.putAll(values);
+            await box.flush();
+          } finally {
+            // 只报告实际写入已结束；异常仍传回真实产品行内错误路径。
+            finished.complete();
+          }
+        });
+      },
     )..load();
     final appearance = WindowsAppearance(
       preferences: unified,
@@ -193,6 +207,9 @@ void main() {
       qualityAudio,
       qualityRequests,
       sources,
+      () =>
+          qualityWriteFinished?.future ??
+          Future<void>.error(StateError('音质保存未触发')),
     );
     container.read(playerProvider.notifier);
     await tester.pumpWidget(
@@ -298,8 +315,10 @@ void main() {
   });
 
   Future<void> chooseQuality(
-    WidgetTester tester, {
+    WidgetTester tester,
+    _Harness harness, {
     bool download = false,
+    VoidCallback? beforeWriteCompletes,
   }) async {
     await tester.tap(
       find.byWidgetPredicate(
@@ -315,16 +334,17 @@ void main() {
     await tester.tap(
       find.text(WindowsMusicStrings.qualityName(AudioLevel.lossless)).last,
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
+    beforeWriteCompletes?.call();
     await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 40)),
+      () => harness.qualityWriteFinished().timeout(const Duration(seconds: 5)),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
   }
 
   testWidgets('U03 播放音质保存后真实多源换流并保持42秒继续播放', (tester) async {
     final h = await mount(tester, qualityPlayback: true);
-    await chooseQuality(tester);
+    await chooseQuality(tester, h);
     expect(h.unified.quality(PlatformType.qq), AudioLevel.lossless);
     expect(h.qualityRequests, [AudioLevel.low, AudioLevel.lossless]);
     expect(h.audio.url, 'https://example.test/lossless');
@@ -345,7 +365,7 @@ void main() {
 
   testWidgets('U03 下载音质保存不会暂停或重载当前流', (tester) async {
     final h = await mount(tester, section: 'downloads', qualityPlayback: true);
-    await chooseQuality(tester, download: true);
+    await chooseQuality(tester, h, download: true);
     expect(
       h.unified.quality(PlatformType.qq, download: true),
       AudioLevel.lossless,
@@ -363,7 +383,7 @@ void main() {
       qualityPlayback: true,
       failQualityWrites: true,
     );
-    await chooseQuality(tester);
+    await chooseQuality(tester, h);
     expect(h.unified.quality(PlatformType.qq), AudioLevel.low);
     expect(h.qualityRequests, [AudioLevel.low]);
     expect(h.audio.loads, hasLength(1));
@@ -377,14 +397,40 @@ void main() {
   });
 
   testWidgets('U03 本地播放时保存在线音质不重载本地文件', (tester) async {
-    final h = await mount(tester, qualityPlayback: true, localPlayback: true);
-    await chooseQuality(tester);
-    expect(h.unified.quality(PlatformType.qq), AudioLevel.lossless);
-    expect(h.qualityRequests, isEmpty);
-    expect(h.audio.loads, hasLength(1));
-    expect(h.player.state.isPlaying, isTrue);
-    expect(h.audio.position, const Duration(seconds: 42));
-    await unmount(tester, h);
+    final release = ioZone.run(Completer<void>.new);
+    final h = await mount(
+      tester,
+      qualityPlayback: true,
+      localPlayback: true,
+      qualityWriteGate: release.future,
+    );
+    try {
+      await chooseQuality(
+        tester,
+        h,
+        beforeWriteCompletes: () {
+          expect(h.unified.quality(PlatformType.qq), AudioLevel.low);
+          expect(find.text(IkWorkspaceStrings.busy), findsOneWidget);
+          expect(h.qualityRequests, isEmpty);
+          expect(h.audio.loads, hasLength(1));
+          expect(h.player.state.isPlaying, isTrue);
+          expect(h.audio.position, const Duration(seconds: 42));
+          release.complete();
+        },
+      );
+      expect(h.unified.quality(PlatformType.qq), AudioLevel.lossless);
+      expect(h.qualityRequests, isEmpty);
+      expect(h.audio.loads, hasLength(1));
+      expect(h.player.state.isPlaying, isTrue);
+      expect(h.audio.position, const Duration(seconds: 42));
+    } finally {
+      if (!release.isCompleted) release.complete();
+      await tester.runAsync(
+        () => h.qualityWriteFinished().timeout(const Duration(seconds: 5)),
+      );
+      await tester.pumpAndSettle();
+      await unmount(tester, h);
+    }
   });
 
   testWidgets('U06 未支持平台歌词开关禁用并显示真实原因', (tester) async {
@@ -519,6 +565,7 @@ class _Harness {
     this.audio,
     this.qualityRequests,
     this.sources,
+    this.qualityWriteFinished,
   );
   final VideoPreferences preferences;
   final WindowsMusicPreferences unified;
@@ -528,6 +575,7 @@ class _Harness {
   final _QualityAudio audio;
   final List<AudioLevel> qualityRequests;
   final WindowsSourceSettings? sources;
+  final Future<void> Function() qualityWriteFinished;
 }
 
 class _QualityAudio extends IdleAudioController {
