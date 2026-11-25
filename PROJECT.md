@@ -21,7 +21,7 @@
 | 数据库 | drift (SQLite) |
 | 持久化 | flutter_secure_storage + Hive |
 
-本仓库另提供 **IK Music** 独立入口 `lib/main_video.dart`，当前产品版本为0.6.1/build12，构建与成品验收完成，发行状态见[使用与构建](docs/交付文档/ik%20061%20使用与构建.md)和[验收记录](docs/IK-Music-0.6.1-原稿对齐验收.md)。独立界面通过可选装配接入，原Mconnect概览中的版本、包名和缺省构建保持；独立版本源为 `ik-version.json`。
+本仓库另提供 **IK Music** 独立入口 `lib/main_video.dart`，当前正式版本为0.6.1/build12，已完成构建、成品验收和公开发行，使用与发行记录见[使用与构建](docs/交付文档/ik%20061%20使用与构建.md)和[验收记录](docs/IK-Music-0.6.1-原稿对齐验收.md)。独立界面通过可选装配接入，原Mconnect概览中的版本、包名和缺省构建保持；独立版本源为 `ik-version.json`。
 
 ---
 

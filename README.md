@@ -2,13 +2,11 @@
 
 面向用户的产品在 Windows、Android 和应用内统一叫 **IK Music**。支持 QQ 音乐、网易云与酷狗音乐接入，提供账号收藏、内置音源自动准备、多音源管理和播放设置。GitHub仓库统一为 **sun-dove/ik-music**，原仓库地址由GitHub重定向；包名、签名和既有安装身份保持兼容。
 
-当前公开发行版为 **[IK Music 0.6.0 / build 11](https://github.com/sun-dove/ik-music/releases/tag/ik-v0.6.0)**。Windows安装器、便携ZIP与Android三ABI分包均已完成构建、校验并发布。此前DJ Music 0.5.1品牌候选的图标与升级适配已纳入本版。历史[0.5.0发行页](https://github.com/sun-dove/ik-music/releases/tag/yueyin-v0.5.0)继续保留；更新版沿用原包名、签名、安装身份与用户数据目录。
+当前公开发行版为 **[IK Music 0.6.1 / build 12](https://github.com/sun-dove/ik-music/releases/tag/ik-v0.6.1)**。Windows安装器、便携ZIP和Android三ABI分包均已发布，九个附件的大小与SHA-256已核对。Windows本机已覆盖安装至 `D:/Applications/ik-music`，新版已正常启动。更新沿用原包名、签名、安装身份与用户数据目录。
 
-0.6.0 的最终 Android 三 ABI 签名包已构建并校验，在专用 API30 x86_64 模拟器通过安装、启动、导航、新图标及静音切换检查。Windows 最终构建和安装验收已通过，本机已迁移到 `D:/Applications/ik-music`；九项正式发行附件已公开并逐项校验。Android 物理设备与全部音源可用性不在上述结论内，具体结果见下文。
+使用入口、备份范围和设备边界见[0.6.1使用与构建](docs/交付文档/ik%20061%20使用与构建.md)与[0.6.1验收记录](docs/IK-Music-0.6.1-原稿对齐验收.md)。历史[0.6.0](https://github.com/sun-dove/ik-music/releases/tag/ik-v0.6.0)和[0.5.0](https://github.com/sun-dove/ik-music/releases/tag/yueyin-v0.5.0)下载保留。
 
-0.6.0 已实现发现、搜索、音乐库、最近播放、设置五个主区，设置集中为七个分区；队列按需打开。真实界面、内置目录、3D 音效运行时和共享歌词动作已进入产品代码。版本清单为 `ik-version.json`。使用入口与备份范围见 [IK Music 使用与构建](docs/交付文档/ik%20060%20使用与构建.md)，最终构建和设备边界见 [0.6.0 验收记录](docs/交付文档/ik-060验收记录.md)。
-
-**0.6.1 / build 12 已完成同提交构建、覆盖安装和本轮成品验收，正在发行收尾。** 音乐库五分类在同页切换；新歌、榜单和推荐使用固定平台选择；歌单收起重复标题，搜索提供可展开热词与真实推荐精选。歌曲简单操作在按钮旁展开，复杂选择居中。发现页新增独立个人每日推荐，最多展示30首，按真实会话、来源和服务状态显示结果。
+**0.6.1 / build 12 已完成同提交构建、覆盖安装和本轮成品验收。** 音乐库五分类在同页切换；新歌、榜单和推荐使用固定平台选择；歌单收起重复标题，搜索提供可展开热词与真实推荐精选。歌曲简单操作在按钮旁展开，复杂选择居中。发现页新增独立个人每日推荐，最多展示30首，按真实会话、来源和服务状态显示结果。
 
 新版还补齐共用搜索顶栏、真实歌曲封面网格、3D强调卡、并排均衡器，以及播放详情的行内音源信息和歌词调整。Android 系统键盘打开时输入框可见；来源菜单第一次系统返回只关闭菜单；两平台底栏“播放与音效”可从备份区直接切换并返回。
 
@@ -18,11 +16,11 @@ Windows 本轮保留429条动作与观察，覆盖五区、七设置、五库分
 
 独立每日推荐本次网易云显示30首并可刷新；QQ重试后仍提示服务不可用；酷狗当前登录信息不足。原推荐页的“今日私享”或“首页推荐”不等于独立日推成功。在线曲目播放仍受资源权限及音源服务影响，本次Madonna《Music》返回403／404和解析错误，未验证该曲成功播放或3D听感。Android ARM真机、所有 Tooltip、直接托盘点击及其余未验条件见[0.6.1验收记录](docs/IK-Music-0.6.1-原稿对齐验收.md)。历史候选和原始红门在该记录中保留。
 
-发行前下方下载仍指向已公开0.6.0；公开后更新为本批九附件。操作和兼容范围见[0.6.1使用与构建](docs/交付文档/ik%20061%20使用与构建.md)。
+源码已通过[PR #6](https://github.com/sun-dove/ik-music/pull/6)合入main，`ik-v0.6.1`标签精确指向产品构建提交。操作和兼容范围见[0.6.1使用与构建](docs/交付文档/ik%20061%20使用与构建.md)。
 
 <img src="assets/branding/dj-music/source/windows/yangyin-256.png" width="100" alt="IK Music 渐变音符图标">
 
-## 0.6.0 功能
+## 功能
 
 - **五个主区**：发现、搜索、音乐库、最近播放、设置；推荐、新歌、榜单以及专辑、歌手、歌单详情继续可达。
 - **七个设置分区**：播放与音效、外观、桌面歌词、音源、下载与缓存、账号、备份与恢复；常用选项行内调整，字体和背景先预览再应用。
@@ -47,19 +45,19 @@ Windows 本轮保留429条动作与观察，覆盖五区、七设置、五库分
 
 ## 安装
 
-以下是 **0.6.0 / build 11** 正式安装包，按系统和设备架构选择：
+以下是 **0.6.1 / build 12** 正式安装包，按系统和设备架构选择：
 
 | 安装包 | 适用设备 |
 | --- | --- |
-| [Android arm64-v8a](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-arm64-v8a.apk) | 大多数安卓手机，推荐，28.59MiB |
-| [Android armeabi-v7a](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-armeabi-v7a.apk) | 支持的旧款32位设备，26.64MiB |
-| [Android x86_64](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-x86_64.apk) | x86_64安卓模拟器或设备，30.10MiB |
-| [Windows x64 安装器](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-Setup-0.6.0-x64.exe) | Windows 10/11，可选择安装目录，16.59MiB |
-| [Windows x64 免安装 ZIP](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-windows-x64.zip) | 完整解压后运行yueyin_music.exe，20.19MiB |
+| [Android arm64-v8a](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/ik-0.6.1-arm64-v8a.apk) | 大多数安卓手机，推荐，28.77MiB |
+| [Android armeabi-v7a](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/ik-0.6.1-armeabi-v7a.apk) | 支持的旧款32位设备，26.93MiB |
+| [Android x86_64](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/ik-0.6.1-x86_64.apk) | x86_64安卓模拟器或设备，30.35MiB |
+| [Windows x64 安装器](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/ik-Setup-0.6.1-x64.exe) | Windows 10/11，可选择安装目录，16.66MiB |
+| [Windows x64 免安装 ZIP](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/ik-0.6.1-windows-x64.zip) | 完整解压后运行yueyin_music.exe，20.29MiB |
 
-文件校验值见发行页的[SHA256SUMS](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/SHA256SUMS)。Windows完整包包含EXE、DLL、data、图标与运行时许可；[最新版使用说明](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/IK-Music-0.6.0-guide.md)、[文件清单](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-0.6.0-windows-manifest.json)和[对应音频源码](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.0/ik-audio-sources.tar.gz)一并提供。Windows新安装默认目录为ik-music；跨目录迁移使用随包脚本，普通升级保持已有目录。iOS和Linux没有对应发行包。
+文件校验值见发行页的[SHA256SUMS](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/SHA256SUMS)。Windows完整包包含EXE、DLL、data、图标与运行时许可；[最新版使用说明](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/IK-Music-0.6.1-guide.md)、[文件清单](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/ik-0.6.1-windows-manifest.json)和[对应音频源码](https://github.com/sun-dove/ik-music/releases/download/ik-v0.6.1/ik-audio-sources.tar.gz)一并提供。Windows新安装默认目录为ik-music；跨目录迁移使用随包脚本，普通升级保持已有目录。iOS和Linux没有对应发行包。
 
-## 0.6.0 使用音源
+## 使用音源
 
 1. 打开“设置 → 音源”。首次进入应用后会在后台准备应用所带的固定目录，无需填写 URL；离线仍可进入应用，已保存音源保留。
 2. 查看完整 20 项目录的本机状态。获取失败可单项重试；历史不支持或使用范围受限的项目明确说明原因，不计为可用。
