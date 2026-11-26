@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/source_strings.dart';
+import '../../l10n/ik_source_workspace_strings.dart';
 import '../ik/ik_workspace_navigation.dart';
 import '../lx_source/lx_source.dart';
 import '../multi_source/source_checks.dart';
@@ -25,6 +26,13 @@ class SourceManagerPage extends StatefulWidget {
     this.onChecksChanged,
     this.runtimeId = 'lx3',
     this.modernPolicyMenu = false,
+    this.embedded = false,
+    this.refinedLayout = false,
+    this.catalogPanel,
+    this.onCheckUpdates,
+    this.onUpdateAll,
+    this.onUpdateEntry,
+    this.updateStatus,
   });
   final SourceCollection initial;
   final Future<LxSourceConfig> Function(String, CancelToken) onImport;
@@ -36,6 +44,13 @@ class SourceManagerPage extends StatefulWidget {
   final Future<void> Function(Map<String, SourceCheckRecord>)? onChecksChanged;
   final String runtimeId;
   final bool modernPolicyMenu;
+  final bool embedded, refinedLayout;
+  final Widget? catalogPanel;
+  final Future<void> Function(SourceCollection, CancelToken)? onCheckUpdates;
+  final Future<SourceCollection> Function(SourceCollection, CancelToken)?
+      onUpdateAll;
+  final Future<LxSourceConfig> Function(SourceEntry, CancelToken)? onUpdateEntry;
+  final String? Function(SourceEntry)? updateStatus;
   @override
   State<SourceManagerPage> createState() => _SourceManagerPageState();
 }
@@ -45,6 +60,7 @@ enum _SourceAction { prefer, inspect, update, downloads, up, down, remove }
 class _SourceManagerPageState extends State<SourceManagerPage> {
   late SourceCollection _value = widget.initial;
   late String _saved = jsonEncode(widget.initial.toJson());
+  late SourceCollection _savedValue = widget.initial;
   late final _checks = Map<String, SourceCheckRecord>.of(widget.initialChecks);
   final _search = TextEditingController();
   final _link = TextEditingController();
@@ -82,13 +98,14 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   @override
   void didUpdateWidget(covariant SourceManagerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.modernPolicyMenu != widget.modernPolicyMenu) {
+    if (oldWidget.modernPolicyMenu != widget.modernPolicyMenu ||
+        oldWidget.embedded != widget.embedded) {
       _bindWorkspaceNavigation();
     }
   }
 
   void _bindWorkspaceNavigation() {
-    final navigation = widget.modernPolicyMenu
+    final navigation = widget.modernPolicyMenu || widget.embedded
         ? IkWorkspaceNavigation.maybeOf(context)
         : null;
     if (identical(navigation, _workspaceNavigation)) return;
@@ -147,6 +164,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       if (!mounted) return;
       setState(() {
         _saved = jsonEncode(_value.toJson());
+        _savedValue = _value;
         _message = ExpandedStrings.saved;
       });
       saved = true;
@@ -159,7 +177,13 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
 
   Future<bool> _checkLeave() async {
     if (_policyMenu.isOpen) _policyMenu.close();
-    if (!mounted || _busy) return false;
+    if (!mounted) return false;
+    if (_busy) {
+      if (widget.embedded || widget.refinedLayout) {
+        setState(() => _message = IkSourceWorkspaceStrings.busyLeave);
+      }
+      return false;
+    }
     if (!_dirty) return true;
     final choice = await showDialog<String>(
       context: context,
@@ -183,10 +207,20 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       ),
     );
     if (!mounted || choice == null || choice == 'cancel') return false;
+    if (choice == 'discard' && widget.embedded) {
+      setState(() {
+        _value = _savedValue;
+        _message = null;
+      });
+    }
     return choice != 'save' || await _save();
   }
 
   Future<void> _return() async {
+    if (widget.embedded) {
+      await _returnFromEmbedded();
+      return;
+    }
     final route = widget.modernPolicyMenu ? ModalRoute.of(context) : null;
     if (widget.modernPolicyMenu && _policyMenu.isOpen) {
       _policyMenu.close();
@@ -236,6 +270,31 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     });
   }
 
+  Future<void> _returnFromEmbedded() async {
+    if (_policyMenu.isOpen) {
+      _policyMenu.close();
+      return;
+    }
+    if (_busy) {
+      _token?.cancel();
+      return;
+    }
+    final route = ModalRoute.of(context);
+    final navigator = Navigator.of(context);
+    if (!await _confirmLeave() || !mounted) return;
+    if (route?.isCurrent != true || !navigator.canPop()) return;
+    setState(() => _leaving = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      if (route?.isCurrent == true && navigator.canPop()) {
+        final popped = await navigator.maybePop();
+        if (!popped && mounted) setState(() => _leaving = false);
+      } else {
+        setState(() => _leaving = false);
+      }
+    });
+  }
+
   Future<void> _record(
     SourceEntry entry,
     String outcome, {
@@ -271,6 +330,31 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       (entry) => entry.config.origin == config.origin,
     );
     await _record(entry, 'initialized');
+  });
+
+  Future<void> _checkUpdates() => _run((token) async {
+    await widget.onCheckUpdates!(_value, token);
+  });
+
+  Future<void> _updateAll() => _run((token) async {
+    final value = await widget.onUpdateAll!(_value, token);
+    if (!mounted) return;
+    setState(() {
+      _value = value;
+      _message = token.isCancelled
+          ? IkSourceWorkspaceStrings.cancelledDraft
+          : IkSourceWorkspaceStrings.draftUpdated;
+    });
+  });
+
+  Future<void> _updateEntry(SourceEntry entry) => _run((token) async {
+    final config = await widget.onUpdateEntry!(entry, token);
+    if (!mounted || token.isCancelled) return;
+    setState(() {
+      _value = _value.replace(entry.id, config);
+      _message = IkSourceWorkspaceStrings.draftUpdated;
+    });
+    await _record(SourceEntry(entry.id, config), 'initialized');
   });
 
   Future<void> _inspect(List<SourceEntry> entries) => _run((token) async {
@@ -340,7 +424,11 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       case _SourceAction.inspect:
         await _inspect([entry]);
       case _SourceAction.update:
-        await _import(entry.config.origin.toString());
+        if (widget.onUpdateEntry != null) {
+          await _updateEntry(entry);
+        } else {
+          await _import(entry.config.origin.toString());
+        }
       case _SourceAction.prefer:
         setState(() => _value = _value.prefer(entry.id));
       case _SourceAction.downloads:
@@ -612,6 +700,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.refinedLayout || widget.embedded) return _refinedPage();
     final entries = _visible;
     return PopScope(
       canPop:
@@ -910,6 +999,519 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       ),
     );
   }
+
+  Widget _refinedPage() {
+    final entries = _visible;
+    final body = LayoutBuilder(
+      builder: (context, size) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: size.maxHeight * .48),
+            child: SingleChildScrollView(child: _refinedToolbar()),
+          ),
+          const SizedBox(height: 12),
+          if (_busy) const LinearProgressIndicator(minHeight: 2),
+          if (_message != null)
+            ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: size.maxHeight * .18),
+              child: SingleChildScrollView(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8, bottom: 4),
+                  child: Text(
+                    _message!,
+                    key: const ValueKey('manager-message'),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
+            ),
+        Expanded(
+          child: CustomScrollView(
+            key: const ValueKey('manager-scroll'),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (widget.catalogPanel != null) ...[
+                      widget.catalogPanel!,
+                      const SizedBox(height: 16),
+                    ],
+                    if (widget.warning != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          widget.warning!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    _refinedCard(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            IkSourceWorkspaceStrings.playbackPolicy,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          _modernPolicy(),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _refinedFilters(entries),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              if (entries.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _value.entries.isEmpty
+                              ? IkSourceWorkspaceStrings.noSources
+                              : ExpandedStrings.noMatches,
+                        ),
+                        if (_value.entries.isEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            IkSourceWorkspaceStrings.noSourcesHint,
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                )
+              else
+                SliverReorderableList(
+                  itemCount: entries.length,
+                  onReorderItem: (from, to) {
+                    if (_busy || _filtered) return;
+                    setState(
+                      () => _value = _value.move(entries[from].id, to - from),
+                    );
+                  },
+                  itemBuilder: (context, index) =>
+                      _refinedRow(entries[index], index),
+                ),
+              const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            ],
+          ),
+        ),
+        ],
+      ),
+    );
+    return PopScope(
+      canPop: !_policyMenu.isOpen && (_leaving || (!_dirty && !_busy)),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _return();
+      },
+      child: widget.embedded
+          ? body
+          : Scaffold(
+              appBar: AppBar(
+                title: const Text(ExpandedStrings.managerTitle),
+                leading: BackButton(onPressed: _return),
+              ),
+              body: SafeArea(
+                child: Padding(padding: const EdgeInsets.all(20), child: body),
+              ),
+            ),
+    );
+  }
+
+  Widget _refinedToolbar() {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    IkSourceWorkspaceStrings.title,
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    SourceStrings.sourceCount(
+                      _value.entries.length,
+                      _value.enabled.length,
+                    ),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              key: const ValueKey('manager-save'),
+              onPressed: _busy ? null : _save,
+              icon: const Icon(Icons.check_rounded, size: 18),
+              label: const Text(ExpandedStrings.saveSettings),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (widget.onCheckUpdates != null)
+              OutlinedButton.icon(
+                key: const ValueKey('manager-check-updates'),
+                onPressed: _busy ? null : _checkUpdates,
+                icon: const Icon(Icons.refresh_rounded, size: 17),
+                label: const Text(IkSourceWorkspaceStrings.checkUpdates),
+              ),
+            if (widget.onUpdateAll != null)
+              OutlinedButton.icon(
+                key: const ValueKey('manager-update-all'),
+                onPressed: _busy ? null : _updateAll,
+                icon: const Icon(Icons.system_update_alt_rounded, size: 17),
+                label: const Text(IkSourceWorkspaceStrings.updateAll),
+              ),
+            TextButton.icon(
+              onPressed: _busy ? null : widget.onHttp,
+              icon: const Icon(Icons.settings_ethernet_rounded, size: 17),
+              label: const Text(ExpandedStrings.httpSettings),
+            ),
+            if (_busy)
+              TextButton.icon(
+                onPressed: () => _token?.cancel(),
+                icon: const Icon(Icons.close_rounded, size: 17),
+                label: const Text(ExpandedStrings.cancelOperation),
+              ),
+            Text(
+              _dirty ? ExpandedStrings.dirty : ExpandedStrings.settingsSaved,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: _dirty
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                key: const ValueKey('manager-import-link'),
+                controller: _link,
+                enabled: !_busy,
+                keyboardType: TextInputType.url,
+                onSubmitted: _busy ? null : (_) => _import(),
+                decoration: InputDecoration(
+                  hintText: IkSourceWorkspaceStrings.scriptLink,
+                  prefixIcon: const Icon(Icons.link_rounded, size: 19),
+                  isDense: true,
+                  filled: true,
+                  fillColor: theme.colorScheme.surfaceContainerLow,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            OutlinedButton(
+              key: const ValueKey('manager-import'),
+              onPressed: _busy ? null : () => _import(),
+              child: const Text(IkSourceWorkspaceStrings.importLink),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _refinedCard(Widget child) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: Theme.of(context).colorScheme.surface,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+    ),
+    child: Padding(padding: const EdgeInsets.all(16), child: child),
+  );
+
+  Widget _refinedFilters(List<SourceEntry> entries) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          key: const ValueKey('manager-search'),
+          controller: _search,
+          enabled: !_busy,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            hintText: ExpandedStrings.searchName,
+            isDense: true,
+            prefixIcon: const Icon(Icons.search_rounded, size: 20),
+            suffixIcon: _search.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: ExpandedStrings.clearSearch,
+                    onPressed: _busy
+                        ? null
+                        : () => setState(() => _search.clear()),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            for (final entry in _platformNames.entries)
+              TextButton(
+                key: ValueKey('manager-platform-${entry.key}'),
+                onPressed: _busy
+                    ? null
+                    : () => setState(() => _platform = entry.key),
+                style: TextButton.styleFrom(
+                  backgroundColor: _platform == entry.key
+                      ? theme.colorScheme.primary.withValues(alpha: .09)
+                      : Colors.transparent,
+                  foregroundColor: _platform == entry.key
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: Text(entry.value),
+              ),
+            FilterChip(
+              label: const Text(ExpandedStrings.enabled),
+              selected: _enabledOnly,
+              elevation: 0,
+              pressElevation: 0,
+              onSelected: _busy
+                  ? null
+                  : (value) => setState(() => _enabledOnly = value),
+            ),
+          ],
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                _filtered
+                    ? ExpandedStrings.filterCount(entries.length)
+                    : ExpandedStrings.orderHint,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              key: const ValueKey('manager-inspect-all'),
+              onPressed: _busy || entries.isEmpty
+                  ? null
+                  : () => _inspect(entries),
+              child: const Text(ExpandedStrings.inspectList),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _refinedRow(SourceEntry entry, int index) {
+    final theme = Theme.of(context);
+    final updateStatus = widget.updateStatus?.call(entry);
+    final preferred = _value.preferred?.id == entry.id;
+    return Padding(
+      key: ValueKey(entry.id),
+      padding: const EdgeInsets.only(bottom: 8),
+      child: _refinedCard(
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text(entry.config.name, style: theme.textTheme.titleSmall),
+                      if (preferred)
+                        Text(
+                          IkSourceWorkspaceStrings.preferred,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    '${entry.config.version} · ${entry.config.sources.keys.map((key) => _platformNames[key] ?? key).join(' / ')}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    updateStatus ?? _status(entry),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    entry.config.origin.host,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Switch.adaptive(
+                  key: ValueKey('manager-enabled-${entry.id}'),
+                  value: entry.config.enabled,
+                  onChanged: _busy
+                      ? null
+                      : (value) => setState(
+                          () => _value = _value.replace(
+                            entry.id,
+                            entry.config.copyWith(enabled: value),
+                          ),
+                        ),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!_busy && !_filtered)
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(Icons.drag_indicator_rounded, size: 19),
+                        ),
+                      ),
+                    _refinedMenu(entry, index),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _refinedMenu(SourceEntry entry, int index) => MenuAnchor(
+    style: MenuStyle(
+      elevation: const WidgetStatePropertyAll(8),
+      padding: const WidgetStatePropertyAll(EdgeInsets.all(5)),
+      shape: WidgetStatePropertyAll(
+        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    ),
+    menuChildren: [
+      _sourceMenuAction(
+        entry,
+        _SourceAction.prefer,
+        ExpandedStrings.prefer,
+        Icons.star_outline_rounded,
+        enabled: entry.config.enabled,
+      ),
+      _sourceMenuAction(
+        entry,
+        _SourceAction.inspect,
+        ExpandedStrings.inspect,
+        Icons.fact_check_outlined,
+      ),
+      if (widget.onUpdateEntry != null)
+        _sourceMenuAction(
+          entry,
+          _SourceAction.update,
+          IkSourceWorkspaceStrings.update,
+          Icons.system_update_alt_rounded,
+        ),
+      _sourceMenuAction(
+        entry,
+        _SourceAction.downloads,
+        ExpandedStrings.allowDownloads,
+        Icons.download_outlined,
+        selected: entry.config.allowForDownloads,
+      ),
+      const Divider(height: 10),
+      _sourceMenuAction(
+        entry,
+        _SourceAction.up,
+        ExpandedStrings.moveUp,
+        Icons.arrow_upward_rounded,
+        enabled: !_filtered && index > 0,
+      ),
+      _sourceMenuAction(
+        entry,
+        _SourceAction.down,
+        ExpandedStrings.moveDown,
+        Icons.arrow_downward_rounded,
+        enabled: !_filtered && index < _value.entries.length - 1,
+      ),
+      const Divider(height: 10),
+      _sourceMenuAction(
+        entry,
+        _SourceAction.remove,
+        ExpandedStrings.deleteSource,
+        Icons.delete_outline_rounded,
+      ),
+    ],
+    builder: (context, controller, _) => IconButton(
+      tooltip: ExpandedStrings.more,
+      onPressed: _busy
+          ? null
+          : () => controller.isOpen ? controller.close() : controller.open(),
+      icon: const Icon(Icons.more_horiz_rounded, size: 20),
+    ),
+  );
+
+  Widget _sourceMenuAction(
+    SourceEntry entry,
+    _SourceAction action,
+    String label,
+    IconData icon, {
+    bool enabled = true,
+    bool selected = false,
+  }) => MenuItemButton(
+    onPressed: _busy || !enabled ? null : () => _action(entry, action),
+    leadingIcon: Icon(icon, size: 18),
+    trailingIcon: selected ? const Icon(Icons.check_rounded, size: 17) : null,
+    child: Text(label),
+  );
 
   Widget _row(SourceEntry entry, int index) => Card(
     key: ValueKey(entry.id),

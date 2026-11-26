@@ -21,20 +21,34 @@ import '../../../../models/playlist.dart';
 import '../../../../models/song.dart';
 import '../../../../platform/base/platform_registry.dart';
 import '../../../../video_app/ik/ik_controls.dart';
+import '../../../../video_app/ui/playlist_artwork.dart';
 import '../providers/my_playlists_provider.dart';
 import '../providers/platform_playlists_provider.dart';
 
 class PlatformPlaylistsPage extends ConsumerStatefulWidget {
-  const PlatformPlaylistsPage({super.key, this.jsonFormatLabel})
+  const PlatformPlaylistsPage({
+    super.key,
+    this.jsonFormatLabel,
+    this.playlistArtwork = false,
+  })
     : _embedded = false,
       _compactSources = false;
-  const PlatformPlaylistsPage.embedded({super.key, this.jsonFormatLabel})
+  const PlatformPlaylistsPage.embedded({
+    super.key,
+    this.jsonFormatLabel,
+    this.playlistArtwork = false,
+  })
     : _embedded = true,
       _compactSources = false;
-  const PlatformPlaylistsPage.compactEmbedded({super.key, this.jsonFormatLabel})
+  const PlatformPlaylistsPage.compactEmbedded({
+    super.key,
+    this.jsonFormatLabel,
+    this.playlistArtwork = false,
+  })
     : _embedded = true,
       _compactSources = true;
   final String? jsonFormatLabel;
+  final bool playlistArtwork;
   final bool _embedded;
   final bool _compactSources;
 
@@ -592,6 +606,7 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
         if (platform == PlatformType.local) {
           return _MyPlaylistsTab(
             state: myState,
+            playlistArtwork: widget.playlistArtwork,
             onRetry: () => ref.read(myPlaylistsProvider.notifier).load(),
             playlistRoute: _playlistRoute,
             onOpenPlaylist: _openPlaylist,
@@ -641,7 +656,14 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
                   itemBuilder: (context, index) {
                     final playlist = playlists[index];
                     return ListTile(
-                      leading: _PlaylistCover(url: playlist.coverUrl),
+                      leading: widget.playlistArtwork
+                          ? PlaylistArtwork(
+                              key: ValueKey('playlist-artwork-${playlist.platform.name}-${playlist.id}'),
+                              playlist: playlist,
+                              size: 48,
+                              allowFirstSongRequest: true,
+                            )
+                          : _PlaylistCover(url: playlist.coverUrl),
                       title: Text(
                         playlist.name,
                         maxLines: 1,
@@ -803,6 +825,7 @@ class _PlaylistCover extends StatelessWidget {
 
 class _MyPlaylistsTab extends StatelessWidget {
   final MyPlaylistsState state;
+  final bool playlistArtwork;
   final VoidCallback onRetry;
   final String Function(Playlist playlist) playlistRoute;
   final void Function(Playlist playlist) onOpenPlaylist;
@@ -811,6 +834,7 @@ class _MyPlaylistsTab extends StatelessWidget {
 
   const _MyPlaylistsTab({
     required this.state,
+    this.playlistArtwork = false,
     required this.onRetry,
     required this.playlistRoute,
     required this.onOpenPlaylist,
@@ -856,7 +880,14 @@ class _MyPlaylistsTab extends StatelessWidget {
               itemBuilder: (context, index) {
                 final playlist = state.playlists[index];
                 return ListTile(
-                  leading: const _PlaylistCover(),
+                  leading: playlistArtwork
+                      ? PlaylistArtwork(
+                          key: ValueKey('playlist-artwork-local-${playlist.id}'),
+                          playlist: playlist,
+                          size: 48,
+                          allowFirstSongRequest: true,
+                        )
+                      : const _PlaylistCover(),
                   title: Text(
                     playlist.name,
                     maxLines: 1,

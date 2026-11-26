@@ -29,6 +29,7 @@ class IkManagedRecord {
     this.rollbackHold = false,
     this.pendingRollback = false,
     this.failureCode,
+    this.followsUpstream = false,
   });
   final String? entryId,
       contentSha256,
@@ -41,6 +42,7 @@ class IkManagedRecord {
       previousRuntimeId,
       failureCode;
   final bool disabled, removed, downloadChoice, rollbackHold, pendingRollback;
+  final bool followsUpstream;
   final LxSourceConfig? previous, pending;
   IkManagedRecord copyWith({
     String? entryId,
@@ -63,6 +65,7 @@ class IkManagedRecord {
     bool clearPending = false,
     bool clearFailure = false,
     bool clearEntryId = false,
+    bool? followsUpstream,
   }) => IkManagedRecord(
     entryId: clearEntryId ? null : entryId ?? this.entryId,
     contentSha256: contentSha256 ?? this.contentSha256,
@@ -87,6 +90,7 @@ class IkManagedRecord {
         ? false
         : pendingRollback ?? this.pendingRollback,
     failureCode: clearFailure ? null : failureCode ?? this.failureCode,
+    followsUpstream: followsUpstream ?? this.followsUpstream,
   );
   Map<String, dynamic> toJson() => {
     'entryId': entryId,
@@ -106,6 +110,7 @@ class IkManagedRecord {
     'rollbackHold': rollbackHold,
     'pendingRollback': pendingRollback,
     'failureCode': failureCode,
+    if (followsUpstream) 'followsUpstream': true,
   };
   factory IkManagedRecord.fromJson(Map<String, dynamic> json) =>
       IkManagedRecord(
@@ -134,6 +139,7 @@ class IkManagedRecord {
         rollbackHold: json['rollbackHold'] == true,
         pendingRollback: json['pendingRollback'] == true,
         failureCode: json['failureCode'] as String?,
+        followsUpstream: json['followsUpstream'] == true,
       );
 }
 
@@ -279,6 +285,69 @@ class IkManagedSourceSettings extends WindowsSourceSettings {
     await persist(merged, updated, notifyPlayback: true, manual: true);
     userPolicyTouched = true;
     if (_editBaseline != null) _editBaseline = merged;
+  });
+
+  /// 新版管理提交：沿用编辑合并与单次持久化，受管更新保留旧版本及身份。
+  Future<void> saveUpdatedDraft(
+    SourceCollection draft, {
+    required Map<String, ({String scriptHash, String contentHash})> verified,
+    required String runtimeId,
+    SourceCollection? expectedBase,
+    bool automatic = false,
+  }) => serialize(() async {
+    if (writesBlocked) {
+      throw const LxSourceException('storage', IkSourceCatalogStrings.saveFailed);
+    }
+    if (expectedBase != null && (editing || !identical(value, expectedBase))) {
+      throw const LxSourceException('busy', '音源正在编辑，自动更新已暂缓');
+    }
+    final next = _mergeDraft(draft);
+    final records = {...managed.records};
+    for (final key in records.keys.toList()) {
+      final record = records[key]!;
+      if (record.entryId == null) continue;
+      final entry = next.entries.where((e) => e.id == record.entryId).firstOrNull;
+      if (entry == null) {
+        records[key] = record.copyWith(removed: true, clearPending: true);
+        continue;
+      }
+      var updated = record.copyWith(
+        disabled: !entry.config.enabled,
+        removed: false,
+        downloadChoice: entry.config.allowForDownloads,
+      );
+      final accepted = verified[entry.id];
+      if (accepted != null && accepted.scriptHash == entry.config.sha256) {
+        final old = value.entries.where((e) => e.id == entry.id).firstOrNull;
+        updated = updated.copyWith(
+          followsUpstream: true,
+          rollbackHold: false,
+          contentSha256: accepted.contentHash,
+          scriptSha256: accepted.scriptHash,
+          runtimeId: runtimeId,
+          checkedAt: DateTime.now().toUtc().toIso8601String(),
+          previous: old != null && old.config.sha256 != accepted.scriptHash
+              ? old.config : null,
+          previousContentSha256:
+              old != null && old.config.sha256 != accepted.scriptHash
+                  ? record.contentSha256 : null,
+          previousRuntimeId:
+              old != null && old.config.sha256 != accepted.scriptHash
+                  ? record.runtimeId : null,
+          clearPending: true,
+          clearFailure: true,
+        );
+      }
+      records[key] = updated;
+    }
+    await persist(
+      next,
+      managed.copyWith(records: records),
+      notifyPlayback: true,
+      manual: !automatic,
+    );
+    if (!automatic) userPolicyTouched = true;
+    if (_editBaseline != null) _editBaseline = next;
   });
 
   /// 调用者必须持有 serialize；集合、镜像、墓碑在一次 Hive putAll 中提交。

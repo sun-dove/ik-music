@@ -65,6 +65,7 @@ import 'video_app/built_in/catalog_player.dart';
 import 'video_app/built_in/catalog_sandbox.dart';
 import 'video_app/built_in/fixed_importer.dart';
 import 'video_app/built_in/managed_settings.dart';
+import 'video_app/built_in/source_updater.dart';
 import 'video_app/multi_source/source_candidates_v3.dart';
 import 'video_app/playback/video_platforms.dart';
 import 'video_app/playback/video_stream_state.dart';
@@ -131,6 +132,13 @@ Future<void> main() async {
       return state.currentSong != null || state.isTransitioning;
     },
   );
+  final sourceUpdater = PlatformUtils.isWindows
+      ? IkSourceUpdater(
+          coordinator: catalogCoordinator,
+          engine: sourceEngine,
+          isResolving: () => container.read(playerProvider).isTransitioning,
+        )
+      : null;
   final windowsAppearance = windowsStorage == null
       ? null
       : WindowsAppearance(
@@ -141,6 +149,7 @@ Future<void> main() async {
           directory: Directory('${windowsStorage.path}/appearance'),
           window: WindowsWindowController(
             beforeExit: () async {
+              sourceUpdater?.dispose();
               catalogCoordinator.dispose();
               await windowsSandbox!.shutdown();
             },
@@ -191,6 +200,7 @@ Future<void> main() async {
     overrides: [
       ikCompactLyricsEnabledProvider.overrideWithValue(PlatformUtils.isWindows),
       ikSourceCatalogProvider.overrideWithValue(catalogCoordinator),
+      ikSourceUpdaterProvider.overrideWithValue(sourceUpdater),
       floatingLyricsProvider.overrideWith(
         (ref) => IkStrictFloatingLyricsNotifier(),
       ),
@@ -281,6 +291,8 @@ Future<void> main() async {
       ),
       playerProvider.overrideWith(
         (ref) => IkCatalogPlayerNotifier(
+          preservePlaybackOnSettingsChange: PlatformUtils.isWindows,
+          quickSourceRecovery: PlatformUtils.isWindows,
           userGain: ref.read(ikUserGainProvider.notifier),
           catalogCoordinator: catalogCoordinator,
           settings: sourceSettings,
@@ -396,7 +408,7 @@ Future<void> main() async {
     ),
   );
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(catalogCoordinator.prepareOnce());
+    unawaited(catalogCoordinator.prepareOnce().whenComplete(() => sourceUpdater?.start()));
   });
 }
 

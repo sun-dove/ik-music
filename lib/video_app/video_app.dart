@@ -39,6 +39,8 @@ import 'ik/ik_floating_lyrics.dart';
 import 'ik/ik_player_lyrics_style.dart';
 import '../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import 'built_in/catalog_panel.dart';
+import 'built_in/source_updater.dart';
+import 'built_in/source_update_panel.dart';
 
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/providers/auth_provider.dart';
@@ -92,12 +94,14 @@ IkPlaybackBar _workspacePlaybackBar({
   required VoidCallback onAudio,
   bool contextualErrors = false,
   bool inlineLyrics = false,
+  bool balancedLayout = false,
 }) => alignToDesign
     ? IkPlaybackBar.aligned(
         onOpen: onOpen,
         onAudio: onAudio,
         contextualErrors: contextualErrors,
         inlineLyrics: inlineLyrics,
+        balancedLayout: balancedLayout,
       )
     : IkPlaybackBar(onOpen: onOpen, onAudio: onAudio);
 
@@ -205,6 +209,8 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
                             alignToDesign: widget.alignToDesign,
                             contextualErrors: _newPages,
                             inlineLyrics: widget.quickExperienceRefinements &&
+                                PlatformUtils.isWindows,
+                            balancedLayout: widget.quickExperienceRefinements &&
                                 PlatformUtils.isWindows,
                             onOpen: () => context.push('/player'),
                             onAudio: () => context.push('/settings/audio'),
@@ -1077,7 +1083,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               ? _workspacePlaybackBar(
                   alignToDesign: widget.alignToDesign,
                   contextualErrors: widget.workspacePageRefinements,
-                  inlineLyrics: widget.quickExperienceRefinements &&
+                  inlineLyrics: false,
+                  balancedLayout: widget.quickExperienceRefinements &&
                       PlatformUtils.isWindows,
                   onOpen: null,
                   onAudio: () => context.push('/settings/audio'),
@@ -1663,6 +1670,14 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   Widget _workspaceSettings([String? section]) => IkSettingsWorkspace(
     alignToDesign: widget.alignToDesign,
+    fixedNavigation: widget.quickExperienceRefinements && PlatformUtils.isWindows,
+    active: section != null ||
+        (_index == 4 && widget.routePath == '/' && _imperativePages == 0),
+    sourceBuilder: widget.quickExperienceRefinements &&
+            PlatformUtils.isWindows && widget.sourceSettings != null &&
+            widget.sourceEngine != null
+        ? (_) => _embeddedSourceManager()
+        : null,
     refinedLyrics: widget.quickExperienceRefinements,
     preferences: widget.preferences,
     unified: _unifiedPreferences,
@@ -2568,6 +2583,11 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   }
 
   Future<void> _customSource() async {
+    if (widget.quickExperienceRefinements && PlatformUtils.isWindows &&
+        widget.workspacePageRefinements) {
+      await _selectWorkspace(4, section: 'sources');
+      return;
+    }
     if (widget.sourceSettings != null && widget.sourceEngine != null) {
       await _sourceCollection();
       return;
@@ -2685,6 +2705,66 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     } finally {
       dio.close(force: true);
     }
+  }
+
+  Widget _embeddedSourceManager() {
+    final updater = ref.read(ikSourceUpdaterProvider);
+    final settings = widget.sourceSettings!;
+    final engine = widget.sourceEngine!;
+    Widget manager() => SourceManagerPage(
+      key: const ValueKey('ik-embedded-source-manager'),
+      embedded: true,
+      refinedLayout: true,
+      modernPolicyMenu: true,
+      initial: settings.value,
+      warning: settings.loadError,
+      runtimeId: '${Theme.of(context).platform.name}-lx3',
+      initialChecks: SourceCheckStore(widget.preferences.box).load(),
+      onChecksChanged: SourceCheckStore(widget.preferences.box).save,
+      catalogPanel: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (updater != null) IkSourceUpdatePanel(updater: updater),
+          const IkSourceCatalogPanel(refinedLayout: true, showCheckAction: false),
+        ],
+      ),
+      onCheckUpdates: updater?.checkDraftUpdates,
+      onUpdateAll: updater?.updateAll,
+      onUpdateEntry: updater?.updateEntry,
+      updateStatus: updater?.statusFor,
+      onImport: (link, token) async {
+        final dio = createLxDio();
+        try {
+          return await LxSourceImporterV3(dio: dio, engine: engine)
+              .importLink(link, cancelToken: token);
+        } finally {
+          dio.close(force: true);
+        }
+      },
+      onInspect: (config, token) async {
+        await engine.inspect(config.script, cancelToken: token);
+      },
+      onSave: (value) async {
+        if (updater != null) {
+          await updater.saveDraft(value);
+        } else {
+          await settings.save(value);
+        }
+        widget.onCustomSourceChanged?.call();
+        if (mounted) setState(() {});
+      },
+      onHttp: () async {
+        for (final check in List.of(_leaveChecks.values).reversed) {
+          if (!await check() || !mounted) return;
+        }
+        if (mounted) await _httpCustomSource();
+      },
+    );
+    return IkSourceEditingScope(
+      child: updater == null
+          ? manager()
+          : AnimatedBuilder(animation: updater, builder: (_, _) => manager()),
+    );
   }
 
   Future<void> _httpCustomSource() async {
@@ -2956,6 +3036,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           ),
         if (widget.workspace)
           IkLibraryWorkspace(
+            playlistArtwork: widget.quickExperienceRefinements && PlatformUtils.isWindows,
             compactSyncStatus: widget.quickExperienceRefinements,
             alignToDesign: widget.alignToDesign,
             stableCategoryTabs: _refinePageInteractions,
@@ -3020,6 +3101,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (widget.workspace)
           IkRecentPage(
             alignToDesign: widget.alignToDesign,
+            contextActions: widget.quickExperienceRefinements &&
+                PlatformUtils.isWindows,
             onNavigate: (path) => context.push(path),
             onMore: _ikSongMore,
             onMoreWithContext: widget.alignToDesign
@@ -3064,6 +3147,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                 alignToDesign: widget.alignToDesign,
                 contextualErrors: widget.workspacePageRefinements,
                 inlineLyrics: widget.quickExperienceRefinements &&
+                    PlatformUtils.isWindows,
+                balancedLayout: widget.quickExperienceRefinements &&
                     PlatformUtils.isWindows,
                 onOpen: _openPlayer,
                 onAudio: widget.workspacePageRefinements

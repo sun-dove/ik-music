@@ -150,6 +150,46 @@ Future<SongAction?> _showContextualSongMenu(
   required bool isLiked,
   required bool isDownloaded,
   required bool isLocal,
+}) => _showContextualSongPopup<SongAction>(
+  context,
+  song: song,
+  isLiked: isLiked,
+  isDownloaded: isDownloaded,
+  isLocal: isLocal,
+  actionValue: (action) => action,
+);
+
+/// 桌面新增入口：沿原歌曲选项，在指针或按钮处显示菜单。
+Future<Object?> showSongActionsPopup(
+  BuildContext context, {
+  required Song song,
+  bool isLiked = false,
+  bool isDownloaded = false,
+  bool isLocal = false,
+  Offset? position,
+  List<PopupMenuEntry<Object>> extraEntries = const [],
+}) => _showContextualSongPopup<Object>(
+  context,
+  song: song,
+  isLiked: isLiked,
+  isDownloaded: isDownloaded,
+  isLocal: isLocal,
+  actionValue: (action) => action,
+  position: position,
+  modern: true,
+  extraEntries: extraEntries,
+);
+
+Future<T?> _showContextualSongPopup<T>(
+  BuildContext context, {
+  required Song song,
+  required bool isLiked,
+  required bool isDownloaded,
+  required bool isLocal,
+  required T Function(SongAction) actionValue,
+  Offset? position,
+  bool modern = false,
+  List<PopupMenuEntry<T>> extraEntries = const [],
 }) {
   final theme = Theme.of(context);
   final l = context.l10n;
@@ -161,13 +201,13 @@ Future<SongAction?> _showContextualSongMenu(
           ).overlay!.context.findRenderObject()!
           as RenderBox;
 
-  PopupMenuItem<SongAction> item(
+  PopupMenuItem<T> item(
     SongAction action,
     IconData icon,
     String label, {
     bool enabled = true,
-  }) => PopupMenuItem<SongAction>(
-    value: action,
+  }) => PopupMenuItem<T>(
+    value: actionValue(action),
     enabled: enabled,
     child: Row(
       children: [
@@ -190,16 +230,32 @@ Future<SongAction?> _showContextualSongMenu(
     ),
   );
 
-  return showMenu<SongAction>(
+  return showMenu<T>(
     context: context,
     useRootNavigator: true,
+    elevation: modern ? 8 : null,
+    color: modern ? theme.colorScheme.surface : null,
+    surfaceTintColor: modern ? Colors.transparent : null,
+    shape: modern
+        ? RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.colorScheme.outlineVariant),
+          )
+        : null,
     constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
     positionBuilder: (_, _) {
       final renderObject = anchorContext.mounted
           ? anchorContext.findRenderObject()
           : null;
       final Rect anchor;
-      if (renderObject is RenderBox &&
+      if (position != null) {
+        anchor = Rect.fromLTWH(
+          overlay.globalToLocal(position).dx,
+          overlay.globalToLocal(position).dy,
+          0,
+          0,
+        );
+      } else if (renderObject is RenderBox &&
           renderObject.hasSize &&
           renderObject.attached) {
         final topLeft = renderObject.localToGlobal(
@@ -226,7 +282,7 @@ Future<SongAction?> _showContextualSongMenu(
       return RelativeRect.fromRect(anchor, Offset.zero & overlay.size);
     },
     items: [
-      PopupMenuItem<SongAction>(
+      PopupMenuItem<T>(
         enabled: false,
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -271,6 +327,10 @@ Future<SongAction?> _showContextualSongMenu(
         ),
       item(SongAction.copyLink, Icons.link, l.commonCopyLink),
       if (!isLocal) item(SongAction.share, Icons.share_outlined, l.share),
+      if (extraEntries.isNotEmpty) ...[
+        const PopupMenuDivider(),
+        ...extraEntries,
+      ],
     ],
   );
 }

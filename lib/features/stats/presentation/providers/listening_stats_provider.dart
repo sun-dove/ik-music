@@ -50,7 +50,7 @@ final listeningStatsTrackerProvider = Provider<ListeningStatsTracker>((ref) {
   // time.
   tracker.onListenedDuration = (songId, platform, duration) async {
     try {
-      await database.historyDao.backfillListenedDuration(
+      await database.historyDao.backfillRecentListenedDuration(
         songId,
         platform,
         duration,
@@ -196,7 +196,7 @@ class ListeningStatsTracker {
   /// Feeds the elapsed time back into the history row as well, so the history
   /// page stops showing `0:00` for every entry.
   ///
-  /// Set by the composition root to [HistoryDao.backfillListenedDuration]; left
+  /// Set by the composition root to [HistoryDao.backfillRecentListenedDuration]; left
   /// null in unit tests.
   Future<void> Function(String songId, String platform, Duration duration)?
   onListenedDuration;

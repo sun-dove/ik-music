@@ -15,6 +15,8 @@ class IkCatalogPlayerNotifier extends ExpandedSourcePlayerNotifier {
     super.offlineFilePathResolver,
     super.isOfflineModeEnabled,
     super.userGain,
+    super.preservePlaybackOnSettingsChange,
+    super.quickSourceRecovery,
   });
   final IkSourceCatalogCoordinator catalogCoordinator;
   int _catalogRequest = 0;

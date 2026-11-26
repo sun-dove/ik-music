@@ -1,0 +1,976 @@
+{
+  "recordedAt": "2026-11-26T05:17:31.942Z",
+  "scope": "仅匿名公开目录与图片；无Cookie、token、个人接口或账号存储读取",
+  "directory": {
+    "url": "https://music.163.com/weapi/playlist/list",
+    "status": 200,
+    "contentType": "text/plain;charset=UTF-8",
+    "code": 200,
+    "count": 24,
+    "total": 680,
+    "more": true,
+    "parameters": {
+      "cat": "全部",
+      "order": "hot",
+      "limit": 24,
+      "offset": 0,
+      "total": true,
+      "csrf_token": ""
+    }
+  },
+  "playlists": [
+    {
+      "id": "18428485896",
+      "name": "扩次元日语潮流神曲 点开就停不下来",
+      "trackCount": 68,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+        "coverImgId": 109951174111254290,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174111254293"
+      }
+    },
+    {
+      "id": "18359211192",
+      "name": "欧美emo独享｜破碎感深夜伤感旋律",
+      "trackCount": 88,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/XtBk-KKRHFBHI87HZE9ljQ==/109951173904350931.jpg",
+        "coverImgId": 109951173904350930,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173904350931"
+      }
+    },
+    {
+      "id": "14475742002",
+      "name": " 「情绪Type Beat｜说唱伴奏·暗黑美学」",
+      "trackCount": 66,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/H7n-Lt3BxoPSo3h27oOeVQ==/109951173224692355.jpg",
+        "coverImgId": 109951173224692350,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173224692355"
+      }
+    },
+    {
+      "id": "18374591158",
+      "name": "【中式美学】大梦一场，醒来归零",
+      "trackCount": 30,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/A6a5ZaeBqGRAcgxa62Ltrw==/109951173929361518.jpg",
+        "coverImgId": 109951173929361520,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173929361518"
+      }
+    },
+    {
+      "id": "18480969427",
+      "name": "秋日逃离 | 藏在街头的 Lo-fi 咖啡馆",
+      "trackCount": 24,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/GAfMpmsPAdZq-53WS6GqpA==/109951174100331187.jpg",
+        "coverImgId": 109951174100331180,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174100331187"
+      }
+    },
+    {
+      "id": "18384003099",
+      "name": "午后纯音｜风吹树响是生命的歌",
+      "trackCount": 99,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/OeS9k1YTY7U56AxgPPBJSQ==/109951173944588617.jpg",
+        "coverImgId": 109951173944588620,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173944588617"
+      }
+    },
+    {
+      "id": "18559002730",
+      "name": "小狗妹你到底还藏了多少好歌！许飞生日快乐",
+      "trackCount": 56,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/EP_x99MPhcsM3X0ywzGTDA==/109951174264417810.jpg",
+        "coverImgId": 109951174264417810,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174264417810"
+      }
+    },
+    {
+      "id": "26467411",
+      "name": "那些你熟悉却又不知道名字的轻音乐",
+      "trackCount": 44,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/8fQ9jzTJnMweLNm7VoyPSw==/6623458045881301.jpg",
+        "coverImgId": 6623458045881301,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null
+      }
+    },
+    {
+      "id": "18516805934",
+      "name": "无尽夏｜一场明亮而恍惚的幻梦",
+      "trackCount": 57,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/9QYB1fbKtWA9WwZWNS8Qow==/109951174157605901.jpg",
+        "coverImgId": 109951174157605900,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174157605901"
+      }
+    },
+    {
+      "id": "17877900086",
+      "name": "马思唯乐透人生演唱会成都站歌单（顺序版）",
+      "trackCount": 46,
+      "imageFields": {
+        "coverImgUrl": "http://p2.music.126.net/t8csfPWVP2WX8Gl-TksBiQ==/109951174299616731.jpg",
+        "coverImgId": 109951174299616740,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174299616731"
+      }
+    },
+    {
+      "id": "18505644975",
+      "name": "超燃节奏Phonk | 精神氮泵游戏 猛攻小曲",
+      "trackCount": 65,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/YiH7M-Hg17b1p3YHzTXagQ==/109951174139397727.jpg",
+        "coverImgId": 109951174139397730,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174139397727"
+      }
+    },
+    {
+      "id": "18339554377",
+      "name": "韩流KPOP｜通勤路上｜心灵复苏",
+      "trackCount": 31,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/R6nN-HLM5oF50ofsueJ3wg==/109951173880752898.jpg",
+        "coverImgId": 109951173880752900,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173880752898"
+      }
+    },
+    {
+      "id": "18216702624",
+      "name": "古早韩流狂欢｜上古KPOP蹦迪曲",
+      "trackCount": 43,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/m0E-0idZaLWLdeL9DGB5FQ==/109951173692980138.jpg",
+        "coverImgId": 109951173692980140,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173692980138"
+      }
+    },
+    {
+      "id": "18455389310",
+      "name": "连麻swimming | 用独特声线唱出破碎的情绪",
+      "trackCount": 111,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/u6frmV7ZsnF53Odw1LBB0A==/109951174081277182.jpg",
+        "coverImgId": 109951174081277180,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174081277182"
+      }
+    },
+    {
+      "id": "18279509567",
+      "name": "「英文BE美学」忧郁诗篇|孤独感",
+      "trackCount": 53,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/2Q2MmInswClY7zXDajtUYw==/109951173789235577.jpg",
+        "coverImgId": 109951173789235580,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173789235577"
+      }
+    },
+    {
+      "id": "18392644351",
+      "name": "散步听这首｜秋风拂面的欧美氛围感歌单",
+      "trackCount": 54,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/SncgDGwPQgKjetKsjf6pRg==/109951173961405465.jpg",
+        "coverImgId": 109951173961405470,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173961405465"
+      }
+    },
+    {
+      "id": "7641135213",
+      "name": "燃向『写作业/刷题/运动』可以听的歌曲",
+      "trackCount": 189,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/8HTf_JVE_Bw8AMS_-Wt1yw==/109951172467391583.jpg",
+        "coverImgId": 109951172467391580,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951172467391583"
+      }
+    },
+    {
+      "id": "18510140895",
+      "name": "【节奏控Phonk/Funk】一听就上瘾的惊艳声",
+      "trackCount": 65,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/Xny_1g1Vh7f5YI55BCTwcg==/109951174145691734.jpg",
+        "coverImgId": 109951174145691730,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174145691734"
+      }
+    },
+    {
+      "id": "18310703163",
+      "name": "纯音乐：治愈and“致郁”",
+      "trackCount": 109,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/JzeAl94t5mRChGuKmTVK8A==/109951174042059544.jpg",
+        "coverImgId": 109951174042059550,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174042059544"
+      }
+    },
+    {
+      "id": "18338797017",
+      "name": "Afro Vibe｜戴上耳机开启心动模式",
+      "trackCount": 80,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/qrYvbDSW6gSD2go-d4ijOw==/109951174023073470.jpg",
+        "coverImgId": 109951174023073470,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174023073470"
+      }
+    },
+    {
+      "id": "14371239826",
+      "name": "Mili专属歌单(建议随机播放)",
+      "trackCount": 182,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/S9EB9WYtPbQjvyUvRWj0Pg==/109951172608481760.jpg",
+        "coverImgId": 109951172608481760,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951172608481760"
+      }
+    },
+    {
+      "id": "18433723172",
+      "name": "【ヨルシカ】高三时光有你陪伴真好~",
+      "trackCount": 51,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/p8P43GHEJSZCkGcfUg0BTg==/109951174029682494.jpg",
+        "coverImgId": 109951174029682500,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174029682494"
+      }
+    },
+    {
+      "id": "18553058060",
+      "name": "嘴上不在意，心里却画地为牢｜秋冬系慢歌",
+      "trackCount": 54,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/oG5IdfSzOqRaPO50YM9IQQ==/109951174225677359.jpg",
+        "coverImgId": 109951174225677360,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951174225677359"
+      }
+    },
+    {
+      "id": "18342138007",
+      "name": "华语流行经典：我怀念的，是无话不说",
+      "trackCount": 177,
+      "imageFields": {
+        "coverImgUrl": "http://p1.music.126.net/WYBr-glAtfeB0GatVeKMrQ==/109951173869782944.jpg",
+        "coverImgId": 109951173869782940,
+        "coverStatus": 3,
+        "socialPlaylistCover": null,
+        "coverText": null,
+        "originalCoverId": 0,
+        "backgroundImageId": 0,
+        "backgroundImageUrl": null,
+        "coverImgId_str": "109951173869782944"
+      }
+    }
+  ],
+  "comparison": [
+    {
+      "Variant": "原HTTP-DartUA",
+      "Url": "http://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "Status": 403,
+      "FinalUrl": "http://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "ContentType": "text/html",
+      "Length": 146,
+      "PrefixHex": "3C68746D6C3E0D0A3C686561643E3C7469746C653E34303320466F7262696464",
+      "Decoded": {
+        "Error": "Parameter is not valid."
+      },
+      "Text": "<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+    },
+    {
+      "Variant": "原HTTP-浏览器UA",
+      "Url": "http://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "Status": 200,
+      "FinalUrl": "http://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "ContentType": "image/jpg",
+      "Length": 298618,
+      "PrefixHex": "FFD8FFE000104A46494600010101004800480000FFDB00430008060607060508",
+      "Decoded": {
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "Height": 1254,
+        "Width": 1254
+      },
+      "Text": null
+    },
+    {
+      "Variant": "HTTPS-DartUA",
+      "Url": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "Status": 403,
+      "FinalUrl": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "ContentType": "text/html",
+      "Length": 146,
+      "PrefixHex": "3C68746D6C3E0D0A3C686561643E3C7469746C653E34303320466F7262696464",
+      "Decoded": {
+        "Error": "Parameter is not valid."
+      },
+      "Text": "<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+    },
+    {
+      "Variant": "HTTPS-候选实际请求头",
+      "Url": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "Status": 200,
+      "FinalUrl": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "ContentType": "image/jpg",
+      "Length": 298618,
+      "PrefixHex": "FFD8FFE000104A46494600010101004800480000FFDB00430008060607060508",
+      "Decoded": {
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "Height": 1254,
+        "Width": 1254
+      },
+      "Text": null
+    }
+  ],
+  "dartRuntime": "3.13.4 (stable) (Tue Sep 15 01:01:15 2026 -0700) on \"windows_x64\"",
+  "dartImageClientComparison": [
+    {
+      "mode": "default",
+      "url": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "initialUserAgent": [
+        "Dart/3.13 (dart:io)"
+      ],
+      "sentUserAgent": [
+        "Dart/3.13 (dart:io)"
+      ],
+      "status": 403,
+      "contentType": "text/html",
+      "length": 146,
+      "prefixHex": "3c68746d6c3e0d0a3c686561643e3c7469746c653e34303320466f7262696464",
+      "body": "<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n"
+    },
+    {
+      "mode": "flutter-add",
+      "url": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "initialUserAgent": [
+        "Dart/3.13 (dart:io)"
+      ],
+      "sentUserAgent": [
+        "Dart/3.13 (dart:io)",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      ],
+      "status": 403,
+      "contentType": "text/html",
+      "length": 548,
+      "prefixHex": "3c68746d6c3e0d0a3c686561643e3c7469746c653e34303320466f7262696464",
+      "body": "<html>\r\n<head><title>403 Forbidden</title></head>\r\n<body>\r\n<center><h1>403 Forbidden</h1></center>\r\n<hr><center>nginx</center>\r\n</body>\r\n</html>\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n<!-- a padding to disable MSIE and Chrome friendly error page -->\r\n"
+    },
+    {
+      "mode": "request-set",
+      "url": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "initialUserAgent": [
+        "Dart/3.13 (dart:io)"
+      ],
+      "sentUserAgent": [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      ],
+      "status": 200,
+      "contentType": "image/jpg",
+      "length": 298618,
+      "prefixHex": "ffd8ffe000104a46494600010101004800480000ffdb00430008060607060508"
+    },
+    {
+      "mode": "client-userAgent",
+      "url": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "initialUserAgent": [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      ],
+      "sentUserAgent": [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      ],
+      "status": 200,
+      "contentType": "image/jpg",
+      "length": 298618,
+      "prefixHex": "ffd8ffe000104a46494600010101004800480000ffdb00430008060607060508"
+    }
+  ],
+  "productRequestAllCovers": [
+    {
+      "id": "18428485896",
+      "sourceUrl": "http://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "requestUrl": "https://p2.music.126.net/gm6aKwErRpe3Bdr806vy_Q==/109951174111254293.jpg",
+      "success": true,
+      "status": 200,
+      "length": 298618,
+      "file": ".codex-netease-cover-bytes-20261126/18428485896.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1254,
+        "Height": 1254,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "8F7D74FE9DA68199C5D246D3741E5499C389C6D797B11406E7EBD69D9293B632"
+    },
+    {
+      "id": "18359211192",
+      "sourceUrl": "http://p2.music.126.net/XtBk-KKRHFBHI87HZE9ljQ==/109951173904350931.jpg",
+      "requestUrl": "https://p2.music.126.net/XtBk-KKRHFBHI87HZE9ljQ==/109951173904350931.jpg",
+      "success": true,
+      "status": 200,
+      "length": 122334,
+      "file": ".codex-netease-cover-bytes-20261126/18359211192.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1024,
+        "Height": 1025,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "50F576E67954B49F23D7577D099062D42942AF777A2EB05399C560C78B518145"
+    },
+    {
+      "id": "14475742002",
+      "sourceUrl": "http://p2.music.126.net/H7n-Lt3BxoPSo3h27oOeVQ==/109951173224692355.jpg",
+      "requestUrl": "https://p2.music.126.net/H7n-Lt3BxoPSo3h27oOeVQ==/109951173224692355.jpg",
+      "success": true,
+      "status": 200,
+      "length": 145520,
+      "file": ".codex-netease-cover-bytes-20261126/14475742002.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1284,
+        "Height": 1284,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "B2C788A13A5A9090A60F8170D42B4BC394AD6D5DE0F1A9211E2FF3828EAE7B01"
+    },
+    {
+      "id": "18374591158",
+      "sourceUrl": "http://p2.music.126.net/A6a5ZaeBqGRAcgxa62Ltrw==/109951173929361518.jpg",
+      "requestUrl": "https://p2.music.126.net/A6a5ZaeBqGRAcgxa62Ltrw==/109951173929361518.jpg",
+      "success": true,
+      "status": 200,
+      "length": 203899,
+      "file": ".codex-netease-cover-bytes-20261126/18374591158.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1075,
+        "Height": 1075,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "B130C466D93616E7FACBC36B68FC00943117CB451678FA49C661DD4FF65A38E0"
+    },
+    {
+      "id": "18480969427",
+      "sourceUrl": "http://p2.music.126.net/GAfMpmsPAdZq-53WS6GqpA==/109951174100331187.jpg",
+      "requestUrl": "https://p2.music.126.net/GAfMpmsPAdZq-53WS6GqpA==/109951174100331187.jpg",
+      "success": true,
+      "status": 200,
+      "length": 164180,
+      "file": ".codex-netease-cover-bytes-20261126/18480969427.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1080,
+        "Height": 1080,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "83C640F349575C8C18A0B22F67742FF6EA364A980CA220080BD52212C6CEE909"
+    },
+    {
+      "id": "18384003099",
+      "sourceUrl": "http://p2.music.126.net/OeS9k1YTY7U56AxgPPBJSQ==/109951173944588617.jpg",
+      "requestUrl": "https://p2.music.126.net/OeS9k1YTY7U56AxgPPBJSQ==/109951173944588617.jpg",
+      "success": true,
+      "status": 200,
+      "length": 135249,
+      "file": ".codex-netease-cover-bytes-20261126/18384003099.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1130,
+        "Height": 1130,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "F9074285A5FB7CF527767708DAE26E277BDC11EAC9875932C4F429CCE58880B0"
+    },
+    {
+      "id": "18559002730",
+      "sourceUrl": "http://p2.music.126.net/EP_x99MPhcsM3X0ywzGTDA==/109951174264417810.jpg",
+      "requestUrl": "https://p2.music.126.net/EP_x99MPhcsM3X0ywzGTDA==/109951174264417810.jpg",
+      "success": true,
+      "status": 200,
+      "length": 93331,
+      "file": ".codex-netease-cover-bytes-20261126/18559002730.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1206,
+        "Height": 1206,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "697F0365F8312AEB78E2A8068A118419D211F72649D38AC7E59CE32F91AC7836"
+    },
+    {
+      "id": "26467411",
+      "sourceUrl": "http://p2.music.126.net/8fQ9jzTJnMweLNm7VoyPSw==/6623458045881301.jpg",
+      "requestUrl": "https://p2.music.126.net/8fQ9jzTJnMweLNm7VoyPSw==/6623458045881301.jpg",
+      "success": true,
+      "status": 200,
+      "length": 100975,
+      "file": ".codex-netease-cover-bytes-20261126/26467411.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1024,
+        "Height": 1024,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "D012531277D0BA3B543BAE671DC3F7689C3C97AF68A3D25A82523444E306EF8B"
+    },
+    {
+      "id": "18516805934",
+      "sourceUrl": "http://p2.music.126.net/9QYB1fbKtWA9WwZWNS8Qow==/109951174157605901.jpg",
+      "requestUrl": "https://p2.music.126.net/9QYB1fbKtWA9WwZWNS8Qow==/109951174157605901.jpg",
+      "success": true,
+      "status": 200,
+      "length": 197135,
+      "file": ".codex-netease-cover-bytes-20261126/18516805934.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1080,
+        "Height": 1081,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "F129B62ED90984F9DBF0DF3F4CDC4B7FBEB28F9332B00F7C716B263546B31052"
+    },
+    {
+      "id": "17877900086",
+      "sourceUrl": "http://p2.music.126.net/t8csfPWVP2WX8Gl-TksBiQ==/109951174299616731.jpg",
+      "requestUrl": "https://p2.music.126.net/t8csfPWVP2WX8Gl-TksBiQ==/109951174299616731.jpg",
+      "success": true,
+      "status": 200,
+      "length": 326582,
+      "file": ".codex-netease-cover-bytes-20261126/17877900086.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 2000,
+        "Height": 2000,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "5C86B4195D113AA0B9F6950A13B297B4C83C4118E374CB26445B18C9AFBE8D2C"
+    },
+    {
+      "id": "18505644975",
+      "sourceUrl": "http://p1.music.126.net/YiH7M-Hg17b1p3YHzTXagQ==/109951174139397727.jpg",
+      "requestUrl": "https://p1.music.126.net/YiH7M-Hg17b1p3YHzTXagQ==/109951174139397727.jpg",
+      "success": true,
+      "status": 200,
+      "length": 115337,
+      "file": ".codex-netease-cover-bytes-20261126/18505644975.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1440,
+        "Height": 1440,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "FE7E25211F44437B49D955B8D0F667D60CB4A52CE8BAEB187D6D451E8D0ED2B7"
+    },
+    {
+      "id": "18339554377",
+      "sourceUrl": "http://p1.music.126.net/R6nN-HLM5oF50ofsueJ3wg==/109951173880752898.jpg",
+      "requestUrl": "https://p1.music.126.net/R6nN-HLM5oF50ofsueJ3wg==/109951173880752898.jpg",
+      "success": true,
+      "status": 200,
+      "length": 765615,
+      "file": ".codex-netease-cover-bytes-20261126/18339554377.jpg",
+      "prefixHex": "89504e470d0a1a0a0000000d49484452",
+      "decoded": {
+        "Success": true,
+        "Width": 800,
+        "Height": 800,
+        "Format": "b96b3caf-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "72F307EA6E6951FB1A62E5E2BEF3F3467B349082F715DB3E2977DF8BC4E6D091"
+    },
+    {
+      "id": "18216702624",
+      "sourceUrl": "http://p1.music.126.net/m0E-0idZaLWLdeL9DGB5FQ==/109951173692980138.jpg",
+      "requestUrl": "https://p1.music.126.net/m0E-0idZaLWLdeL9DGB5FQ==/109951173692980138.jpg",
+      "success": true,
+      "status": 200,
+      "length": 78098,
+      "file": ".codex-netease-cover-bytes-20261126/18216702624.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1170,
+        "Height": 1170,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "2640E18440B2EBB2064AB91805418B18D1399AF914A825C20D0935808185C02A"
+    },
+    {
+      "id": "18455389310",
+      "sourceUrl": "http://p1.music.126.net/u6frmV7ZsnF53Odw1LBB0A==/109951174081277182.jpg",
+      "requestUrl": "https://p1.music.126.net/u6frmV7ZsnF53Odw1LBB0A==/109951174081277182.jpg",
+      "success": true,
+      "status": 200,
+      "length": 119644,
+      "file": ".codex-netease-cover-bytes-20261126/18455389310.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1080,
+        "Height": 1080,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "7E92E189380A1427A48D782C569F6141E3E3EFDC754162F649FEA26638CF1A00"
+    },
+    {
+      "id": "18279509567",
+      "sourceUrl": "http://p1.music.126.net/2Q2MmInswClY7zXDajtUYw==/109951173789235577.jpg",
+      "requestUrl": "https://p1.music.126.net/2Q2MmInswClY7zXDajtUYw==/109951173789235577.jpg",
+      "success": true,
+      "status": 200,
+      "length": 44855,
+      "file": ".codex-netease-cover-bytes-20261126/18279509567.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1179,
+        "Height": 1179,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "328897D0EA7234C5EC5D3469B0D501ED311F6264C4A70070ED430E983C862402"
+    },
+    {
+      "id": "18392644351",
+      "sourceUrl": "http://p1.music.126.net/SncgDGwPQgKjetKsjf6pRg==/109951173961405465.jpg",
+      "requestUrl": "https://p1.music.126.net/SncgDGwPQgKjetKsjf6pRg==/109951173961405465.jpg",
+      "success": true,
+      "status": 200,
+      "length": 258970,
+      "file": ".codex-netease-cover-bytes-20261126/18392644351.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1081,
+        "Height": 1080,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "47AFAA813E848A7A8946291962014022F7435CE84B7E943986B90D8115D0BC43"
+    },
+    {
+      "id": "7641135213",
+      "sourceUrl": "http://p1.music.126.net/8HTf_JVE_Bw8AMS_-Wt1yw==/109951172467391583.jpg",
+      "requestUrl": "https://p1.music.126.net/8HTf_JVE_Bw8AMS_-Wt1yw==/109951172467391583.jpg",
+      "success": true,
+      "status": 200,
+      "length": 313528,
+      "file": ".codex-netease-cover-bytes-20261126/7641135213.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1280,
+        "Height": 1280,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "B976FC525AB5921346D6DF17E201D6B6E14D937AC8CBBE8B83FBFD8139F30398"
+    },
+    {
+      "id": "18510140895",
+      "sourceUrl": "http://p1.music.126.net/Xny_1g1Vh7f5YI55BCTwcg==/109951174145691734.jpg",
+      "requestUrl": "https://p1.music.126.net/Xny_1g1Vh7f5YI55BCTwcg==/109951174145691734.jpg",
+      "success": true,
+      "status": 200,
+      "length": 67756,
+      "file": ".codex-netease-cover-bytes-20261126/18510140895.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1125,
+        "Height": 1125,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "2EE812C607EFB1D91FACBDC161EA8AB9E6F9D54C104557A71CC367F54E079118"
+    },
+    {
+      "id": "18310703163",
+      "sourceUrl": "http://p1.music.126.net/JzeAl94t5mRChGuKmTVK8A==/109951174042059544.jpg",
+      "requestUrl": "https://p1.music.126.net/JzeAl94t5mRChGuKmTVK8A==/109951174042059544.jpg",
+      "success": true,
+      "status": 200,
+      "length": 110279,
+      "file": ".codex-netease-cover-bytes-20261126/18310703163.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1599,
+        "Height": 1600,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "040694E3D0225EB3DF4546AAF9E662CF6E16BBE0BD265E6489CCE50C043FB3C9"
+    },
+    {
+      "id": "18338797017",
+      "sourceUrl": "http://p1.music.126.net/qrYvbDSW6gSD2go-d4ijOw==/109951174023073470.jpg",
+      "requestUrl": "https://p1.music.126.net/qrYvbDSW6gSD2go-d4ijOw==/109951174023073470.jpg",
+      "success": true,
+      "status": 200,
+      "length": 284935,
+      "file": ".codex-netease-cover-bytes-20261126/18338797017.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1799,
+        "Height": 1800,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "29B3A85473690EAEC0F75C6DC890F4EC5FC25BCA2B6A5C5DA326CB088BBD39F6"
+    },
+    {
+      "id": "14371239826",
+      "sourceUrl": "http://p1.music.126.net/S9EB9WYtPbQjvyUvRWj0Pg==/109951172608481760.jpg",
+      "requestUrl": "https://p1.music.126.net/S9EB9WYtPbQjvyUvRWj0Pg==/109951172608481760.jpg",
+      "success": true,
+      "status": 200,
+      "length": 29110,
+      "file": ".codex-netease-cover-bytes-20261126/14371239826.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1246,
+        "Height": 1244,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "FB6E8293DC4A39A2732A6D96E2721414C80B784576F13055CC3C36AE2F8D135F"
+    },
+    {
+      "id": "18433723172",
+      "sourceUrl": "http://p1.music.126.net/p8P43GHEJSZCkGcfUg0BTg==/109951174029682494.jpg",
+      "requestUrl": "https://p1.music.126.net/p8P43GHEJSZCkGcfUg0BTg==/109951174029682494.jpg",
+      "success": true,
+      "status": 200,
+      "length": 140890,
+      "file": ".codex-netease-cover-bytes-20261126/18433723172.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1254,
+        "Height": 1254,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "90C0AFA3D7992D018B944CE1FDFE6C32E29E7186848F2914BD22BAFC8E19E0A9"
+    },
+    {
+      "id": "18553058060",
+      "sourceUrl": "http://p1.music.126.net/oG5IdfSzOqRaPO50YM9IQQ==/109951174225677359.jpg",
+      "requestUrl": "https://p1.music.126.net/oG5IdfSzOqRaPO50YM9IQQ==/109951174225677359.jpg",
+      "success": true,
+      "status": 200,
+      "length": 157702,
+      "file": ".codex-netease-cover-bytes-20261126/18553058060.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1153,
+        "Height": 1153,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "71824F60E0FB5F1F32A1437384CBE2C5288C48FE53363E4304DF0E3B8A1F3CA9"
+    },
+    {
+      "id": "18342138007",
+      "sourceUrl": "http://p1.music.126.net/WYBr-glAtfeB0GatVeKMrQ==/109951173869782944.jpg",
+      "requestUrl": "https://p1.music.126.net/WYBr-glAtfeB0GatVeKMrQ==/109951173869782944.jpg",
+      "success": true,
+      "status": 200,
+      "length": 79477,
+      "file": ".codex-netease-cover-bytes-20261126/18342138007.jpg",
+      "prefixHex": "ffd8ffe000104a464946000101010048",
+      "decoded": {
+        "Success": true,
+        "Width": 1024,
+        "Height": 1025,
+        "Format": "b96b3cae-0728-11d3-9d7b-0000f81ef32e",
+        "PixelDecoded": true
+      },
+      "sha256": "7FDE11EB6CDCF744DE5BD7815D9659CB64DF6382F25799299FFD0B97DE492E53"
+    }
+  ],
+  "allCoversSummary": {
+    "Requested": 24,
+    "HttpSuccess": 24,
+    "DecodeSuccess": 24,
+    "Method": "产品loadNeteaseCoverBytes函数逐张真实HTTP + System.Drawing完整像素解码；非GUI验收"
+  },
+  "productSourceSha256": "41A3C56AF19F3896B1112AD4F479269134F7D97DA98E5BCD3B7D1FDDDE10E570",
+  "cleanup": {
+    "TemporaryScriptsRemoved": 2,
+    "TemporaryImagesRemoved": 0,
+    "TemporaryImagesRetained": 24,
+    "TemporaryImageDirectory": ".codex-netease-cover-bytes-20261126",
+    "Reason": "自动审批两次拒绝PowerShell清理命令，返回blocked by policy，未给细分原因；收到停止要求后不再重试",
+    "RetainedPaths": "productRequestAllCovers[].file",
+    "EvidenceRetained": true
+  }
+}

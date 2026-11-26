@@ -2,11 +2,13 @@ import '../../l10n/expanded_strings.dart';
 
 import '../../l10n/video_strings.dart';
 
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
 import '../../models/song.dart';
+import '../data/netease_cover_request.dart';
 import 'video_theme.dart';
 import '../../models/platform_type.dart';
 import '../windows/windows_platform_icon.dart';
@@ -344,35 +346,9 @@ class VideoCover extends StatelessWidget {
   final double radius;
   final bool neteaseImageCompatibility;
 
-  static const _neteaseImageHosts = {
-    'p1.music.126.net',
-    'p2.music.126.net',
-    'p3.music.126.net',
-    'p4.music.126.net',
-  };
-
-  static const _neteaseImageHeaders = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/131.0.0.0 Safari/537.36',
-    'Referer': 'https://music.163.com/',
-  };
-
   @override
   Widget build(BuildContext context) {
-    var imageUrl = url;
-    Map<String, String>? imageHeaders;
-    if (neteaseImageCompatibility && imageUrl != null) {
-      final uri = Uri.tryParse(imageUrl.trim());
-      if (uri != null &&
-          _neteaseImageHosts.contains(uri.host.toLowerCase()) &&
-          (uri.scheme.isEmpty || uri.scheme == 'http' || uri.scheme == 'https') &&
-          uri.userInfo.isEmpty &&
-          (!uri.hasPort || uri.port == 80 || uri.port == 443)) {
-        imageUrl = uri.replace(scheme: 'https', port: 443).toString();
-        imageHeaders = _neteaseImageHeaders;
-      }
-    }
+    final neteaseUri = neteaseImageCompatibility ? neteaseCoverUri(url) : null;
     final fallback = Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -394,15 +370,56 @@ class VideoCover extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: imageUrl == null || imageUrl.isEmpty
+        child: url == null || url!.isEmpty
             ? fallback
-            : Image.network(
-                imageUrl,
-                headers: imageHeaders,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => fallback,
-              ),
+            : neteaseUri == null
+                ? Image.network(
+                    url!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => fallback,
+                  )
+                : Image(
+                    image: _NeteaseCoverImage(neteaseUri),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => fallback,
+                  ),
       ),
     );
   }
+}
+
+class _NeteaseCoverImage extends ImageProvider<_NeteaseCoverImage> {
+  const _NeteaseCoverImage(this.uri);
+  final Uri uri;
+
+  @override
+  Future<_NeteaseCoverImage> obtainKey(ImageConfiguration configuration) async =>
+      this;
+
+  @override
+  ImageStreamCompleter loadImage(
+    _NeteaseCoverImage key,
+    ImageDecoderCallback decode,
+  ) => MultiFrameImageStreamCompleter(
+    codec: _load(decode),
+    scale: 1,
+    debugLabel: uri.toString(),
+  );
+
+  Future<Codec> _load(ImageDecoderCallback decode) async {
+    try {
+      final bytes = await loadNeteaseCoverBytes(uri);
+      return await decode(await ImmutableBuffer.fromUint8List(bytes));
+    } catch (_) {
+      scheduleMicrotask(() => PaintingBinding.instance.imageCache.evict(this));
+      rethrow;
+    }
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is _NeteaseCoverImage && other.uri == uri;
+
+  @override
+  int get hashCode => uri.hashCode;
 }

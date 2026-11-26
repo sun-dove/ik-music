@@ -17,11 +17,17 @@ import '../../../../models/song.dart';
 import '../../../../platform/base/platform_registry.dart';
 import '../../../../l10n/l10n.dart';
 import '../../../../l10n/ik_strings.dart';
+import '../../../../l10n/ik_alignment_strings.dart';
+import '../../../../l10n/ik_playlist_table_strings.dart';
+import '../../../../video_app/ui/video_shell.dart';
+import '../../../../video_app/ui/playlist_artwork.dart';
+import '../../../download/domain/entities/download_task.dart';
 import '../../../download/presentation/providers/download_provider.dart';
 import '../../../download/presentation/providers/download_quality_provider.dart';
 import '../../../download/presentation/widgets/download_button.dart';
 import '../../../player/presentation/providers/player_provider.dart';
 import '../providers/my_playlists_provider.dart';
+import '../providers/likes_provider.dart';
 
 /// A playlist's songs, plus the interaction layer on top: long-press to select,
 /// batch actions, drag-to-reorder for 自建歌单, and the shared song action menu.
@@ -30,6 +36,7 @@ class PlaylistDetailPage extends ConsumerStatefulWidget {
   final String playlistId;
   final String playlistName;
   final String? coverUrl;
+  final bool desktopTable;
 
   const PlaylistDetailPage({
     super.key,
@@ -37,6 +44,7 @@ class PlaylistDetailPage extends ConsumerStatefulWidget {
     required this.playlistId,
     required this.playlistName,
     this.coverUrl,
+    this.desktopTable = false,
   });
 
   @override
@@ -175,6 +183,27 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
       ref,
       song: song,
       isLocal: song.platform == PlatformType.local,
+    );
+  }
+
+  Future<void> _openDesktopSongMenu(
+    BuildContext menuContext,
+    Song song, {
+    Offset? position,
+  }) async {
+    await showSongActionsMenuAt(
+      menuContext,
+      ref,
+      song: song,
+      position: position,
+      isLocal: song.platform == PlatformType.local,
+      isLiked: ref.read(likesProvider).songs.any(
+        (liked) => _keyOf(liked) == _keyOf(song),
+      ),
+      isDownloaded: ref.read(downloadProvider).tasks.any(
+        (task) => _keyOf(task.song) == _keyOf(song) &&
+            task.status == DownloadStatus.completed,
+      ),
     );
   }
 
@@ -343,6 +372,9 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
   @override
   Widget build(BuildContext context) {
     final songs = _songsOrEmpty;
+    if (widget.desktopTable) {
+      ref.watch(playerProvider.select((state) => state.currentSong));
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -428,6 +460,14 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
       );
     }
     if (songs.isEmpty) {
+      if (widget.desktopTable) {
+        return Column(
+          children: [
+            _header(songs),
+            const Expanded(child: AsyncStateView.empty(title: '歌单暂无歌曲')),
+          ],
+        );
+      }
       return const AsyncStateView.empty(title: '歌单暂无歌曲');
     }
 
@@ -438,7 +478,7 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
         if (_isLocalPlaylist && !_selectionMode) {
           return ReorderableListView.builder(
             scrollController: controller,
-            header: _header(songs),
+            header: widget.desktopTable ? _desktopHeader(songs) : _header(songs),
             buildDefaultDragHandles: false,
             itemCount: songs.length,
             proxyDecorator: (child, index, animation) =>
@@ -448,7 +488,14 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
             // so [_onReorder] must not apply the classic `-1` correction again.
             onReorderItem: (oldIndex, newIndex) =>
                 unawaited(_onReorder(songs, oldIndex, newIndex)),
-            itemBuilder: (context, index) => _songTile(
+            itemBuilder: (context, index) => widget.desktopTable
+                ? _desktopSongRow(
+                    songs[index],
+                    index,
+                    key: ValueKey('reorder-${_keyOf(songs[index])}-$index'),
+                    dragHandleIndex: index,
+                  )
+                : _songTile(
               songs[index],
               index,
               key: ValueKey('reorder-${_keyOf(songs[index])}-$index'),
@@ -461,9 +508,13 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
           // +1 keeps the header in the same place in both modes.
           itemCount: songs.length + 1,
           itemBuilder: (context, index) {
-            if (index == 0) return _header(songs);
+            if (index == 0) {
+              return widget.desktopTable ? _desktopHeader(songs) : _header(songs);
+            }
             final songIndex = index - 1;
-            return _songTile(songs[songIndex], songIndex);
+            return widget.desktopTable
+                ? _desktopSongRow(songs[songIndex], songIndex)
+                : _songTile(songs[songIndex], songIndex);
           },
         );
       },
@@ -476,11 +527,200 @@ class _PlaylistDetailPageState extends ConsumerState<PlaylistDetailPage> {
       name: widget.playlistName,
       coverUrl:
           widget.coverUrl ?? (songs.isNotEmpty ? songs.first.coverUrl : null),
+      artwork: widget.desktopTable
+          ? PlaylistArtwork(
+              playlist: Playlist(
+                id: widget.playlistId,
+                name: widget.playlistName,
+                platform: widget.platform,
+                coverUrl: widget.coverUrl,
+                songCount: songs.length,
+              ),
+              firstSong: songs.firstOrNull,
+              size: 96,
+              radius: 8,
+            )
+          : null,
       songCount: songs.length,
       isLoading: false,
       onPlayAll: songs.isEmpty ? null : () => _playSongs(songs, 0),
     );
   }
+
+  Widget _desktopHeader(List<Song> songs) => Column(
+    children: [
+      _header(songs),
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            if (constraints.maxWidth < 760 * scale) return const SizedBox.shrink();
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: DefaultTextStyle(
+                style: Theme.of(context).textTheme.bodySmall!,
+                child: Row(
+                  children: [
+                    const SizedBox(width: 40, child: Text('#')),
+                    const Expanded(flex: 5, child: Text(IkAlignmentStrings.song)),
+                    const Expanded(flex: 3, child: Text(IkPlaylistTableStrings.artist)),
+                    const Expanded(flex: 3, child: Text(IkAlignmentStrings.album)),
+                    SizedBox(width: 64 * scale, child: const Text(IkAlignmentStrings.duration)),
+                    SizedBox(
+                      width: 96,
+                      child: _selectionMode ? null : const Center(
+                        child: Text(IkAlignmentStrings.actions),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ],
+  );
+
+  Widget _desktopSongRow(Song song, int index, {Key? key, int? dragHandleIndex}) =>
+      Padding(
+        key: key ?? ValueKey(_keyOf(song)),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final colors = Theme.of(context).colorScheme;
+            final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+            final wide = constraints.maxWidth >= 760 * scale;
+            final selected = _selectedKeys.contains(_keyOf(song));
+            final currentSong = ref.read(playerProvider).currentSong;
+            final playing = currentSong != null &&
+                _keyOf(currentSong) == _keyOf(song);
+            final duration = song.duration.inSeconds;
+            final durationLabel = duration <= 0
+                ? IkAlignmentStrings.unknownDuration
+                : '${duration ~/ 60}:${(duration % 60).toString().padLeft(2, '0')}';
+            final songCover = song.coverUrl?.trim();
+            final coverUrl = songCover != null && songCover.isNotEmpty
+                ? songCover : song.album?.coverUrl?.trim();
+            final leading = SizedBox(
+              width: 40,
+              child: Center(
+                child: _selectionMode
+                    ? Checkbox(value: selected, onChanged: (_) => _toggleSelection(song))
+                    : dragHandleIndex != null
+                    ? ReorderableDragStartListener(
+                        index: dragHandleIndex,
+                        child: Icon(Icons.drag_handle, size: 20,
+                            color: colors.onSurfaceVariant,
+                            semanticLabel: IkPlaylistTableStrings.reorder),
+                      )
+                    : Text('${index + 1}'.padLeft(2, '0'),
+                        style: Theme.of(context).textTheme.bodySmall),
+              ),
+            );
+            final actions = _selectionMode
+                ? const SizedBox(width: 96)
+                : SizedBox(
+                    width: 96,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (song.platform != PlatformType.local)
+                          DownloadButton(song: song, size: 22),
+                        Builder(
+                          builder: (buttonContext) => IconButton(
+                            icon: const Icon(Icons.more_horiz, size: 20),
+                            tooltip: IkPlaylistTableStrings.songActions,
+                            onPressed: () => unawaited(
+                              _openDesktopSongMenu(buttonContext, song),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+            return GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onSecondaryTapDown: (details) => unawaited(
+                _openDesktopSongMenu(context, song, position: details.globalPosition),
+              ),
+              child: Material(
+                color: _selectionMode && selected
+                    ? colors.primaryContainer.withValues(alpha: .4)
+                    : playing ? colors.primary.withValues(alpha: .07) : Colors.transparent,
+                child: InkWell(
+                  onTap: _selectionMode
+                      ? () => _toggleSelection(song)
+                      : () => _playSongs(_songsOrEmpty, index),
+                  onLongPress: _selectionMode ? null : () => _enterSelection(song),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      border: Border(bottom: BorderSide(
+                        color: colors.outlineVariant.withValues(alpha: .7),
+                      )),
+                    ),
+                    child: Row(
+                      children: [
+                        leading,
+                        Expanded(
+                          flex: 5,
+                          child: Row(
+                            children: [
+                              VideoCover(
+                                url: coverUrl,
+                                size: wide ? 40 : 32,
+                                radius: 7,
+                                neteaseImageCompatibility: true,
+                              ),
+                              SizedBox(width: wide ? 12 : 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(song.name, maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500,
+                                            color: playing ? colors.primary : null)),
+                                    if (!wide) ...[
+                                      const SizedBox(height: 3),
+                                      Text(song.artistNames, maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: Theme.of(context).textTheme.bodySmall),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                            ],
+                          ),
+                        ),
+                        if (wide) ...[
+                          Expanded(flex: 3, child: Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Text(song.artistNames, maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          )),
+                          Expanded(flex: 3, child: Padding(
+                            padding: const EdgeInsets.only(right: 12),
+                            child: Text(song.album?.name ?? '', maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          )),
+                          SizedBox(width: 64 * scale, child: Text(durationLabel,
+                              style: Theme.of(context).textTheme.bodySmall)),
+                        ],
+                        actions,
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
 
   Widget _songTile(Song song, int index, {Key? key, int? dragHandleIndex}) {
     final cs = Theme.of(context).colorScheme;
@@ -675,6 +915,7 @@ class _PlaylistHeader extends StatelessWidget {
   final int songCount;
   final bool isLoading;
   final VoidCallback? onPlayAll;
+  final Widget? artwork;
 
   const _PlaylistHeader({
     required this.platform,
@@ -683,6 +924,7 @@ class _PlaylistHeader extends StatelessWidget {
     required this.songCount,
     required this.isLoading,
     required this.onPlayAll,
+    this.artwork,
   });
 
   @override
@@ -693,7 +935,7 @@ class _PlaylistHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
+          artwork ?? ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: coverUrl != null && coverUrl!.isNotEmpty
                 ? CachedNetworkImage(

@@ -3,7 +3,9 @@ import 'package:go_router/go_router.dart';
 
 import 'ik_router.dart';
 import 'ik_personal_daily_page.dart';
+import '../../core/platform/platform_utils.dart';
 import '../../features/library/presentation/pages/import_playlist_page.dart';
+import '../../features/library/presentation/pages/playlist_detail_page.dart';
 import '../../features/smart_playlists/presentation/pages/smart_playlist_editor_page.dart';
 import '../../l10n/ik_strings.dart';
 import '../../models/platform_type.dart';
@@ -23,7 +25,7 @@ GoRouter createIkWorkspaceRouter({
   downloads: downloads,
 );
 
-/// 快速改版只改变新日推装配；旧公开路由工厂与默认页面保持。
+/// 快速改版扩展新日推与桌面歌单装配；旧公开路由工厂与默认页面保持。
 GoRouter createIkRefinedWorkspaceRouter({
   required Widget Function(BuildContext, Widget, String) workspace,
   required WidgetBuilder player,
@@ -89,6 +91,31 @@ GoRouter _createWorkspaceRouter({
                   return IkPersonalDailyPage(
                     initialPlatform: platform,
                     refinedRecommendations: true,
+                  );
+                },
+              )
+            else if (refinedRecommendations &&
+                PlatformUtils.isWindows &&
+                route is GoRoute &&
+                route.path == '/playlist/:platform/:id')
+              GoRoute(
+                path: route.path,
+                builder: (_, state) {
+                  final name = state.pathParameters['platform'];
+                  final platform = name == null
+                      ? null
+                      : PlatformType.tryParse(name);
+                  final id = state.pathParameters['id'] ?? '';
+                  if (platform == null || id.trim().isEmpty) {
+                    return const IkRouteError();
+                  }
+                  return PlaylistDetailPage(
+                    platform: platform,
+                    playlistId: id,
+                    playlistName:
+                        state.uri.queryParameters['name'] ?? IkStrings.playlists,
+                    coverUrl: state.uri.queryParameters['cover'],
+                    desktopTable: true,
                   );
                 },
               )

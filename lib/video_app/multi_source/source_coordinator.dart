@@ -194,6 +194,7 @@ class SourceSession {
     this.onChanged,
     this.exclusions = const [],
     this.budget = const Duration(seconds: 45),
+    this.resolveTimeout = const Duration(seconds: 15),
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now {
     renewBudget();
@@ -203,6 +204,7 @@ class SourceSession {
   final void Function()? onChanged;
   final List<String> exclusions;
   final Duration budget;
+  final Duration resolveTimeout;
   final DateTime Function() _now;
   late DateTime _deadline;
   final List<SourceAttempt> attempts = [];
@@ -242,9 +244,9 @@ class SourceSession {
       _token = token;
       try {
         final remainingTime = _deadline.difference(_now());
-        final limit = remainingTime < const Duration(seconds: 15)
+        final limit = remainingTime < resolveTimeout
             ? remainingTime
-            : const Duration(seconds: 15);
+            : resolveTimeout;
         final result = await Future.any<ResolvedSource?>([
           resolve(candidate, token),
           token.whenCancel.then<ResolvedSource?>((_) => null),

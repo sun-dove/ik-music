@@ -59,6 +59,7 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
   Timer? _pendingRecordTimer;
   String? _pendingRecordKey;
   int _loadGeneration = 0;
+  Future<void> _recentMutationTail = Future<void>.value();
 
   HistoryNotifier(
     this._historyDao,
@@ -113,38 +114,102 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
     }
   }
 
-  Future<void> recordListen(Song song, {int durationMs = 0}) async {
-    final songKey = '${song.platform.name}_${song.id}';
+  Future<T> _queueRecentMutation<T>(Future<T> Function() mutation) {
+    final next = _recentMutationTail.then((_) => mutation());
+    _recentMutationTail = next.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace trace) {},
+    );
+    return next;
+  }
+
+  Future<void> recordListen(Song song, {int durationMs = 0}) {
     final now = DateTime.now();
+    return _queueRecentMutation(() async {
+      final songKey = '${song.platform.name}_${song.id}';
 
-    // Time-based cooldown: ignore if same song recorded within 10 seconds
-    if (_lastListenedSongId == songKey &&
-        _lastListenedAt != null &&
-        now.difference(_lastListenedAt!).inSeconds < 10) {
-      return;
+      // Time-based cooldown: ignore if same song recorded within 10 seconds
+      if (_lastListenedSongId == songKey &&
+          _lastListenedAt != null &&
+          now.difference(_lastListenedAt!).inSeconds < 10) {
+        return;
+      }
+
+      _lastListenedSongId = songKey;
+      _lastListenedAt = now;
+
+      try {
+        await _songsDao.insertSong(_songToCompanion(song));
+        await _historyDao.recordRecentListen(
+          song.id,
+          song.platform.name,
+          durationMs: durationMs,
+        );
+
+        // Update in-memory state so the UI sees the new entry immediately
+        final newEntry = HistoryEntry(
+          song: song,
+          listenedAt: now,
+          durationListenedMs: durationMs,
+        );
+        if (mounted) {
+          state = state.copyWith(entries: [newEntry, ...state.entries]);
+        }
+      } catch (e) {
+        debugPrint('recordListen error: $e');
+      }
+    });
+  }
+
+  /// 新版按歌曲组移除历史；等待既有录入完成，数据库成功后才改列表。
+  Future<bool> removeRecentSongsHistory(Iterable<Song> songs) {
+    final identities = songs
+        .map((song) => (id: song.id, platform: song.platform.name))
+        .toSet();
+    if (identities.isEmpty) return Future<bool>.value(true);
+    final recordKeys = identities
+        .map((song) => '${song.platform}_${song.id}')
+        .toSet();
+    if (recordKeys.contains(_pendingRecordKey)) {
+      _pendingRecordTimer?.cancel();
+      _pendingRecordTimer = null;
+      _pendingRecordKey = null;
     }
-
-    _lastListenedSongId = songKey;
-    _lastListenedAt = now;
-
-    try {
-      await _songsDao.insertSong(_songToCompanion(song));
-      await _historyDao.recordListen(
-        song.id,
-        song.platform.name,
-        durationMs: durationMs,
-      );
-
-      // Update in-memory state so the UI sees the new entry immediately
-      final newEntry = HistoryEntry(
-        song: song,
-        listenedAt: now,
-        durationListenedMs: durationMs,
-      );
-      state = state.copyWith(entries: [newEntry, ...state.entries]);
-    } catch (e) {
-      debugPrint('recordListen error: $e');
-    }
+    ++_loadGeneration;
+    return _queueRecentMutation(() async {
+      try {
+        await _historyDao.removeRecentSongsHistory(identities);
+        ++_loadGeneration;
+        if (recordKeys.contains(_lastListenedSongId)) {
+          _lastListenedSongId = null;
+          _lastListenedAt = null;
+        }
+        if (mounted) {
+          state = state.copyWith(
+            entries: state.entries
+                .where(
+                  (entry) => !identities.contains((
+                    id: entry.song.id,
+                    platform: entry.song.platform.name,
+                  )),
+                )
+                .toList(),
+            isLoading: false,
+            error: () => null,
+          );
+        }
+        return true;
+      } catch (error) {
+        ++_loadGeneration;
+        if (mounted) {
+          state = state.copyWith(
+            isLoading: false,
+            error: () => '移除失败，请重试',
+          );
+        }
+        return false;
+      }
+    });
   }
 
   void scheduleRecordAfterPlaybackStarts(Song song) {

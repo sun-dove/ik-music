@@ -52,12 +52,16 @@ class PreparedSourceRouter {
   Song? song;
   bool guarded = false;
   CancelToken mediaToken = CancelToken();
+  CancelToken? _loadedMediaToken;
+  bool get _hasLoadedMedia =>
+      _loadedMediaToken == mediaToken && !mediaToken.isCancelled;
   Duration Function()? timeLeft;
   final failedUrls = <String>{};
   bool seekFailed = false;
   void cancelMedia() {
     mediaToken.cancel();
     mediaToken = CancelToken();
+    _loadedMediaToken = null;
   }
 
   AudioLevel quality(PlatformType type) =>
@@ -109,15 +113,24 @@ class _SourceAudio
         SkipSilenceCapable,
         VerifiedEqualizerCapable,
         SpatialAudioCapable {
-  _SourceAudio(this.delegate, this.router, [IkUserGainController? userGain])
+  _SourceAudio(
+    this.delegate,
+    this.router, {
+    IkUserGainController? userGain,
+    this.isolateRequests = false,
+    this.loadTimeout = const Duration(seconds: 10),
+  })
     : _gain = userGain?.attach(
         delegate.setVolume,
         initialVolume: delegate.volume,
       );
   final PlayerAudioController delegate;
   final PreparedSourceRouter router;
+  final bool isolateRequests;
+  final Duration loadTimeout;
   final IkGainBinding? _gain;
   int _gainPlayGeneration = 0;
+  bool _disposed = false;
   @override
   Future<bool> supportsSpatialAudio() => delegate is SpatialAudioCapable
       ? (delegate as SpatialAudioCapable).supportsSpatialAudio()
@@ -138,9 +151,15 @@ class _SourceAudio
   }
 
   CancelToken? _loaded;
+  CancelToken? _requestToken;
   bool get _current =>
-      !router.guarded ||
-      (_loaded == router.mediaToken && _loaded?.isCancelled == false);
+      (!isolateRequests ||
+          (!_disposed &&
+              (_requestToken == null ||
+                  (_requestToken == router.mediaToken &&
+                      _requestToken?.isCancelled == false)))) &&
+      (!router.guarded ||
+          (_loaded == router.mediaToken && _loaded?.isCancelled == false));
   Stream<T> _events<T>(Stream<T> stream) => stream.transform(
     StreamTransformer<T, T>.fromHandlers(
       handleData: (value, sink) {
@@ -166,13 +185,53 @@ class _SourceAudio
       _events(delegate.playerStateStream);
   @override
   Future<void> setUrl(String url) async {
+    final requestedToken = router.mediaToken;
+    _requestToken = requestedToken;
+    final initialRemaining = router.timeLeft?.call() ?? loadTimeout;
+    final loadWindow = initialRemaining < loadTimeout
+        ? initialRemaining
+        : loadTimeout;
+    final deadline = isolateRequests && router.guarded
+        ? DateTime.now().add(loadWindow)
+        : null;
     if (_gain != null) {
       _gainPlayGeneration++;
-      await _gain.preparePlayback();
+      if (deadline == null) {
+        await _gain.preparePlayback();
+      } else {
+        try {
+          await Future.any<void>([
+            _gain.preparePlayback(),
+            requestedToken.whenCancel.then(
+              (_) => throw const SourceFailure(
+                'cancelled',
+                SourceStrings.loadCancelled,
+              ),
+            ),
+          ]).timeout(loadWindow);
+        } catch (_) {
+          _failedLoad(url, requestedToken);
+          rethrow;
+        }
+      }
+    }
+    if (isolateRequests &&
+        (_disposed ||
+            requestedToken.isCancelled ||
+            requestedToken != router.mediaToken)) {
+      throw const SourceFailure('cancelled', SourceStrings.loadCancelled);
     }
     if (!router.guarded) {
       _loaded = null;
       await delegate.setUrl(url);
+      if (isolateRequests &&
+          (_disposed ||
+              requestedToken.isCancelled ||
+              requestedToken != router.mediaToken)) {
+        throw const SourceFailure('cancelled', SourceStrings.loadCancelled);
+      }
+      _loaded = requestedToken;
+      router._loadedMediaToken = requestedToken;
       return;
     }
     final token = router.mediaToken;
@@ -180,8 +239,10 @@ class _SourceAudio
         router.failedUrls.contains(url)) {
       throw const SourceFailure('load', SourceStrings.invalidAudio);
     }
-    final remaining = router.timeLeft?.call() ?? const Duration(seconds: 10);
-    if (remaining <= Duration.zero) {
+    final remaining = router.timeLeft?.call() ?? loadTimeout;
+    final loadRemaining = deadline?.difference(DateTime.now()) ?? loadTimeout;
+    if (remaining <= Duration.zero || loadRemaining <= Duration.zero) {
+      if (isolateRequests) _failedLoad(url, token);
       throw const SourceFailure('timeout', SourceStrings.loadBudgetUsed);
     }
     try {
@@ -194,36 +255,74 @@ class _SourceAudio
           ),
         ),
       ]).timeout(
-        remaining < const Duration(seconds: 10)
-            ? remaining
-            : const Duration(seconds: 10),
+        remaining < loadRemaining ? remaining : loadRemaining,
       );
       if (token.isCancelled) throw token.cancelError!;
+      if (isolateRequests && (_disposed || token != router.mediaToken)) {
+        throw const SourceFailure('cancelled', SourceStrings.loadCancelled);
+      }
       _loaded = token;
+      router._loadedMediaToken = token;
     } catch (_) {
-      router.failedUrls.add(url);
+      _failedLoad(url, token);
       rethrow;
+    }
+  }
+
+  void _failedLoad(String url, CancelToken token) {
+    if (!isolateRequests ||
+        (!token.isCancelled && token == router.mediaToken)) {
+      router.failedUrls.add(url);
+    }
+    if (isolateRequests) {
+      token.cancel(SourceStrings.loadCancelled);
+      _loaded = null;
+      if (router._loadedMediaToken == token) {
+        router._loadedMediaToken = null;
+      }
     }
   }
 
   @override
   Future<void> play() {
+    if (isolateRequests &&
+        (_disposed ||
+            _loaded != router.mediaToken ||
+            !router._hasLoadedMedia)) {
+      return Future.value();
+    }
     if (router.guarded &&
         (_loaded != router.mediaToken || _loaded?.isCancelled != false)) {
       return Future.value();
     }
     final gain = _gain;
-    if (gain == null) return delegate.play();
     final generation = _gainPlayGeneration;
     final token = router.mediaToken;
-    return gain.preparePlayback().then<void>((_) async {
-      if (generation != _gainPlayGeneration ||
-          token != router.mediaToken ||
-          !_current) {
-        return;
+    return _playForToken(token, gain, generation);
+  }
+
+  Future<void> _playForToken(
+    CancelToken token,
+    IkGainBinding? gain,
+    int generation,
+  ) async {
+    try {
+      if (gain != null) {
+        await gain.preparePlayback();
+        if (generation != _gainPlayGeneration ||
+            token != router.mediaToken ||
+            !_current) {
+          return;
+        }
       }
       await delegate.play();
-    });
+    } catch (_) {
+      if (isolateRequests &&
+          (_disposed || token.isCancelled || token != router.mediaToken)) {
+        return;
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -240,9 +339,14 @@ class _SourceAudio
 
   @override
   Future<void> seek(Duration value) async {
+    final token = router.mediaToken;
     try {
       await delegate.seek(value);
     } catch (_) {
+      if (isolateRequests &&
+          (_disposed || token.isCancelled || token != router.mediaToken)) {
+        return;
+      }
       router.seekFailed = true;
       rethrow;
     }
@@ -291,6 +395,10 @@ class _SourceAudio
 
   @override
   Future<void> dispose() {
+    _disposed = true;
+    if (router._loadedMediaToken == _loaded) {
+      router._loadedMediaToken = null;
+    }
     if (_gain != null) _gainPlayGeneration++;
     _gain?.close();
     return delegate.dispose();
@@ -304,6 +412,8 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     required this.router,
     required this.resolve,
     this.onProgress,
+    this.preservePlaybackOnSettingsChange = false,
+    this.quickSourceRecovery = false,
     CustomSourcePlaybackFallback? legacyFallback,
     PlayerAudioController? audioController,
     PlayerAudioController Function()? audioControllerFactory,
@@ -322,16 +432,48 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
          requestedQuality: router.quality,
          audioController: audioController == null
              ? null
-             : _SourceAudio(audioController, router, userGain),
+             : _SourceAudio(
+                 audioController,
+                 router,
+                 userGain: userGain,
+                 isolateRequests:
+                     preservePlaybackOnSettingsChange || quickSourceRecovery,
+                 loadTimeout: quickSourceRecovery
+                     ? const Duration(seconds: 6)
+                     : const Duration(seconds: 10),
+               ),
          audioControllerFactory: () => _SourceAudio(
            (audioControllerFactory ?? _defaultSourceAudio)(),
            router,
-           userGain,
+           userGain: userGain,
+           isolateRequests:
+               preservePlaybackOnSettingsChange || quickSourceRecovery,
+           loadTimeout: quickSourceRecovery
+               ? const Duration(seconds: 6)
+               : const Duration(seconds: 10),
          ),
          customSourceFallback: legacyFallback,
        ) {
     settings.addListener(_settingsChanged);
     _unlisten = addListener((value) {
+      if (preservePlaybackOnSettingsChange &&
+          _settingsPending &&
+          !_advancing &&
+          !_paused &&
+          !router.guarded &&
+          _multiEnabled &&
+          _song != null &&
+          value.currentSong == _song &&
+          value.error != null) {
+        _advancing = true;
+        final generation = _generation;
+        scheduleMicrotask(() {
+          if (mounted && generation == _generation && !_paused) {
+            unawaited(_start(_song!, value.position));
+          }
+        });
+        return;
+      }
       final session = _session;
       if (_advancing ||
           _paused ||
@@ -345,7 +487,16 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       final source = _active!;
       _active = null;
       session.failed(source, SourceFailure('playback', value.error!));
-      session.renewBudget();
+      if (preservePlaybackOnSettingsChange || quickSourceRecovery) {
+        router.failedUrls.add(source.url.toString());
+        router.cancelMedia();
+        router.prepared = null;
+      }
+      if (preservePlaybackOnSettingsChange && _settingsPending) {
+        session.cancel();
+        _createSession(_song!);
+      }
+      _session?.renewBudget();
       _advancing = true;
       final generation = _generation;
       scheduleMicrotask(() => _advance(generation, value.position));
@@ -354,6 +505,8 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
   final SourceSettings settings;
   final PreparedSourceRouter router;
   final MultiSourceResolve resolve;
+  final bool preservePlaybackOnSettingsChange;
+  final bool quickSourceRecovery;
   final void Function(SourcePlaybackView)? onProgress;
   final OfflineFilePathResolver? _offlinePath;
   final bool Function()? _offlineMode;
@@ -365,11 +518,29 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
   bool _advancing = false, _paused = false;
   Future<void>? _loading;
   AudioLevel? _fixedOverride;
+  SourceCollection? _sessionPolicy;
+  bool _settingsPending = false;
 
   bool get _multiEnabled =>
       settings.value.autoSwitch ||
       settings.value.highestQuality ||
       settings.value.sourceFirst;
+
+  bool get _hasStableMedia =>
+      !_advancing &&
+      _loading == null &&
+      !state.isTransitioning &&
+      state.error == null &&
+      state.currentSong == _song &&
+      router._hasLoadedMedia &&
+      (!router.guarded ||
+          (_active != null && _session?.cancelled == false));
+
+  bool get _usesManagedPlayback =>
+      _multiEnabled ||
+      (preservePlaybackOnSettingsChange &&
+          router.guarded &&
+          state.currentSong == _song);
 
   /// 可由新版入口扩展平台；旧入口仍使用原候选规则。
   List<SourceCandidate> candidatesFor(Song song, AudioLevel quality) =>
@@ -377,6 +548,10 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
   List<String> exclusionsFor(Song song, AudioLevel quality) =>
       sourceExclusions(song, quality, settings.value);
   void _settingsChanged() {
+    if (preservePlaybackOnSettingsChange) {
+      _settingsPending = true;
+      if (_hasStableMedia) return;
+    }
     final wasGuarded = router.guarded;
     cancelSourceAttempts();
     if (wasGuarded) unawaited(super.pause());
@@ -387,6 +562,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     _session?.cancel();
     router.cancelMedia();
     _active = null;
+    _sessionPolicy = null;
     router.prepared = null;
     _advancing = false;
     if (mounted && state.isTransitioning) {
@@ -408,12 +584,20 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     await _loading;
     if (generation != _generation || !mounted) return;
     _paused = false;
+    _settingsPending = false;
     _song = song;
     router.song = song;
     router.failedUrls.clear();
     router.guarded = _multiEnabled && song.platform != PlatformType.local;
     if (!router.guarded) {
       await super.playSong(song);
+      if (preservePlaybackOnSettingsChange &&
+          mounted &&
+          generation == _generation &&
+          state.error == null &&
+          position > Duration.zero) {
+        await super.seek(position);
+      }
       return;
     }
     if (_offlineMode?.call() == true && _offlinePath != null) {
@@ -422,6 +606,13 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       if (local != null) {
         router.guarded = false;
         await super.playSong(song);
+        if (preservePlaybackOnSettingsChange &&
+            mounted &&
+            generation == _generation &&
+            state.error == null &&
+            position > Duration.zero) {
+          await super.seek(position);
+        }
         return;
       }
     }
@@ -443,7 +634,15 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       isTransitioning: true,
       error: () => null,
     );
-    _session = SourceSession(
+    _createSession(song);
+    await _advance(generation, position);
+  }
+
+  void _createSession(Song song) {
+    _sessionPolicy = settings.value;
+    _settingsPending = false;
+    late final SourceSession session;
+    session = SourceSession(
       exclusions: exclusionsFor(
         song,
         _fixedOverride ?? router.fixedQuality(song.platform),
@@ -453,10 +652,18 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
         _fixedOverride ?? router.fixedQuality(song.platform),
       ),
       resolve: (candidate, token) => resolve(song, candidate, token),
-      onChanged: _report,
+      onChanged: () {
+        if (identical(_session, session)) _report();
+      },
+      budget: quickSourceRecovery
+          ? const Duration(seconds: 25)
+          : const Duration(seconds: 45),
+      resolveTimeout: quickSourceRecovery
+          ? const Duration(seconds: 7)
+          : const Duration(seconds: 15),
     );
-    router.timeLeft = () => _session?.timeLeft ?? Duration.zero;
-    await _advance(generation, position);
+    _session = session;
+    router.timeLeft = () => session.timeLeft;
   }
 
   void _report() {
@@ -465,7 +672,9 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     if (session == null) return;
     final last = session.attempts.lastOrNull;
     final downgraded =
-        settings.value.highestQuality &&
+        (preservePlaybackOnSettingsChange
+            ? (_sessionPolicy?.highestQuality ?? settings.value.highestQuality)
+            : settings.value.highestQuality) &&
         last != null &&
         last.candidate.quality != AudioLevel.hires;
     final qualityNotice = downgraded ? SourceStrings.downshift : '';
@@ -494,7 +703,10 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
         message: message,
         details: session.summary,
         busy: _advancing,
-        canContinue: session.budgetExpired && session.canContinue,
+        canContinue:
+            (!preservePlaybackOnSettingsChange || _active == null) &&
+            session.budgetExpired &&
+            session.canContinue,
         sourceName: _active?.candidate.name,
         format: _active?.format,
         bitrate: _active?.bitrate,
@@ -530,6 +742,9 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
           );
           return;
         }
+        if (quickSourceRecovery || preservePlaybackOnSettingsChange) {
+          router.cancelMedia();
+        }
         router.prepared = resolved;
         _loading = super.playSong(song);
         await _loading;
@@ -562,6 +777,10 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
 
   Future<void> continueSources() async {
     if (_advancing || _session?.canContinue != true) return;
+    if (preservePlaybackOnSettingsChange && _settingsPending && _song != null) {
+      _session!.cancel();
+      _createSession(_song!);
+    }
     _session!.renewBudget();
     _paused = false;
     state = state.copyWith(error: () => null, isTransitioning: true);
@@ -570,7 +789,18 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
 
   @override
   Future<void> pause() async {
-    if (!_multiEnabled) {
+    if (preservePlaybackOnSettingsChange && _hasStableMedia) {
+      _paused = true;
+      final generation = _generation;
+      await super.pause();
+      if (mounted && generation == _generation && _paused) {
+        onProgress?.call(
+          const SourcePlaybackView(message: SourceStrings.paused),
+        );
+      }
+      return;
+    }
+    if (!_usesManagedPlayback) {
       await super.pause();
       return;
     }
@@ -595,15 +825,46 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
 
   @override
   Future<void> togglePlay() async {
-    if (_multiEnabled && (state.isPlaying || state.isTransitioning)) {
+    if (preservePlaybackOnSettingsChange &&
+        state.isPlaying &&
+        _hasStableMedia) {
       await pause();
       return;
     }
-    if (_multiEnabled && state.currentSong != null && !state.isPlaying) {
+    if (preservePlaybackOnSettingsChange &&
+        !state.isPlaying &&
+        _hasStableMedia) {
+      _paused = false;
+      final generation = _generation;
+      await super.togglePlay();
+      if (mounted && generation == _generation && state.error == null) {
+        if (router.guarded) {
+          _report();
+        } else {
+          onProgress?.call(const SourcePlaybackView());
+        }
+      }
+      return;
+    }
+    if (_usesManagedPlayback && (state.isPlaying || state.isTransitioning)) {
+      await pause();
+      return;
+    }
+    if (_usesManagedPlayback &&
+        state.currentSong != null &&
+        !state.isPlaying) {
       if (_session?.canContinue == true && _session!.budgetExpired) {
         await continueSources();
         return;
       }
+      await _start(state.currentSong!, state.position);
+      return;
+    }
+    if (preservePlaybackOnSettingsChange &&
+        state.currentSong != null &&
+        !state.isPlaying &&
+        !state.isTransitioning &&
+        !router._hasLoadedMedia) {
       await _start(state.currentSong!, state.position);
       return;
     }
@@ -615,7 +876,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     AudioLevel quality, {
     bool preferHighest = false,
   }) async {
-    if (!_multiEnabled) {
+    if (!_usesManagedPlayback) {
       await _loading;
       router.guarded = false;
       router.prepared = null;

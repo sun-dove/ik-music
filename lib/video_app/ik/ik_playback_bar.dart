@@ -14,6 +14,7 @@ import 'ik_floating_lyrics.dart';
 import 'ik_lyrics_action.dart';
 import 'ik_like_action.dart';
 import 'ik_playback_lyrics.dart';
+import 'ik_queue_sheet.dart';
 import 'ik_user_gain.dart';
 import 'ik_runtime.dart';
 
@@ -58,6 +59,7 @@ class IkPlaybackBar extends ConsumerWidget {
     required this.onOpen,
     required this.onAudio,
     this.inlineLyrics = false,
+    this.balancedLayout = false,
   })
     : _stableSeekSemantics = false,
       contextualErrors = false;
@@ -67,12 +69,14 @@ class IkPlaybackBar extends ConsumerWidget {
     required this.onAudio,
     this.contextualErrors = false,
     this.inlineLyrics = false,
+    this.balancedLayout = false,
   }) : _stableSeekSemantics = true;
   final VoidCallback? onOpen;
   final VoidCallback onAudio;
   final bool _stableSeekSemantics;
   final bool contextualErrors;
   final bool inlineLyrics;
+  final bool balancedLayout;
   Widget _seekSemantics(Slider slider) =>
       _stableSeekSemantics ? Semantics(container: true, child: slider) : slider;
   String _time(Duration value) =>
@@ -358,7 +362,9 @@ class IkPlaybackBar extends ConsumerWidget {
         IconButton(
           key: const ValueKey('ik-bar-queue'),
           tooltip: IkStrings.nextUp,
-          onPressed: () => showIkQueue(context),
+          onPressed: () => balancedLayout
+              ? showIkQueueRefined(context)
+              : showIkQueue(context),
           icon: const Icon(Icons.queue_music_rounded, size: 23),
         ),
       ],
@@ -403,10 +409,62 @@ class IkPlaybackBar extends ConsumerWidget {
                 ),
               ),
             LayoutBuilder(
-              builder: (context, size) => size.maxWidth >= 850
+              builder: (context, size) {
+                final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                if (balancedLayout && size.maxWidth >= 1000 * scale) {
+                  final centerWidth = (size.maxWidth * .32)
+                      .clamp(400.0, 600.0).toDouble();
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 328),
+                            child: title,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 24),
+                      SizedBox(
+                        key: const ValueKey('ik-bar-centered-controls'),
+                        width: centerWidth,
+                        child: controls,
+                      ),
+                      const SizedBox(width: 24),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            if (inlineLyrics && song != null) ...[
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 460),
+                                child: IkPlaybackLyrics(
+                                  key: ValueKey('ik-bar-lyrics-${song.platform.name}-${song.id}'),
+                                  position: player.position,
+                                  isPlaying: player.isPlaying,
+                                  isTransitioning: player.isTransitioning,
+                                  compact: true,
+                                  onOpen: onOpen,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                            ],
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [volume, tools],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }
+                return size.maxWidth >= 850
                   ? Row(
                       children: [
-                        Expanded(flex: 10, child: wideTitle()),
+                        Expanded(flex: 10, child: balancedLayout ? title : wideTitle()),
                         const SizedBox(width: 24),
                         Expanded(flex: 12, child: controls),
                         const SizedBox(width: 24),
@@ -429,7 +487,8 @@ class IkPlaybackBar extends ConsumerWidget {
                           children: [volume, if (size.maxWidth < 470) tools],
                         ),
                       ],
-                    ),
+                    );
+              },
             ),
           ],
         ),

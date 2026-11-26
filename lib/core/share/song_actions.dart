@@ -193,3 +193,84 @@ Future<SongActionResult?> showSongActionsMenu(
   }
   return result;
 }
+
+/// 新版页面可附加自己拥有的数据操作，不扩展既有SongAction契约。
+class SongMenuExtraAction {
+  const SongMenuExtraAction({
+    required this.label,
+    required this.icon,
+    required this.onSelected,
+    this.enabled = true,
+  });
+  final String label;
+  final IconData icon;
+  final Future<SongActionResult> Function() onSelected;
+  final bool enabled;
+}
+
+/// 定点桌面菜单；更多按钮与鼠标右键共用原歌曲动作和反馈。
+Future<SongActionResult?> showSongActionsMenuAt(
+  BuildContext context,
+  WidgetRef ref, {
+  required Song song,
+  Offset? position,
+  bool isLiked = false,
+  bool isDownloaded = false,
+  bool isLocal = false,
+  List<SongMenuExtraAction> extraActions = const [],
+}) async {
+  final selected = await showSongActionsPopup(
+    context,
+    song: song,
+    position: position,
+    isLiked: isLiked,
+    isDownloaded: isDownloaded,
+    isLocal: isLocal,
+    extraEntries: [
+      for (var index = 0; index < extraActions.length; index++)
+        PopupMenuItem<Object>(
+          value: index,
+          enabled: extraActions[index].enabled,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: Icon(extraActions[index].icon, size: 18),
+              ),
+              const SizedBox(width: 12),
+              Expanded(child: Text(extraActions[index].label)),
+            ],
+          ),
+        ),
+    ],
+  );
+  if (selected == null || !context.mounted) return null;
+  SongActionResult result;
+  if (selected is SongAction) {
+    result = await performSongAction(
+      action: selected,
+      song: song,
+      deps: liveSongActionDeps(ref, context: context),
+      isLiked: isLiked,
+    );
+  } else if (selected is int && selected >= 0 && selected < extraActions.length) {
+    try {
+      result = await extraActions[selected].onSelected();
+    } catch (error) {
+      result = SongActionResult(message: '操作失败：$error', success: false);
+    }
+  } else {
+    return null;
+  }
+  if (!context.mounted) return result;
+  final message = result.message;
+  if (message != null) {
+    if (result.success) {
+      showSuccessSnackBar(context, message);
+    } else {
+      showErrorSnackBar(context, message);
+    }
+  }
+  return result;
+}

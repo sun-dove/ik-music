@@ -15,11 +15,13 @@ class IkPlaybackLyrics extends ConsumerWidget {
     required this.position,
     required this.isPlaying,
     required this.isTransitioning,
+    this.compact = false,
     this.onOpen,
   });
 
   final Duration position;
   final bool isPlaying, isTransitioning;
+  final bool compact;
   final VoidCallback? onOpen;
 
   @override
@@ -49,7 +51,7 @@ class IkPlaybackLyrics extends ConsumerWidget {
     }
     final colors = Theme.of(context).colorScheme;
     final style = Theme.of(context).textTheme.bodySmall!.copyWith(
-      fontSize: 13,
+      fontSize: compact ? 14 : 13,
       height: 1.5,
       color: hasLine ? colors.onSurfaceVariant : colors.onSurfaceVariant.withValues(alpha: .65),
     );
@@ -64,8 +66,14 @@ class IkPlaybackLyrics extends ConsumerWidget {
           onTap: onOpen,
           borderRadius: BorderRadius.circular(8),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
-            child: LayoutBuilder(
+            padding: EdgeInsets.symmetric(horizontal: 4, vertical: compact ? 2 : 12),
+            child: Row(
+              children: [
+                if (compact) ...[
+                  Icon(Icons.lyrics_outlined, size: 16, color: colors.primary),
+                  const SizedBox(width: 7),
+                ],
+                Expanded(child: LayoutBuilder(
               builder: (context, constraints) {
                 final direction = Directionality.of(context);
                 final painter = TextPainter(
@@ -92,6 +100,8 @@ class IkPlaybackLyrics extends ConsumerWidget {
                   playing: isPlaying && !isTransitioning,
                 );
               },
+                )),
+              ],
             ),
           ),
         ),

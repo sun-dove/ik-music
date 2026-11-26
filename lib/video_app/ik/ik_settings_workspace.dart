@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -40,6 +41,7 @@ import 'ik_desktop_lyrics_style.dart';
 import 'ik_lyrics_style_panel.dart';
 import 'ik_spatial_runtime.dart';
 import 'ik_version.dart';
+import 'ik_workspace_navigation.dart';
 
 class IkSettingsWorkspace extends ConsumerStatefulWidget {
   const IkSettingsWorkspace({
@@ -58,6 +60,9 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
     this.sectionRequest = 0,
     this.alignToDesign = false,
     this.refinedLyrics = false,
+    this.fixedNavigation = false,
+    this.active = true,
+    this.sourceBuilder,
   });
   final VideoPreferences preferences;
   final WindowsAppearance? appearance;
@@ -72,6 +77,8 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
   final int sectionRequest;
   final bool alignToDesign;
   final bool refinedLyrics;
+  final bool fixedNavigation, active;
+  final WidgetBuilder? sourceBuilder;
   @override
   ConsumerState<IkSettingsWorkspace> createState() =>
       _IkSettingsWorkspaceState();
@@ -97,6 +104,10 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
   String? _systemFont;
   String? _backupRaw, _backupStatus;
   BackupFileSummary? _backupSummary;
+  final _sourceLeaveChecks = <Object, Future<bool> Function()>{};
+  IkWorkspaceNavigation? _outerNavigation;
+  bool _changingSection = false;
+  String? _requestedSection;
   void _preferencesChanged() {
     if (mounted) setState(() {});
   }
@@ -106,6 +117,48 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
     super.initState();
     widget.appearance?.addListener(_preferencesChanged);
     widget.unified?.addListener(_preferencesChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final navigation = IkWorkspaceNavigation.maybeOf(context);
+    if (identical(navigation, _outerNavigation)) return;
+    for (final owner in _sourceLeaveChecks.keys) {
+      _outerNavigation?.unregister(owner);
+    }
+    _outerNavigation = navigation;
+    for (final entry in _sourceLeaveChecks.entries) {
+      navigation?.register(entry.key, entry.value);
+    }
+  }
+
+  void _registerSourceLeave(Object owner, Future<bool> Function() check) {
+    _sourceLeaveChecks[owner] = check;
+    _outerNavigation?.register(owner, check);
+  }
+
+  void _unregisterSourceLeave(Object owner) {
+    _sourceLeaveChecks.remove(owner);
+    _outerNavigation?.unregister(owner);
+  }
+
+  Future<void> _selectSection(String next) async {
+    if (!sections.containsKey(next)) return;
+    _requestedSection = next;
+    if (_changingSection || next == _section) return;
+    _changingSection = true;
+    try {
+      for (final check in List.of(_sourceLeaveChecks.values).reversed) {
+        if (!await check() || !mounted) return;
+      }
+      if (mounted && _requestedSection != null) {
+        setState(() => _section = _requestedSection!);
+      }
+    } finally {
+      _changingSection = false;
+      _requestedSection = null;
+    }
   }
 
   @override
@@ -122,7 +175,14 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
     if ((oldWidget.initialSection != widget.initialSection ||
             oldWidget.sectionRequest != widget.sectionRequest) &&
         sections.containsKey(widget.initialSection)) {
-      _section = widget.initialSection;
+      if (widget.fixedNavigation) {
+        final target = widget.initialSection;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) unawaited(_selectSection(target));
+        });
+      } else {
+        _section = widget.initialSection;
+      }
     }
   }
 
@@ -130,6 +190,10 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
   void dispose() {
     widget.appearance?.removeListener(_preferencesChanged);
     widget.unified?.removeListener(_preferencesChanged);
+    for (final owner in _sourceLeaveChecks.keys.toList()) {
+      _outerNavigation?.unregister(owner);
+    }
+    _sourceLeaveChecks.clear();
     super.dispose();
   }
 
@@ -173,6 +237,7 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.fixedNavigation) return _fixedWorkspace();
     final child = LayoutBuilder(
       builder: (context, size) {
         final wide = size.maxWidth >= 850;
@@ -259,6 +324,121 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
     );
     return child;
   }
+
+  Widget _fixedWorkspace() => IkWorkspaceNavigation(
+    register: _registerSourceLeave,
+    unregister: _unregisterSourceLeave,
+    child: LayoutBuilder(
+      builder: (context, size) {
+        final wide = size.maxWidth >= 850;
+        final theme = Theme.of(context);
+        final navigation = [
+          for (final item in sections.entries)
+            TextButton(
+              key: ValueKey('ik-settings-${item.key}'),
+              onPressed: () => unawaited(_selectSection(item.key)),
+              style: TextButton.styleFrom(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 13,
+                ),
+                foregroundColor: _section == item.key
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
+                backgroundColor: _section == item.key
+                    ? theme.colorScheme.primary.withValues(alpha: .08)
+                    : Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9),
+                ),
+              ),
+              child: Text(item.value, style: const TextStyle(fontSize: 13)),
+            ),
+        ];
+        final content = _section == 'sources' && widget.sourceBuilder != null
+            ? widget.active
+                  ? Builder(builder: widget.sourceBuilder!)
+                  : const SizedBox.shrink()
+            : SingleChildScrollView(
+                key: ValueKey('ik-settings-scroll-$_section'),
+                child: _content(),
+              );
+        final body = Overlay.wrap(
+          key: ValueKey('ik-settings-overlay-$_section-${widget.active}'),
+          clipBehavior: Clip.none,
+          child: content,
+        );
+        return Padding(
+          padding: EdgeInsets.all(size.maxWidth < 580 ? 16 : 24),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    IkWorkspaceStrings.settings,
+                    style: theme.textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    IkWorkspaceStrings.settingsHint,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: 22),
+                  Expanded(
+                    child: wide
+                        ? Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                width: 145,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: SingleChildScrollView(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: navigation,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      '${IkWorkspaceStrings.currentVersion} · ${IkVersion.label}',
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 28),
+                              Expanded(child: body),
+                            ],
+                          )
+                        : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(children: navigation),
+                              ),
+                              const SizedBox(height: 16),
+                              Expanded(child: body),
+                            ],
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    ),
+  );
 
   Widget _content() => switch (_section) {
     'appearance' => _appearance(),

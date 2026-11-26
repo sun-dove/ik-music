@@ -472,6 +472,63 @@ class SongsDao extends DatabaseAccessor<AppDatabase> with _$SongsDaoMixin {
 class HistoryDao extends DatabaseAccessor<AppDatabase> with _$HistoryDaoMixin {
   HistoryDao(super.db);
 
+  final Set<({String id, String platform})> _removedRecentSongs = {};
+  Future<void> _recentWriteTail = Future<void>.value();
+
+  Future<T> _queueRecentWrite<T>(Future<T> Function() write) {
+    final next = _recentWriteTail.then((_) => write());
+    _recentWriteTail = next.then<void>(
+      (_) {},
+      onError: (Object error, StackTrace trace) {},
+    );
+    return next;
+  }
+
+  /// 新版历史录入：成功的新播放解除该曲的移除屏障。
+  Future<void> recordRecentListen(
+    String songId,
+    String platform, {
+    int durationMs = 0,
+    DateTime? at,
+  }) => _queueRecentWrite(() async {
+    await recordListen(songId, platform, durationMs: durationMs, at: at);
+    _removedRecentSongs.remove((id: songId, platform: platform));
+  });
+
+  /// 当前播放的时长回填不能重建用户刚移除的历史。
+  Future<void> backfillRecentListenedDuration(
+    String songId,
+    String platform,
+    Duration duration, {
+    DateTime? at,
+  }) => _queueRecentWrite(() async {
+    if (_removedRecentSongs.contains((id: songId, platform: platform))) return;
+    await backfillListenedDuration(songId, platform, duration, at: at);
+  });
+
+  /// 只删除组内精确身份的历史；收藏、歌单及统计明细不在此事务内。
+  Future<int> removeRecentSongsHistory(
+    Iterable<({String id, String platform})> songs,
+  ) {
+    final identities = songs.toSet();
+    return _queueRecentWrite(() async {
+      final removed = await transaction(() async {
+        var count = 0;
+        for (final song in identities) {
+          count += await (delete(listeningHistory)..where(
+                (row) =>
+                    row.songId.equals(song.id) &
+                    row.platform.equals(song.platform),
+              ))
+              .go();
+        }
+        return count;
+      });
+      _removedRecentSongs.addAll(identities);
+      return removed;
+    });
+  }
+
   /// Two listens of the same song closer than this are treated as one stretch of
   /// playback, so a pause/resume or a seek does not create a second row.
   static const Duration dedupeWindow = Duration(seconds: 10);

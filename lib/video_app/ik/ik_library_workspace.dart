@@ -39,6 +39,7 @@ class IkLibraryWorkspace extends StatefulWidget {
     this.stableCategoryTabs = false,
     this.contextualErrors = false,
     this.compactSyncStatus = false,
+    this.playlistArtwork = false,
     this.expiredPlatform,
     this.downloadsBuilder,
   });
@@ -59,6 +60,7 @@ class IkLibraryWorkspace extends StatefulWidget {
   final bool stableCategoryTabs;
   final bool contextualErrors;
   final bool compactSyncStatus;
+  final bool playlistArtwork;
   final PlatformType? expiredPlatform;
   final WidgetBuilder? downloadsBuilder;
   @override
@@ -281,13 +283,15 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                                 child: switch (category) {
                                   'playlists' =>
                                     widget.simplifySources
-                                        ? const PlatformPlaylistsPage.compactEmbedded(
+                                        ? PlatformPlaylistsPage.compactEmbedded(
                                             jsonFormatLabel:
                                                 IkStrings.playlistJson,
+                                            playlistArtwork: widget.playlistArtwork,
                                           )
-                                        : const PlatformPlaylistsPage.embedded(
+                                        : PlatformPlaylistsPage.embedded(
                                             jsonFormatLabel:
                                                 IkStrings.playlistJson,
+                                            playlistArtwork: widget.playlistArtwork,
                                           ),
                                   'local' => const LocalMusicPage.embedded(),
                                   'downloads' => widget.downloadsBuilder!(
