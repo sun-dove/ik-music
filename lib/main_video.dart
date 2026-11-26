@@ -353,7 +353,11 @@ Future<void> main() async {
   attachVideoSessionGuard(kugouDio, PlatformType.kugou, auth);
   qqApi = VideoQqPlaybackApi(dio: qqDio);
   PlatformRegistry.register(
-    VideoQqPlatform(api: qqApi, onResolved: onResolved),
+    VideoQqPlatform(
+      api: qqApi,
+      onResolved: onResolved,
+      dailyThirtyRecommendations: PlatformUtils.isWindows,
+    ),
   );
   PlatformRegistry.register(
     VideoNeteasePlatform(

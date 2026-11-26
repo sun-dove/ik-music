@@ -1507,6 +1507,94 @@ class QqApi {
     );
   }
 
+  /// 每日30首卡片来自个人推荐流；不复用“今日私享”的HTML推断。
+  Future<({int? status, Map<String, dynamic> body, bool accessDenied})>
+  getDailyThirtyFeed({
+    required String cookieSnapshot,
+    required String musicId,
+  }) => _dailyThirtyRequest(
+    cookieSnapshot: cookieSnapshot,
+    musicId: musicId,
+    comm: const {'ct': 20, 'cv': 13020008},
+    module: QqEndpoints.moduleRecommendationFeed,
+    method: QqEndpoints.methodGetRecommendationFeed,
+    param: const {'direction': 0, 'page': 1, 's_num': 0, 'v_cache': []},
+  );
+
+  Future<({int? status, Map<String, dynamic> body, bool accessDenied})>
+  getDailyThirtyPlaylistPage(
+    String playlistId, {
+    required String cookieSnapshot,
+    required String musicId,
+    required int songBegin,
+    required int songNum,
+  }) => _dailyThirtyRequest(
+    cookieSnapshot: cookieSnapshot,
+    musicId: musicId,
+    comm: const {
+      'ct': 11,
+      'cv': 14090008,
+      'v': 14090008,
+      'chid': '10003505',
+      'tmeAppID': 'qqmusic',
+    },
+    module: QqEndpoints.moduleOwnedPlaylist,
+    method: QqEndpoints.methodGetOwnedPlaylist,
+    userAgent: 'QQMusic 14090008(android 10)',
+    param: {
+      'disstid': int.parse(playlistId),
+      'dirid': 0,
+      'tag': 1,
+      'song_begin': songBegin,
+      'song_num': songNum,
+    },
+  );
+
+  Future<({int? status, Map<String, dynamic> body, bool accessDenied})>
+  _dailyThirtyRequest({
+    required String cookieSnapshot,
+    required String musicId,
+    required Map<String, dynamic> comm,
+    required String module,
+    required String method,
+    required Map<String, dynamic> param,
+    String? userAgent,
+  }) async {
+    final cookies = _parseCookieMap(cookieSnapshot);
+    final musicKey = _hasCookieValue(cookies['qm_keyst'])
+        ? cookies['qm_keyst']
+        : cookies['qqmusic_key'];
+    final options = _personalDailyOptions(
+      cookieSnapshot,
+      contentType: Headers.jsonContentType,
+    );
+    if (userAgent != null) options.headers!['User-Agent'] = userAgent;
+    final response = await _dio.post<String>(
+      QqEndpoints.musicu,
+      data: {
+        'comm': {
+          ...comm,
+          'qq': musicId,
+          'authst': musicKey,
+          // 当前IK音乐会话由QQLogin取得，登录时已要求loginType=2。
+          'tmeLoginType': 2,
+        },
+        'req_0': {'module': module, 'method': method, 'param': param},
+      },
+      options: options,
+    );
+    final text = response.data?.trim().toLowerCase() ?? '';
+    return (
+      status: response.statusCode,
+      body: response.statusCode == 200
+          ? responseMapOf(response.data)
+          : <String, dynamic>{},
+      accessDenied: text.startsWith('access deny') ||
+          text.startsWith('<!doctype html') ||
+          text.startsWith('<html'),
+    );
+  }
+
   static Options _personalDailyOptions(String cookie, {String? contentType}) =>
       Options(
         contentType: contentType,

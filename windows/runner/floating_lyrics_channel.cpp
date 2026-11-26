@@ -6,9 +6,26 @@
 #include <cstdint>
 #include <string>
 
+#ifdef YUEYIN_BUILD
+#include "ik_desktop_host.h"
+#endif
+
 namespace {
 
 constexpr char kChannelName[] = "com.mconnect.mconnect/floating_lyrics";
+
+#ifdef YUEYIN_BUILD
+BOOL CALLBACK WakeLyricsSettingsWindow(HWND window, LPARAM) {
+  DWORD process = 0;
+  GetWindowThreadProcessId(window, &process);
+  if (process != GetCurrentProcessId() ||
+      !GetPropW(window, IkDesktopHost::WindowProperty())) {
+    return TRUE;
+  }
+  PostMessageW(window, IkDesktopHost::WakeMessage(), 0, 0);
+  return FALSE;
+}
+#endif
 
 std::wstring Utf8ToWide(const std::string& value) {
   if (value.empty()) {
@@ -164,6 +181,11 @@ FloatingLyricsChannel::FloatingLyricsChannel(
       args[flutter::EncodableValue("action")] = flutter::EncodableValue(event);
       channel_->InvokeMethod("controlRequested",
           std::make_unique<flutter::EncodableValue>(args));
+    } else if (event == "settingsRequested") {
+#ifdef YUEYIN_BUILD
+      EnumWindows(WakeLyricsSettingsWindow, 0);
+#endif
+      channel_->InvokeMethod("settingsRequested", nullptr);
     } else {
       channel_->InvokeMethod(event, nullptr);
     }

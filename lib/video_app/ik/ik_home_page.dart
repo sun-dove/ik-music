@@ -72,7 +72,28 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
   @override
   Widget build(BuildContext context) {
     if (widget.refinedRecommendations) {
-      return IkDiscoveryCatalogPage(onNavigate: widget.onNavigate);
+      final player = ref.watch(playerProvider);
+      return IkDiscoveryCatalogPage(
+        onNavigate: widget.onNavigate,
+        compactPlatformSelector: true,
+        header: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DiscoveryHeading(onNavigate: widget.onNavigate),
+            const SizedBox(height: 16),
+            _DiscoveryHero(onExplore: () => widget.onNavigate('/new-songs')),
+            if (player.currentSong case final song?) ...[
+              const SizedBox(height: 12),
+              _ContinueCard(
+                song: song,
+                playing: player.isPlaying,
+                onOpen: widget.onPlayer,
+                onToggle: ref.read(playerProvider.notifier).togglePlay,
+              ),
+            ],
+          ],
+        ),
+      );
     }
     final aligned = widget.workspace && widget.alignToDesign;
     final publicRecommendations = aligned && widget.recommendationsInDiscovery;

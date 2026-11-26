@@ -13,6 +13,7 @@ constexpr wchar_t kCompactClass[] = L"IK_COMPACT_FLOATING_LYRICS_WINDOW";
 constexpr int kToolbarHeight = 36;
 constexpr int kToolbarGap = 6;
 constexpr int kTooltipHeight = 24;
+constexpr int kToolbarButtons = 6;
 
 float WindowScale(HWND window) {
   using GetWindowDpi = UINT(WINAPI*)(HWND);
@@ -85,11 +86,23 @@ void DrawIcon(Gdiplus::Graphics& graphics, RECT bounds, int index,
     RoundedPath(lock, {cx - 6 * scale, cy - scale, 12 * scale, 9 * scale},
                 2 * scale);
     graphics.DrawPath(&pen, &lock);
-  } else {
+  } else if (index == 4) {
     graphics.DrawLine(&pen, cx - 5 * scale, cy - 5 * scale,
                        cx + 5 * scale, cy + 5 * scale);
     graphics.DrawLine(&pen, cx + 5 * scale, cy - 5 * scale,
                        cx - 5 * scale, cy + 5 * scale);
+  } else {
+    Gdiplus::PointF teeth[32];
+    for (int i = 0; i < 32; ++i) {
+      const float angle = static_cast<float>(i) * 3.14159265f / 16.0f;
+      const float radius = (i % 4 < 2 ? 7.0f : 5.3f) * scale;
+      teeth[i] = {cx + std::cos(angle) * radius, cy + std::sin(angle) * radius};
+    }
+    Gdiplus::GraphicsPath gear(Gdiplus::FillModeAlternate);
+    gear.AddPolygon(teeth, 32);
+    gear.AddEllipse(cx - 2.4f * scale, cy - 2.4f * scale,
+                     4.8f * scale, 4.8f * scale);
+    graphics.FillPath(&brush, &gear);
   }
 }
 }  // namespace
@@ -219,7 +232,7 @@ RECT CompactFloatingLyricsWindow::BodyRect() const {
 }
 
 RECT CompactFloatingLyricsWindow::ToolbarRect() const {
-  const int width = Pixels(190);
+  const int width = Pixels(214);
   const int left = (Pixels(content_.width) - width) / 2;
   const int top = toolbar_above_
                       ? Pixels(hovered_button_ >= 0 ? kTooltipHeight : 0)
@@ -229,13 +242,15 @@ RECT CompactFloatingLyricsWindow::ToolbarRect() const {
 
 RECT CompactFloatingLyricsWindow::ButtonRect(int index) const {
   const RECT bar = ToolbarRect();
-  const int left = bar.left + Pixels(5 + index * 36);
-  return {left, bar.top + Pixels(2), left + Pixels(36), bar.bottom - Pixels(2)};
+  // 设置在锁定和关闭之间，原有五项的动作索引保持不变。
+  const int slot = index == 5 ? 4 : index == 4 ? 5 : index;
+  const int left = bar.left + Pixels(5 + slot * 34);
+  return {left, bar.top + Pixels(2), left + Pixels(34), bar.bottom - Pixels(2)};
 }
 
 int CompactFloatingLyricsWindow::ButtonAt(POINT point) const {
   if (!ToolbarVisible()) return -1;
-  for (int i = 0; i < 5; ++i) {
+  for (int i = 0; i < kToolbarButtons; ++i) {
     const RECT rect = ButtonRect(i);
     if (PtInRect(&rect, point)) return i;
   }
@@ -468,7 +483,7 @@ bool CompactFloatingLyricsWindow::Paint() {
       RoundedPath(panel, FloatRect(bar), 10 * scale_);
       Gdiplus::SolidBrush panel_brush(Gdiplus::Color(238, 24, 30, 33));
       graphics.FillPath(&panel_brush, &panel);
-      for (int i = 0; i < 5; ++i) {
+      for (int i = 0; i < kToolbarButtons; ++i) {
         const RECT button = ButtonRect(i);
         const bool enabled = i >= 3 || content_.has_song;
         if (hovered_button_ == i && enabled) {
@@ -484,8 +499,9 @@ bool CompactFloatingLyricsWindow::Paint() {
         const wchar_t* title = hovered_button_ == 0 ? L"上一首" :
             hovered_button_ == 1 ? (content_.playing ? L"暂停" : L"播放") :
             hovered_button_ == 2 ? L"下一首" :
-            hovered_button_ == 3 ? L"锁定歌词" : L"关闭歌词";
-        const float tip_width = 90 * scale_;
+            hovered_button_ == 3 ? L"锁定歌词" :
+            hovered_button_ == 4 ? L"关闭歌词" : L"桌面歌词设置";
+        const float tip_width = (hovered_button_ == 5 ? 112.0f : 90.0f) * scale_;
         Gdiplus::RectF tip((static_cast<float>(width) - tip_width) * 0.5f,
             toolbar_above_ ? 0.0f : static_cast<float>(bar.bottom) + 2 * scale_,
             tip_width, 21 * scale_);
@@ -658,6 +674,8 @@ LRESULT CALLBACK CompactFloatingLyricsWindow::WndProc(
           that->closed_by_user_ = true;
           that->Hide();
           that->Send("closedByUser");
+        } else if (pressed == 5) {
+          that->Send("settingsRequested");
         }
       }
       return 0;

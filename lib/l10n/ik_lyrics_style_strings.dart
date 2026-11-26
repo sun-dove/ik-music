@@ -2,7 +2,8 @@ abstract final class IkLyricsStyleStrings {
   static const style = '歌词样式';
   static const player = '播放详情歌词';
   static const desktop = '桌面歌词外观';
-  static const close = '返回封面';
+  static const desktopSettings = '桌面歌词设置';
+  static const close = '关闭样式面板';
   static const font = '字体';
   static const inheritFont = '沿用应用字体';
   static const fontSize = '字号';

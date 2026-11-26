@@ -61,6 +61,7 @@ class WindowsPlayerPage extends StatefulWidget {
     this.sourceDetails,
     this.playbackBar,
     this.onDesktopLyrics,
+    this.onFloatingLyricsSettings,
     this.desktopLyricsEnabled = false,
     this.alignToDesign = false,
     this.compactLayout = false,
@@ -84,6 +85,7 @@ class WindowsPlayerPage extends StatefulWidget {
   final WindowsSourceDetails? sourceDetails;
   final Widget? playbackBar;
   final VoidCallback? onDesktopLyrics;
+  final VoidCallback? onFloatingLyricsSettings;
   final bool desktopLyricsEnabled;
   final bool alignToDesign;
 
@@ -103,12 +105,14 @@ class WindowsPlayerPage extends StatefulWidget {
 class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   final _scroll = ScrollController();
   final _informationScroll = ScrollController();
+  final _lyricsStyleScroll = ScrollController();
+  final _lyricsStyleMenu = MenuController();
+  final _lyricsStyleButtonFocus = FocusNode();
   final _lyricsFocus = FocusNode();
   List<GlobalKey> _lineKeys = [];
   bool _following = true;
   bool _showTranslation = true;
   bool _sourceExpanded = false;
-  bool _showLyricsStyle = false;
   bool _lyricsStyleBusy = false;
   String? _lyricsStyleIssue;
   double _lyricsFontSize = 22;
@@ -151,13 +155,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
     _follow();
   }
 
-  void _setLyricsStyleVisible(bool visible) {
-    setState(() => _showLyricsStyle = visible);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _informationScroll.hasClients) {
-        _informationScroll.jumpTo(0);
-      }
-    });
+  void _lyricsStyleMenuChanged() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _saveLyricsStyle(IkPlayerLyricsStyle value) async {
@@ -225,11 +224,162 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
       onShadowOpacity: (opacity) =>
           unawaited(_saveLyricsStyle(value.copyWith(shadowOpacity: opacity))),
       onReset: () => unawaited(_resetLyricsStyle()),
-      onClose: () => _setLyricsStyleVisible(false),
+      onClose: _lyricsStyleMenu.close,
       busy: _lyricsStyleBusy,
       issue: _lyricsStyleIssue,
     );
   }
+
+  Widget _lyricsStyleAnchor(BuildContext context) => PopScope<Object?>(
+    canPop: !_lyricsStyleMenu.isOpen,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop && _lyricsStyleMenu.isOpen) _lyricsStyleMenu.close();
+    },
+    child: RawMenuAnchor(
+      controller: _lyricsStyleMenu,
+      childFocusNode: _lyricsStyleButtonFocus,
+      useRootOverlay: false,
+      onOpen: _lyricsStyleMenuChanged,
+      onClose: _lyricsStyleMenuChanged,
+      overlayBuilder: (overlayContext, info) {
+        final colors = Theme.of(overlayContext).colorScheme;
+        final padding = math.min(
+          12.0,
+          math.min(info.overlaySize.width, info.overlaySize.height) / 4,
+        );
+        final width = math.min(364.0, info.overlaySize.width - padding * 2);
+        final desiredTop = info.anchorRect.bottom + 8;
+        final minimumHeight = math.min(180.0, info.overlaySize.height - padding * 2);
+        final top = desiredTop.clamp(
+          padding,
+          info.overlaySize.height - padding - minimumHeight,
+        ).toDouble();
+        final height = math.min(620.0, info.overlaySize.height - top - padding);
+        final left = (info.anchorRect.right - width).clamp(
+          padding,
+          info.overlaySize.width - width - padding,
+        ).toDouble();
+        return Positioned(
+          top: top,
+          left: left,
+          width: width,
+          child: TapRegion(
+            groupId: info.tapRegionGroupId,
+            onTapOutside: (_) => _lyricsStyleMenu.close(),
+            child: Semantics(
+              container: true,
+              explicitChildNodes: true,
+              label: IkLyricsStyleStrings.style,
+              child: FocusScope(
+                child: Focus(
+                  autofocus: true,
+                  onKeyEvent: (_, event) {
+                    if (event is KeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.escape) {
+                      _lyricsStyleMenu.close();
+                      return KeyEventResult.handled;
+                    }
+                    return KeyEventResult.ignored;
+                  },
+                  child: Material(
+                    elevation: 12,
+                    color: colors.surfaceContainerLow,
+                    surfaceTintColor: Colors.transparent,
+                    clipBehavior: Clip.antiAlias,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      side: BorderSide(color: colors.outlineVariant),
+                    ),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(maxHeight: height),
+                      child: Scrollbar(
+                        controller: _lyricsStyleScroll,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          key: const ValueKey('ik-player-style-scroll'),
+                          controller: _lyricsStyleScroll,
+                          child: _lyricsStylePanel(overlayContext),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+      builder: (context, controller, _) => TextButton.icon(
+        key: const ValueKey('ik-player-lyrics-style-toggle'),
+        focusNode: _lyricsStyleButtonFocus,
+        onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+        style: TextButton.styleFrom(
+          foregroundColor: controller.isOpen
+              ? VideoTheme.accent(context)
+              : VideoTheme.secondaryText(context),
+          backgroundColor: controller.isOpen
+              ? Theme.of(context).colorScheme.primary.withValues(alpha: .08)
+              : null,
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+        icon: const Icon(Icons.tune_rounded, size: 18),
+        label: const Text(IkLyricsStyleStrings.style),
+      ),
+    ),
+  );
+
+  Widget _refinedPlayerToolbar(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      TextButton.icon(
+        onPressed: () => Navigator.maybePop(context),
+        icon: const Icon(Icons.keyboard_arrow_down_rounded),
+        label: const Text(WindowsMusicStrings.back),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 4,
+            runSpacing: 2,
+            children: [
+              if (widget.lyricsPreferences != null) _lyricsStyleAnchor(context),
+              if (widget.onDesktopLyrics != null)
+                TextButton.icon(
+                  onPressed: widget.onDesktopLyrics,
+                  icon: Icon(
+                    Icons.subtitles_outlined,
+                    size: 18,
+                    color: widget.desktopLyricsEnabled
+                        ? VideoTheme.accent(context) : null,
+                  ),
+                  label: const Text(IkStrings.floating),
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                ),
+              if (widget.onFloatingLyricsSettings != null)
+                TextButton.icon(
+                  key: const ValueKey('ik-player-floating-lyrics-settings'),
+                  onPressed: widget.onFloatingLyricsSettings,
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  icon: const Icon(Icons.settings_outlined, size: 18),
+                  label: const Text(IkLyricsStyleStrings.desktopSettings),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
 
   void _resetKeys() {
     _lineKeys = List.generate(widget.lyrics.length, (_) => GlobalKey());
@@ -442,6 +592,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
     _revision++;
     _scroll.dispose();
     _informationScroll.dispose();
+    _lyricsStyleScroll.dispose();
+    _lyricsStyleButtonFocus.dispose();
     _lyricsFocus.dispose();
     super.dispose();
   }
@@ -498,7 +650,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
               child: Column(
                 children: [
-                  Row(
+                  if (widget.refinedLayout)
+                    _refinedPlayerToolbar(context)
+                  else Row(
                     children: [
                       TextButton.icon(
                         onPressed: () => Navigator.maybePop(context),
@@ -506,21 +660,6 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                         label: const Text(WindowsMusicStrings.back),
                       ),
                       const Spacer(),
-                      if (widget.refinedLayout && widget.lyricsPreferences != null)
-                        TextButton.icon(
-                          key: const ValueKey('ik-player-lyrics-style-toggle'),
-                          onPressed: () =>
-                              _setLyricsStyleVisible(!_showLyricsStyle),
-                          style: TextButton.styleFrom(
-                            foregroundColor: _showLyricsStyle
-                                ? VideoTheme.accent(context)
-                                : VideoTheme.secondaryText(context),
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 10),
-                          ),
-                          icon: const Icon(Icons.tune_rounded, size: 18),
-                          label: const Text(IkLyricsStyleStrings.style),
-                        ),
                       if (widget.onDesktopLyrics != null)
                         TextButton.icon(
                           onPressed: widget.onDesktopLyrics,
@@ -532,6 +671,17 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                 : null,
                           ),
                           label: const Text(IkStrings.floating),
+                        ),
+                      if (widget.onFloatingLyricsSettings != null)
+                        TextButton.icon(
+                          key: const ValueKey('ik-player-floating-lyrics-settings'),
+                          onPressed: widget.onFloatingLyricsSettings,
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          icon: const Icon(Icons.settings_outlined, size: 18),
+                          label: const Text(IkLyricsStyleStrings.desktopSettings),
                         ),
                     ],
                   ),
@@ -571,20 +721,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                     ),
                                   )
                                 : 68.0;
-                            final information = widget.refinedLayout &&
-                                    _showLyricsStyle && widget.lyricsPreferences != null
-                                ? Scrollbar(
-                                    controller: _informationScroll,
-                                    thumbVisibility: true,
-                                    thickness: 3,
-                                    child: SingleChildScrollView(
-                                      key: const ValueKey('ik-player-style-scroll'),
-                                      controller: _informationScroll,
-                                      padding: const EdgeInsets.only(right: 8),
-                                      child: _lyricsStylePanel(context),
-                                    ),
-                                  )
-                                : Scrollbar(
+                            final information = Scrollbar(
                               key: const ValueKey(
                                 'ik-player-information-scrollbar',
                               ),
@@ -660,12 +797,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                     children: [
                                       SizedBox(
                                         height: math.min(
-                                          widget.refinedLayout
-                                              ? (_showLyricsStyle ? 300 : 240) : 300,
+                                          widget.refinedLayout ? 240 : 300,
                                           constraints.maxHeight *
-                                              (widget.refinedLayout
-                                                  ? (_showLyricsStyle ? .46 : .35)
-                                                  : .43),
+                                              (widget.refinedLayout ? .35 : .43),
                                         ),
                                         child: information,
                                       ),

@@ -3,6 +3,7 @@ import '../../core/network/platform_http.dart';
 import '../../core/storage/session_storage.dart';
 import '../../lyrics/models/lyrics_bundle.dart';
 import '../../models/audio_quality.dart';
+import '../../models/personal_daily_result.dart';
 import '../../models/platform_type.dart';
 import '../../models/playlist.dart';
 import '../../models/song.dart';
@@ -38,17 +39,37 @@ class VideoStreamInfo {
 }
 
 class VideoQqPlatform extends QqPlatform {
-  VideoQqPlatform({super.api, this.onResolved, bool Function()? useOgg640})
+  VideoQqPlatform({
+    super.api,
+    this.onResolved,
+    bool Function()? useOgg640,
+    this.dailyThirtyRecommendations = false,
+  })
     : _useOgg640 = useOgg640 ?? (() => false);
 
   final void Function(VideoStreamInfo)? onResolved;
   final bool Function() _useOgg640;
+  final bool dailyThirtyRecommendations;
   final String _guid =
       ((DateTime.now().microsecondsSinceEpoch % 9000000000) + 1000000000)
           .toString();
   bool _hasVerifiedOgg640 = false;
 
   bool get hasVerifiedOgg640 => _hasVerifiedOgg640;
+
+  @override
+  Future<PersonalDailyResult> getPersonalDailyRecommendations({
+    int limit = 30,
+    String? expectedAccountId,
+  }) => dailyThirtyRecommendations
+      ? getDailyThirtyRecommendations(
+          limit: limit,
+          expectedAccountId: expectedAccountId,
+        )
+      : super.getPersonalDailyRecommendations(
+          limit: limit,
+          expectedAccountId: expectedAccountId,
+        );
 
   @override
   Future<String> getSongUrl(

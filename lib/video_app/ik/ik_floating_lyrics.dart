@@ -4,12 +4,53 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/floating_lyrics/data/floating_lyrics_models.dart';
+import '../../features/floating_lyrics/data/floating_lyrics_service.dart';
 import '../../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../l10n/ik_runtime_strings.dart';
 import '../../l10n/video_strings.dart';
 import 'ik_desktop_lyrics_style.dart';
+
+/// 仅新版入口挂载，路由交由主程序处理，以继续沿用已有编辑离开保护。
+class IkFloatingLyricsSettingsBridge extends StatefulWidget {
+  const IkFloatingLyricsSettingsBridge({
+    super.key,
+    required this.child,
+    required this.onOpenSettings,
+  });
+
+  final Widget child;
+  final VoidCallback onOpenSettings;
+
+  @override
+  State<IkFloatingLyricsSettingsBridge> createState() =>
+      _IkFloatingLyricsSettingsBridgeState();
+}
+
+class _IkFloatingLyricsSettingsBridgeState
+    extends State<IkFloatingLyricsSettingsBridge> {
+  late final StreamSubscription<void> _settingsSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _settingsSubscription = FloatingLyricsService.instance
+        .settingsRequestedStream
+        .listen((_) {
+          if (mounted) widget.onOpenSettings();
+        });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_settingsSubscription.cancel());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
 
 final ikFloatingFailureProvider = StateProvider<bool>((ref) => false);
 final ikFloatingSyncProvider = Provider<FloatingLyricsSyncController>((ref) {

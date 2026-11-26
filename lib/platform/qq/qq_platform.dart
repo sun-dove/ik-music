@@ -1004,6 +1004,256 @@ class QqPlatform extends MusicPlatform {
     }
   }
 
+  /// 仅供显式启用的IK入口使用；旧“今日私享”与榜单推荐保持各自语义。
+  Future<PersonalDailyResult> getDailyThirtyRecommendations({
+    int limit = 30,
+    String? expectedAccountId,
+  }) async {
+    PersonalDailyResult outcome(
+      PersonalDailyStatus status, {
+      String? code,
+      int rawCount = 0,
+    }) => PersonalDailyResult(
+      platform: platformType,
+      status: status,
+      fetchedAt: DateTime.now(),
+      errorCode: code,
+      rawCount: rawCount,
+    );
+
+    final user = _currentUser;
+    if (user == null) return outcome(PersonalDailyStatus.signedOut);
+    final cookie = _api.cookie;
+    final musicId = _api.personalDailyMusicId;
+    if (cookie == null ||
+        musicId == null ||
+        _personalDailyIdentity != (accountId: user.id, musicId: musicId) ||
+        (expectedAccountId != null && expectedAccountId != user.id) ||
+        !_matchesPersonalDailyIdentity(user, cookie, musicId)) {
+      return outcome(PersonalDailyStatus.identityIncomplete);
+    }
+    final revision = personalDailySessionRevision;
+    int chinaDay() =>
+        (DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000 + 8 * 3600) ~/
+        86400;
+    final requestDay = chinaDay();
+    bool scopeIsCurrent() =>
+        revision == personalDailySessionRevision &&
+        _currentUser?.id == user.id &&
+        requestDay == chinaDay();
+
+    ({PersonalDailyResult? failure, Map<dynamic, dynamic>? data}) payload(
+      ({int? status, Map<String, dynamic> body, bool accessDenied}) response, {
+      bool isFeed = false,
+    }) {
+      PersonalDailyResult failure(PersonalDailyStatus status, [String? code]) =>
+          outcome(status, code: code);
+      if (response.status != 200) {
+        return (
+          failure: failure(
+            response.status == 401
+                ? PersonalDailyStatus.sessionExpired
+                : PersonalDailyStatus.serviceUnavailable,
+            response.status?.toString(),
+          ),
+          data: null,
+        );
+      }
+      if (response.accessDenied) {
+        return (
+          failure: failure(PersonalDailyStatus.serviceUnavailable),
+          data: null,
+        );
+      }
+      final rootCode = _dailyThirtyCode(response.body['code']);
+      if (rootCode == null || rootCode != 0) {
+        return (
+          failure: failure(
+            rootCode == null
+                ? PersonalDailyStatus.invalidResponse
+                : PersonalDailyStatus.serviceUnavailable,
+            rootCode?.toString(),
+          ),
+          data: null,
+        );
+      }
+      final module = response.body['req_0'];
+      if (module is! Map) {
+        return (
+          failure: failure(PersonalDailyStatus.invalidResponse),
+          data: null,
+        );
+      }
+      final data = module['data'];
+      for (final node in [response.body, module, if (data is Map) data]) {
+        for (final key in [
+          'code',
+          'subcode',
+          if (isFeed && identical(node, data)) 'retcode',
+        ]) {
+          final codeRequired = key == 'code' && !identical(node, data) ||
+              key == 'retcode';
+          if (!codeRequired && !node.containsKey(key)) continue;
+          final code = _dailyThirtyCode(node[key]);
+          if (code == null) {
+            return (
+              failure: failure(PersonalDailyStatus.invalidResponse),
+              data: null,
+            );
+          }
+          if (code != 0) {
+            return (
+              failure: failure(PersonalDailyStatus.serviceUnavailable, '$code'),
+              data: null,
+            );
+          }
+        }
+      }
+      return data is Map
+          ? (failure: null, data: data)
+          : (failure: failure(PersonalDailyStatus.invalidResponse), data: null);
+    }
+
+    try {
+      final feed = await _api.getDailyThirtyFeed(
+        cookieSnapshot: cookie,
+        musicId: musicId,
+      );
+      if (!scopeIsCurrent()) return outcome(PersonalDailyStatus.sessionChanged);
+      final feedPayload = payload(feed, isFeed: true);
+      if (feedPayload.failure != null) return feedPayload.failure!;
+      final shelves = feedPayload.data!['v_shelf'];
+      if (shelves is! List) return outcome(PersonalDailyStatus.invalidResponse);
+      final cards = <Map>[];
+      for (final shelf in shelves) {
+        if (shelf is! Map) return outcome(PersonalDailyStatus.invalidResponse);
+        final niches = shelf['v_niche'];
+        if (niches != null && niches is! List) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        for (final section in [shelf, if (niches is List) ...niches]) {
+          if (section is! Map) return outcome(PersonalDailyStatus.invalidResponse);
+          final entries = section['v_card'];
+          if (entries == null) continue;
+          if (entries is! List || entries.any((entry) => entry is! Map)) {
+            return outcome(PersonalDailyStatus.invalidResponse);
+          }
+          cards.addAll(entries.cast<Map>());
+        }
+      }
+      final dailyIds = <String>[];
+      for (final card in cards) {
+        if (_personalDailyInt(card['type']) != 500 ||
+            _personalDailyInt(card['subtype']) != 510 ||
+            _personalDailyInt(card['jumptype']) != 10014) {
+          continue;
+        }
+        final seconds = _personalDailyInt(card['time']);
+        if (seconds == null || seconds <= 0) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        if ((seconds + 8 * 3600) ~/ 86400 != requestDay) continue;
+        final id = _personalDailyInt(card['id']);
+        if (id == null || id <= 0 || id > 9007199254740991) {
+          return outcome(PersonalDailyStatus.invalidResponse);
+        }
+        dailyIds.add('$id');
+      }
+      if (dailyIds.isEmpty) {
+        return outcome(
+          PersonalDailyStatus.serviceUnavailable,
+          code: 'daily_thirty_unavailable',
+        );
+      }
+      if (dailyIds.length != 1) return outcome(PersonalDailyStatus.invalidResponse);
+      final playlistId = dailyIds.single;
+      final uniqueSongs = <String, Song>{};
+      var fetched = 0;
+      int? total;
+      bool hasMore;
+      do {
+        final response = await _api.getDailyThirtyPlaylistPage(
+          playlistId,
+          cookieSnapshot: cookie,
+          musicId: musicId,
+          songBegin: fetched,
+          songNum: 50,
+        );
+        if (!scopeIsCurrent()) return outcome(PersonalDailyStatus.sessionChanged);
+        final detail = payload(response);
+        if (detail.failure != null) return detail.failure!;
+        final data = detail.data!;
+        final rows = data['songlist'];
+        final pageTotal = _personalDailyInt(data['total_song_num']);
+        final more = data['hasmore'];
+        final moreValue = more is bool ? (more ? 1 : 0) : _personalDailyInt(more);
+        if (rows is! List ||
+            pageTotal == null ||
+            pageTotal < 0 ||
+            (total != null && total != pageTotal) ||
+            (moreValue != 0 && moreValue != 1)) {
+          return outcome(PersonalDailyStatus.invalidResponse, rawCount: fetched);
+        }
+        final metadata = data['dirinfo'];
+        for (final fields in [data, if (metadata is Map) metadata]) {
+          for (final key in const ['disstid', 'dissid', 'tid']) {
+            if (fields.containsKey(key) &&
+                '${_personalDailyInt(fields[key])}' != playlistId) {
+              return outcome(PersonalDailyStatus.invalidResponse);
+            }
+          }
+        }
+        total = pageTotal;
+        fetched += rows.length;
+        hasMore = moreValue == 1;
+        if (fetched > total ||
+            (hasMore && (rows.isEmpty || fetched >= total)) ||
+            (!hasMore && fetched != total)) {
+          return outcome(PersonalDailyStatus.invalidResponse, rawCount: fetched);
+        }
+        for (final row in rows) {
+          final song = _parsePersonalDailySong(row);
+          if (song == null) {
+            return outcome(PersonalDailyStatus.invalidResponse, rawCount: fetched);
+          }
+          uniqueSongs.putIfAbsent(song.id, () => song);
+        }
+      } while (hasMore);
+      if (fetched == 0) return outcome(PersonalDailyStatus.empty);
+      final sourceDay = DateTime.fromMillisecondsSinceEpoch(
+        requestDay * 86400 * 1000,
+        isUtc: true,
+      );
+      return PersonalDailyResult(
+        platform: platformType,
+        status: PersonalDailyStatus.success,
+        songs: List.unmodifiable(uniqueSongs.values.take(limit.clamp(1, 30))),
+        fetchedAt: DateTime.now(),
+        rawCount: fetched,
+        validCount: uniqueSongs.length,
+        sourceDate: DateTime(sourceDay.year, sourceDay.month, sourceDay.day),
+      );
+    } catch (error) {
+      if (!scopeIsCurrent()) return outcome(PersonalDailyStatus.sessionChanged);
+      final translated = apiExceptionOf(error);
+      if (translated is NetworkException) {
+        return outcome(
+          PersonalDailyStatus.networkFailure,
+          code: translated.code.name,
+        );
+      }
+      return outcome(PersonalDailyStatus.serviceUnavailable);
+    }
+  }
+
+  static int? _dailyThirtyCode(Object? value) {
+    if (value is int) return value;
+    if (value is String && RegExp(r'^-?\d+$').hasMatch(value)) {
+      return int.tryParse(value);
+    }
+    return null;
+  }
+
   static int? _personalDailyInt(Object? value) {
     if (value is int) return value;
     if (value is String && RegExp(r'^\d+$').hasMatch(value)) {

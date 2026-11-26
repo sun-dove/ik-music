@@ -4,6 +4,7 @@ abstract final class IkRecommendationCatalogStrings {
   static const heading = '发现音乐';
   static const intro = '从一张歌单，遇见下一首喜欢。';
   static const playlists = '歌单推荐';
+  static const platform = '歌单平台';
   static const refresh = '刷新歌单';
   static const loadMore = '加载更多';
   static const loading = '正在加载';

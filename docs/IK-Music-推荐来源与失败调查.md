@@ -186,3 +186,37 @@ class IkDailyPresentationState {
 以上“已落盘”仅指源码候选已写入。本轮按用户要求没有运行测试、静态检查、构建、原生验收或真实平台探测，外部接口响应、实际分页、布局和账号变化体验都未标记通过。后续验证仍按第九、十节范围，不能直接发布或称这两个新功能已经验收完成。
 
 快速候选的入口参数已由主任务接线。为与用户看过的快速稿一致，新发现页的每日推荐／新歌速递／榜单采用三个等宽入口卡：图标24，圆角10，高度84；内容宽不超过600时保持三张紧凑小卡、高76并隐藏副标题，不增加巨大Hero。平台选择采用固定42高文字与2像素底线，选中不下沉、不出现勾号或Chip；窄窗允许换行。标题下单独显示“歌单推荐”和当前真实来源，QQ仍称公开歌单。网格列数按 `ceil((可用宽度+16)/206)` 且至少两列计算，再平分宽度，封面不超过190，列数不设6列上限。本次仅调整新页面和本票据，没有运行工具检查或验证。
+
+## 十二、QQ官方“每日30首”与旧“今日私享”的补充调查及候选设计
+
+2026-11-26用户再次提供QQ桌面官方“每日30首”截图，要求继续修复。截图证明官方客户端当时展示30首私人偏好歌曲，但没有歌单ID、请求或响应，因此不能据截图断言本程序已经获得同一批曲目。重新读取已发布0.6.1提交 `0b9561d0042784f6f37d55a49bb0b6f079ec6534` 可确认：搜索“推荐精选”使用 `recommendationsProvider → getDailyRecommendation()`，QQ走旧“今日私享”HTML尝试，失败后回退新歌榜27／热歌榜26；每平台外层只展示4首，全部推荐进入 `/recommendations`。这不是严格个人入口 `/daily`，历史有歌曲也不能证明取到截图的官方“每日30首”。
+
+本轮新增公开证据来自以下固定版本。它们是开源实现与提交说明，不是QQ官方对第三方提供的稳定接口承诺；其中作者记录的真实账号结果不能替代本仓账号验收。
+
+- [mygo QQ插件PR#4源码](https://github.com/Amamiya23/mygo-music-qq-plugin/blob/02be0e0385fedb61cbfeb9e0d78a20a35635944c/index.js)：个人推荐流 `music.recommend.RecommendFeed/get_recommend_feed`，`comm` 包含 `ct=20/cv=13020008/qq/authst/tmeLoginType`，参数 `direction=0/page=1/s_num=0/v_cache=[]`。成功数据要求 `retcode=0`，歌曲推荐卡位于 `v_shelf[].v_niche[].v_card[]`；每日卡类型为 `type=500/subtype=510/jumptype=10014`，普通歌单的 `subtype=0`。
+- [mygo QQ插件PR#8源码](https://github.com/Lorpaves/mygo-music-qqmusic/blob/d8509cb91fb989bd141c5436151f91c8d26fd5b4/index.js)：每日卡另外要求 `time` 为北京时间当天，且仅有一张合格卡，使用其动态ID调用 `music.srfDissInfo.DissInfo/CgiGetDiss`。详情参数为 `disstid/dirid=0/tag=1/song_begin/song_num=50`，检查 `songlist/total_song_num/hasmore` 证明完整性。该版本的详情认证使用 `ct=11/cv=14090008/v=14090008/chid=10003505/tmeAppID=qqmusic` 和音乐账号会话。
+- [qplayer QQ插件PR#2源码](https://github.com/TIMER-err/qplayer-qqmusic-plugin/blob/bc92a203f551b9f0f06cc4ff2ceb46f56b662183/src/main.js)：同样从个人推荐流取得“每日30首”卡片，并明确把它与 `GetRadarSong` 雷达／猜你喜欢分开。其仅按标题包含“每日／30首”取第一张的做法证据较弱，本仓不照搬；只有明确类型、当天日期和唯一动态ID才可进入详情。
+
+方案A继续严格“今日私享”HTML，仅增加标题别名。这不能证明拿到“每日30首”，且HTML失效原因并未因此解决，不采用。方案B新增官方每日卡推荐流读取，保留旧方法及默认行为，仅IK新装配显式启用。采用B：它有明确卡片类型、服务端日期和动态ID，不借用榜单或雷达凑数。
+
+接口与影响范围：`QqApi` 新增每日卡推荐流及对应歌单分页请求；`QqPlatform` 新增 `getDailyThirtyRecommendations({int limit=30, String? expectedAccountId})` 返回既有 `PersonalDailyResult`。`VideoQqPlatform` 新增可选 `dailyThirtyRecommendations=false`，只有显式true才在个人入口调用新方法，缺省继续 `super.getPersonalDailyRecommendations`。现有旧推荐、旧严格HTML方法、登录存储与全部旧调用签名不改。主入口 `main_video.dart` 的IK装配传 `dailyThirtyRecommendations: PlatformUtils.isWindows`，本轮仅Windows启用；撤销此参数即可回滚到原严格入口。
+
+身份、来源和失败契约先于实现固定：新方法继续要求已登录用户、完整音乐Cookie、恢复绑定、预期账号和OAuth别名一致，固定当前Cookie与会话revision，不能把QQ号码直接冒充音乐ID。当前IK只实现QQ OAuth并在音乐登录时要求 `loginType=2`，本候选据此使用 `tmeLoginType=2`，不扩展微信登录或会话格式。请求只到已知QQ音乐HTTPS域名，不读取外部客户端或本机凭据存储。当天卡缺失／过期是服务暂不可用；字段缺失、日期／ID歧义、详情ID不符、数量矛盾或分页不完整是响应异常；HTTP401保留过期语义，403／WAF及业务非零为服务暂不可用，网络错误单独归类。以上都不清理用户会话。跨账号、凭据revision或北京时间日界的迟到结果不得被接纳。
+
+读取规则为完整详情后去重、展示最多30首并保留真实原始／有效数量；不固定歌单ID，不拼接雷达或榜单，不把抓取时刻当推荐日期。`sourceDate`仅由当天卡的服务端 `time` 推导北京时间年月日，并按现有UI契约构造自然日期，避免将北京时间零点的UTC瞬间直接格式化成前一天；不改共用日期文案。公共榜单回退仍在独立呈现层并保留来源，不能把回退改写为该新个人方法成功。
+
+实现步骤：先记录本节契约与门规格，再新增QQ请求／解析方法，最后接入默认关闭的 `VideoQqPlatform` 分支，由IK主装配显式开启。用户仍要求快版且暂停验证，本轮不运行以下门，不声明已取得截图曲目或服务可用。
+
+| 真实场景 | 体验门 | 功能门 |
+| --- | --- | --- |
+| 当天唯一官方每日卡 | 个人页展示当天实际歌曲与数量 | 同一会话 `type500/subtype510/jumptype10014`、北京时间当天、唯一正数动态ID，详情来源与ID一致 |
+| 普通歌单、雷达、旧私享、昨日卡 | 不冒充“每日30首”个人成功 | 普通推荐、标题相似、错误类型、无日期与过期卡全部不进入详情 |
+| 完整详情与分页 | 播放全部对应可见同源列表，少于30按实显示 | 所有页完整、总数一致、结束信号一致，去重后最多30，字段异常不得静默成功 |
+| 多张每日卡／错误ID／日期冲突 | 清楚显示个人服务或响应异常，公共回退另标来源 | 不猜选首卡，不猜固定ID，不把无可信结果当空歌单 |
+| 登录变化与日界 | 退出或换号不残留旧个人歌曲 | 请求绑定账号、预期账号、Cookie快照、revision与北京时间日界，迟到全部丢弃 |
+| HTTP、业务错误与WAF | 原连接／重试动作及失败类别仍可用 | 401、403、WAF、非零业务、结构错误和网络错误分别处理，不改会话存储 |
+| 兼容与回滚 | 未启用调用方保持旧严格入口与旧搜索精选 | 新参数缺省false，旧公开签名不变，关闭IK显式参数即可回到原路径 |
+
+本节源码候选已落盘：`qq_endpoints.dart` 只新增推荐流模块／方法常量；`qq_api.dart` 新增 `getDailyThirtyFeed/getDailyThirtyPlaylistPage`，使用Cookie快照和既有独立HTTP状态解释；`qq_platform.dart` 新增 `getDailyThirtyRecommendations`，旧 `getPersonalDailyRecommendations/getDailyRecommendation` 不变；`video_platforms.dart` 新增默认false的入口参数及条件分派。普通歌单和昨日卡被排除，缺日期、多个当天每日卡、结构或数量矛盾均不进入成功。详情读取保持完整分页，先按真实响应去重再限30。没有新增依赖或临时产物。
+
+本轮只读取公开源码并写候选，没有运行测试、静态检查、格式检查、构建、实机或QQ个人请求，也没有读取用户Cookie／token。GitHub搜索和公开PR作者的验收描述只用于定位协议；本仓待验门仍未执行，不能据此宣称QQ账号日推已经恢复或与截图30首一致。

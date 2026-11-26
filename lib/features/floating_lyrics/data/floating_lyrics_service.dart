@@ -38,6 +38,7 @@ class FloatingLyricsService {
   final _controlRequestedController =
       StreamController<FloatingLyricsControl>.broadcast();
   final _positionChangedController = StreamController<double>.broadcast();
+  final _settingsRequestedController = StreamController<void>.broadcast();
 
   Stream<void> get closedByUserStream => _closedByUserController.stream;
 
@@ -58,10 +59,16 @@ class FloatingLyricsService {
   /// Fired once per completed vertical drag, in physical pixels.
   Stream<double> get positionChangedStream => _positionChangedController.stream;
 
+  /// 只在新版桌面歌词设置按钮被点击时发送，不占用播放控制 action。
+  Stream<void> get settingsRequestedStream => _settingsRequestedController.stream;
+
   Future<void> _handleNativeCall(MethodCall call) async {
     switch (call.method) {
       case 'closedByUser':
         _closedByUserController.add(null);
+        break;
+      case 'settingsRequested':
+        _settingsRequestedController.add(null);
         break;
       case 'lockChanged':
         final locked = call.arguments;
@@ -179,6 +186,8 @@ class _AdaptedFloatingLyricsService extends FloatingLyricsService {
       _delegate.controlRequestedStream;
   @override
   Stream<double> get positionChangedStream => _delegate.positionChangedStream;
+  @override
+  Stream<void> get settingsRequestedStream => _delegate.settingsRequestedStream;
 
   @override
   Future<bool> show(

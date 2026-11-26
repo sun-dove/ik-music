@@ -34,6 +34,7 @@ import 'ik/ik_download_folder.dart';
 import 'ik/ik_downloads_workspace.dart';
 import 'ik/ik_workspace_theme.dart';
 import 'ik/ik_lyrics_action.dart';
+import 'ik/ik_floating_lyrics.dart';
 import 'ik/ik_player_lyrics_style.dart';
 import '../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import 'built_in/catalog_panel.dart';
@@ -261,15 +262,25 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
           _ => ThemeMode.light,
         },
         routerConfig: _router,
-        builder: (context, child) => IkRuntime(
-          onNavigate: (path) => _router.push(path),
-          child: widget.windowsAppearance == null
-              ? child!
-              : WindowsBackground(
-                  appearance: widget.windowsAppearance!,
-                  child: child!,
-                ),
-        ),
+        builder: (context, child) {
+          final runtime = IkRuntime(
+            onNavigate: (path) => _router.push(path),
+            child: widget.windowsAppearance == null
+                ? child!
+                : WindowsBackground(
+                    appearance: widget.windowsAppearance!,
+                    child: child!,
+                  ),
+          );
+          if (!widget.quickExperienceRefinements) return runtime;
+          return IkFloatingLyricsSettingsBridge(
+            onOpenSettings: () => unawaited(
+              _homeKey.currentState?._openDesktopLyricsSettings() ??
+                  Future<void>.value(),
+            ),
+            child: runtime,
+          );
+        },
       );
     }
     return MaterialApp(
@@ -390,7 +401,34 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           IkPlayerLyricsPreferences(widget.preferences.box);
   final _leaveChecks = <Object, Future<bool> Function()>{};
   bool _leavingWorkspacePage = false;
+  bool _desktopLyricsSettingsOpen = false;
   int _imperativePages = 0;
+
+  Future<void> _openDesktopLyricsSettings() async {
+    if (!widget.quickExperienceRefinements ||
+        _leavingWorkspacePage ||
+        _desktopLyricsSettingsOpen) return;
+    final router = GoRouter.of(context);
+    final origin = router.routerDelegate.currentConfiguration;
+    if (router.routerDelegate.state.uri.path == '/settings/lyrics') return;
+    _desktopLyricsSettingsOpen = true;
+    try {
+      _leavingWorkspacePage = true;
+      try {
+        for (final check in List.of(_leaveChecks.values).reversed) {
+          if (!await check() || !mounted) return;
+          if (!identical(router.routerDelegate.currentConfiguration, origin)) {
+            return;
+          }
+        }
+      } finally {
+        _leavingWorkspacePage = false;
+      }
+      if (mounted) await router.push<void>('/settings/lyrics');
+    } finally {
+      _desktopLyricsSettingsOpen = false;
+    }
+  }
 
   Future<bool> _returnToWorkspace() async {
     if (!widget.workspacePageRefinements) return true;
@@ -1048,6 +1086,12 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               : null,
           desktopLyricsEnabled:
               widget.workspace && ref.watch(floatingLyricsProvider).enabled,
+          onFloatingLyricsSettings:
+              widget.quickExperienceRefinements &&
+                  widget.workspace &&
+                  ref.watch(ikLyricsCapabilityProvider).supported
+              ? () => unawaited(_openDesktopLyricsSettings())
+              : null,
           song: song,
           position: player.position,
           duration: player.duration,
