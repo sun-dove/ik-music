@@ -13,10 +13,15 @@ import 'package:mconnect/features/floating_lyrics/presentation/providers/floatin
 import 'package:mconnect/features/library/presentation/providers/likes_provider.dart';
 import 'package:mconnect/features/player/data/playback_keep_alive_service.dart';
 import 'package:mconnect/features/player/data/playback_notification_service.dart';
+import 'package:mconnect/features/player/presentation/providers/lyrics_provider.dart';
 import 'package:mconnect/features/player/presentation/providers/player_provider.dart';
 import 'package:mconnect/l10n/ik_lyrics_action_strings.dart';
+import 'package:mconnect/l10n/ik_playback_notice_strings.dart';
+import 'package:mconnect/l10n/ik_runtime_strings.dart';
+import 'package:mconnect/l10n/ik_strings.dart';
 import 'package:mconnect/l10n/ik_workspace_strings.dart';
 import 'package:mconnect/l10n/video_strings.dart';
+import 'package:mconnect/lyrics/models/lyrics_line.dart';
 import 'package:mconnect/models/platform_type.dart';
 import 'package:mconnect/models/song.dart';
 import 'package:mconnect/video_app/ik/ik_like_action.dart';
@@ -91,6 +96,11 @@ void main() {
     double scale = 1,
     bool balancedLayout = false,
     bool contentAdaptive = false,
+    bool inlineLyrics = false,
+    bool contextualErrors = false,
+    LyricsDocument? document,
+    IkPlaybackBar? playbackBar,
+    VoidCallback? onOpen,
     VoidCallback? onAudio,
   }) async {
     tester.view.physicalSize = Size(width, 400);
@@ -101,6 +111,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         playerProvider.overrideWith((ref) => player),
+        lyricsProvider.overrideWith((ref) async => document),
         likesProvider.overrideWith((ref) => likes),
         floatingLyricsProvider.overrideWith(
           (ref) => IkStrictFloatingLyricsNotifier(save: (_) async {}),
@@ -119,14 +130,18 @@ void main() {
           home: Scaffold(
             body: Align(
               alignment: Alignment.bottomCenter,
-              child: balancedLayout
-                  ? IkPlaybackBar.aligned(
-                      onOpen: null,
-                      onAudio: onAudio ?? () {},
-                      balancedLayout: true,
-                      contentAdaptive: contentAdaptive,
-                    )
-                  : IkPlaybackBar(onOpen: () {}, onAudio: () {}),
+              child:
+                  playbackBar ??
+                  (balancedLayout
+                      ? IkPlaybackBar.aligned(
+                          onOpen: onOpen,
+                          onAudio: onAudio ?? () {},
+                          balancedLayout: true,
+                          contentAdaptive: contentAdaptive,
+                          inlineLyrics: inlineLyrics,
+                          contextualErrors: contextualErrors,
+                        )
+                      : IkPlaybackBar(onOpen: () {}, onAudio: () {})),
             ),
           ),
         ),
@@ -150,6 +165,163 @@ void main() {
       tester.widget<TextButton>(find.byKey(const ValueKey('ik-bar-lyrics')));
   Slider seekSlider(WidgetTester tester) =>
       tester.widget<Slider>(find.byKey(const ValueKey('ik-bar-seek')));
+
+  final centerControls = find.byKey(const ValueKey('ik-bar-centered-controls'));
+  final currentLyrics = find.byKey(const ValueKey('ik-bar-current-lyrics'));
+  final heartTarget = find.byTooltip(VideoStrings.like);
+  final volumeSlider = find.byKey(const ValueKey('ik-bar-volume'));
+  final queueTarget = find.byKey(const ValueKey('ik-bar-queue'));
+
+  testWidgets('内容变更：旧调用缺省仍保留宽屏布局且详情不重复歌词', (tester) async {
+    final legacy = IkPlaybackBar.aligned(
+      onOpen: null,
+      onAudio: () {},
+      balancedLayout: true,
+    );
+    expect(legacy.contentAdaptive, isFalse);
+    await mount(tester, width: 1920, playbackBar: legacy);
+    final center = tester.getRect(centerControls);
+    expect(center.left - tester.getRect(heartTarget).right, greaterThan(180));
+    expect(currentLyrics, findsNothing);
+    expect(heartTarget.hitTestable(), findsOneWidget);
+    expect(volumeSlider.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('内容变更：主栏逐句滚动歌词不推移收藏、中央及右侧工具；长歌名按预算显示', (tester) async {
+    const firstLine = '起风了';
+    const nextLine = '窗外的风穿过长街，远方的歌声仍在回响，一行很长的歌词正在唱，直到夜色将灯光点亮';
+    var detailOpens = 0;
+    final h = await mount(
+      tester,
+      width: 1920,
+      balancedLayout: true,
+      contentAdaptive: true,
+      inlineLyrics: true,
+      onOpen: () => detailOpens++,
+      document: const LyricsDocument(
+        format: LyricsFormat.lrc,
+        lines: [
+          LyricsLine(timestamp: Duration.zero, text: firstLine),
+          LyricsLine(timestamp: Duration(seconds: 3), text: nextLine),
+        ],
+      ),
+    );
+    final areas = [
+      currentLyrics,
+      heartTarget,
+      centerControls,
+      volumeSlider,
+      queueTarget,
+    ];
+    final before = areas.map(tester.getRect).toList();
+    expect(find.text(firstLine), findsOneWidget);
+    await tester.tap(currentLyrics);
+    expect(detailOpens, 1);
+    expect(
+      tester.getRect(centerControls).left - tester.getRect(currentLyrics).right,
+      closeTo(28, 1),
+    );
+    h.player.publish(
+      const PlayerState(
+        currentSong: _track,
+        isPlaying: true,
+        position: Duration(seconds: 4),
+        duration: Duration(minutes: 3),
+      ),
+    );
+    await tester.pump();
+    expect(find.text(firstLine), findsNothing);
+    final longLine = find.text(nextLine);
+    expect(longLine, findsOneWidget);
+    final textStart = tester.getTopLeft(longLine).dx;
+    await tester.pump(const Duration(seconds: 2));
+    expect(tester.getTopLeft(longLine).dx, lessThan(textStart));
+    expect(areas.map(tester.getRect).toList(), before);
+
+    Finder songInfo(String name) =>
+        find.ancestor(of: find.text(name), matching: find.byType(InkWell));
+    final shortSong = tester.getRect(songInfo(_track.name));
+    const longSong = Song(
+      id: 'long-title',
+      name: '特别长的一首歌的名字测试歌名增长时可用空间的使用情况',
+      artists: [],
+      platform: PlatformType.qq,
+    );
+    h.player.publish(
+      const PlayerState(currentSong: longSong, duration: Duration(minutes: 3)),
+    );
+    await tester.pump();
+    final longerSong = tester.getRect(songInfo(longSong.name));
+    expect(longerSong.width, greaterThan(shortSong.width));
+    expect(
+      tester.widget<Text>(find.text(longSong.name)).overflow,
+      TextOverflow.ellipsis,
+    );
+    expect(
+      tester.getRect(heartTarget).left - longerSong.right,
+      inInclusiveRange(0, 12),
+    );
+    expect(tester.getRect(centerControls), before[2]);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final width in [1920.0, 1024.0]) {
+    testWidgets('内容变更：长歌名播放失败 $width 可查看原因并重试当前歌曲', (tester) async {
+      const longSong = Song(
+        id: 'failed-title',
+        name: '这是一首很长很长一直延伸到右边但不能遮盖按钮的长歌名',
+        artists: [],
+        platform: PlatformType.qq,
+      );
+      const cause = '音源没有返回可播放的地址';
+      final h = await mount(
+        tester,
+        width: width,
+        balancedLayout: true,
+        contentAdaptive: true,
+        contextualErrors: true,
+        inlineLyrics: true,
+      );
+      h.player.publish(
+        const PlayerState(
+          currentSong: longSong,
+          error: cause,
+          duration: Duration(minutes: 3),
+        ),
+      );
+      await tester.pump();
+      expect(currentLyrics, findsNothing);
+      final details = find.widgetWithText(
+        TextButton,
+        IkPlaybackNoticeStrings.details,
+      );
+      final retry = find.widgetWithText(TextButton, IkRuntimeStrings.retry);
+      expect(find.text(IkPlaybackNoticeStrings.failed), findsOneWidget);
+      expect(find.text(cause), findsNothing);
+      expect(details.hitTestable(), findsOneWidget);
+      expect(retry.hitTestable(), findsOneWidget);
+      final center = tester.getRect(centerControls);
+      if (width == 1920) {
+        expect(center.left - tester.getRect(details).right, closeTo(28, 1));
+      } else {
+        expect(
+          tester.getRect(details).top,
+          greaterThanOrEqualTo(tester.getRect(heartTarget).bottom),
+        );
+        expect(tester.getRect(details).right, lessThan(center.left));
+      }
+      await tester.tap(details);
+      await tester.pumpAndSettle();
+      expect(find.text(cause).hitTestable(), findsOneWidget);
+      await tester.tap(find.byTooltip(IkStrings.close));
+      await tester.pumpAndSettle();
+      expect(find.text(cause), findsNothing);
+      await tester.tap(retry);
+      expect(h.player.retried, [same(longSong)]);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final (width, centerWidth, gap) in <(double, double, double)>[
     (1920, 680, 28),
@@ -271,6 +443,83 @@ void main() {
       }
     });
     await tester.pump();
+  }
+
+  for (final scale in [1.0, 1.5]) {
+    testWidgets('内容变更：同一会话连续缩到 1024、800 再放大，字号 $scale 下控件仍可操作', (tester) async {
+      var audioOpens = 0;
+      final h = await mount(
+        tester,
+        width: 1920,
+        scale: scale,
+        balancedLayout: true,
+        contentAdaptive: true,
+        onAudio: () => audioOpens++,
+      );
+      final initialState = h.container.read(playerProvider);
+      final play = find.byTooltip(VideoStrings.play);
+      final seek = find.byKey(const ValueKey('ik-bar-seek'));
+      final audio = find.byTooltip(IkWorkspaceStrings.audio);
+      for (final width in [1920.0, 1024.0, 800.0, 1920.0]) {
+        tester.view.physicalSize = Size(width, 400);
+        await tester.pump();
+        final center = tester.getRect(centerControls);
+        expect(center.center.dx, closeTo(width / 2, 1));
+        expect(tester.getCenter(play).dx, closeTo(width / 2, 1));
+        if (width == 800 || (width == 1024 && scale > 1)) {
+          expect(
+            tester.getRect(heartTarget).bottom,
+            lessThanOrEqualTo(center.top),
+          );
+          expect(
+            tester.getRect(queueTarget).bottom,
+            lessThanOrEqualTo(center.top),
+          );
+        } else {
+          expect(
+            tester.getCenter(heartTarget).dy,
+            closeTo(center.center.dy, 1),
+          );
+          expect(
+            tester.getCenter(queueTarget).dy,
+            closeTo(center.center.dy, 1),
+          );
+        }
+        for (final target in [
+          heartTarget,
+          play,
+          seek,
+          volumeSlider,
+          audio,
+          queueTarget,
+        ]) {
+          expect(target.hitTestable(), findsOneWidget);
+        }
+        if (width == 800) {
+          await tester.tap(play);
+          expect(h.player.toggles, 1);
+          await tester.tap(seek);
+          expect(h.player.seeks.single.inSeconds, inInclusiveRange(85, 95));
+          await tester.tap(volumeSlider);
+          await tester.pump();
+          expect(tester.widget<Slider>(volumeSlider).value, closeTo(.5, .05));
+          await tester.tap(audio);
+          expect(audioOpens, 1);
+          await tester.tap(queueTarget);
+          await tester.pumpAndSettle();
+          expect(find.text(IkStrings.emptyQueue).hitTestable(), findsOneWidget);
+          await tester.tap(find.byTooltip(IkStrings.close));
+          await tester.pumpAndSettle();
+        }
+        expect(h.container.read(playerProvider), same(initialState));
+        expect(tester.takeException(), isNull);
+      }
+      await tester.tap(heartTarget);
+      await finishLike(tester, h.container);
+      expect(find.widgetWithIcon(IconButton, Icons.favorite), findsOneWidget);
+      expect(tester.widget<Slider>(volumeSlider).value, closeTo(.5, .05));
+      expect(tester.takeException(), isNull);
+    });
   }
 
   // 正式长期门：使用真实播放栏验证键盘输入几何、命中与状态恢复。
@@ -597,7 +846,13 @@ class _BarPlayer extends PlayerNotifier {
     );
   }
   final seeks = <Duration>[];
+  final retried = <Song>[];
+  int toggles = 0;
   void publish(PlayerState next) => state = next;
+  @override
+  Future<void> playSong(Song song) async => retried.add(song);
+  @override
+  Future<void> togglePlay() async => toggles++;
   @override
   Future<void> seek(Duration position) async => seeks.add(position);
 }
