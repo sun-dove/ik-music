@@ -419,6 +419,7 @@ void main() {
         ),
       ],
     );
+    ioZone.run(() => container.read(historyProvider));
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,

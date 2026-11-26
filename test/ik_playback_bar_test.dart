@@ -90,6 +90,7 @@ void main() {
     double width = 1200,
     double scale = 1,
     bool balancedLayout = false,
+    bool contentAdaptive = false,
     VoidCallback? onAudio,
   }) async {
     tester.view.physicalSize = Size(width, 400);
@@ -123,6 +124,7 @@ void main() {
                       onOpen: null,
                       onAudio: onAudio ?? () {},
                       balancedLayout: true,
+                      contentAdaptive: contentAdaptive,
                     )
                   : IkPlaybackBar(onOpen: () {}, onAudio: () {}),
             ),
@@ -148,6 +150,36 @@ void main() {
       tester.widget<TextButton>(find.byKey(const ValueKey('ik-bar-lyrics')));
   Slider seekSlider(WidgetTester tester) =>
       tester.widget<Slider>(find.byKey(const ValueKey('ik-bar-seek')));
+
+  for (final (width, centerWidth, gap) in <(double, double, double)>[
+    (1920, 680, 28),
+    (1440, 680, 17),
+    (1280, 560, 16),
+    (1024, 304, 16),
+  ]) {
+    testWidgets('内容自适应：详情 $width 的可见控件贴近中央控制区', (tester) async {
+      await mount(
+        tester,
+        width: width,
+        balancedLayout: true,
+        contentAdaptive: true,
+      );
+      final center = tester.getRect(
+        find.byKey(const ValueKey('ik-bar-centered-controls')),
+      );
+      final heart = tester.getRect(find.byTooltip(VideoStrings.like));
+      final volume = tester.getRect(
+        find.widgetWithIcon(IconButton, Icons.volume_up_outlined),
+      );
+      expect(center.center.dx, closeTo(width / 2, 1));
+      expect(center.width, closeTo(centerWidth, 1));
+      expect(center.left - heart.right, closeTo(gap, 1), reason: '收藏命中盒与中区间距');
+      expect(volume.left - center.right, closeTo(gap, 1), reason: '音量命中盒与中区间距');
+      expect(heart.center.dy, closeTo(center.center.dy, 1));
+      expect(volume.center.dy, closeTo(center.center.dy, 1));
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   for (final (width, scale, singleRow) in <(double, double, bool)>[
     (1024, 1, true),

@@ -64,6 +64,7 @@ class IkPlaybackBar extends ConsumerWidget {
     this.inlineLyrics = false,
     this.balancedLayout = false,
   }) : _stableSeekSemantics = false,
+       contentAdaptive = false,
        contextualErrors = false;
   const IkPlaybackBar.aligned({
     super.key,
@@ -72,6 +73,7 @@ class IkPlaybackBar extends ConsumerWidget {
     this.contextualErrors = false,
     this.inlineLyrics = false,
     this.balancedLayout = false,
+    this.contentAdaptive = false,
   }) : _stableSeekSemantics = true;
   final VoidCallback? onOpen;
   final VoidCallback onAudio;
@@ -79,6 +81,7 @@ class IkPlaybackBar extends ConsumerWidget {
   final bool contextualErrors;
   final bool inlineLyrics;
   final bool balancedLayout;
+  final bool contentAdaptive;
   Widget _seekSemantics(Slider slider) =>
       _stableSeekSemantics ? Semantics(container: true, child: slider) : slider;
   String _time(Duration value) =>
@@ -426,7 +429,10 @@ class IkPlaybackBar extends ConsumerWidget {
       );
     }
 
-    Widget leftSongAndLyrics({Widget? playbackNotice}) {
+    Widget leftSongAndLyrics({
+      Widget? playbackNotice,
+      bool hugContent = false,
+    }) {
       final currentSong = song;
       return LayoutBuilder(
         builder: (context, size) {
@@ -494,24 +500,32 @@ class IkPlaybackBar extends ConsumerWidget {
                     )
                   : null);
           if (supplement == null) {
-            return Align(alignment: Alignment.centerLeft, child: songGroup);
+            return hugContent
+                ? songGroup
+                : Align(alignment: Alignment.centerLeft, child: songGroup);
           }
           final supplementLimit = 260 * scale.clamp(1.0, 1.35);
           final availableSupplement =
               size.maxWidth - songWidth - heartWidth - heartGap - 12;
           final supplementMinimum =
               (playbackNotice == null ? 120 : 160) * scale;
+          Widget fitSupplement(double width) =>
+              hugContent && playbackNotice != null
+              ? ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: width),
+                  child: supplement,
+                )
+              : SizedBox(width: width, child: supplement);
           if (availableSupplement >= supplementMinimum) {
             return Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 songGroup,
                 const SizedBox(width: 12),
-                SizedBox(
-                  width: availableSupplement < supplementLimit
+                fitSupplement(
+                  availableSupplement < supplementLimit
                       ? availableSupplement
                       : supplementLimit.toDouble(),
-                  child: supplement,
                 ),
               ],
             );
@@ -522,11 +536,10 @@ class IkPlaybackBar extends ConsumerWidget {
             children: [
               songGroup,
               const SizedBox(height: 4),
-              SizedBox(
-                width: size.maxWidth < supplementLimit
+              fitSupplement(
+                size.maxWidth < supplementLimit
                     ? size.maxWidth
                     : supplementLimit.toDouble(),
-                child: supplement,
               ),
             ],
           );
@@ -580,14 +593,27 @@ class IkPlaybackBar extends ConsumerWidget {
                 final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
                 if (balancedLayout) {
                   const groupGap = 16.0;
-                  final contentWidth = size.maxWidth
-                      .clamp(0.0, 1560.0)
-                      .toDouble();
+                  final contentWidth = contentAdaptive
+                      ? size.maxWidth
+                      : size.maxWidth.clamp(0.0, 1560.0).toDouble();
                   final centerWidth =
                       (contentWidth - 2 * (roomyToolsWidth + groupGap))
                           .clamp(0.0, 680.0)
                           .toDouble();
                   if (centerWidth >= 240 + 40 * scale) {
+                    final sideSlack =
+                        (contentWidth - centerWidth) / 2 -
+                        roomyToolsWidth -
+                        groupGap;
+                    final gap = contentAdaptive
+                        ? (groupGap + sideSlack * .05)
+                              .clamp(groupGap, 28.0)
+                              .toDouble()
+                        : groupGap;
+                    final left = leftSongAndLyrics(
+                      playbackNotice: compactNotice,
+                      hugContent: contentAdaptive,
+                    );
                     return Center(
                       child: SizedBox(
                         width: contentWidth,
@@ -595,18 +621,28 @@ class IkPlaybackBar extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Expanded(
-                              child: leftSongAndLyrics(
-                                playbackNotice: compactNotice,
-                              ),
+                              child: contentAdaptive
+                                  ? Align(
+                                      alignment: Alignment.centerRight,
+                                      child: left,
+                                    )
+                                  : left,
                             ),
-                            const SizedBox(width: groupGap),
+                            SizedBox(width: gap),
                             SizedBox(
                               key: const ValueKey('ik-bar-centered-controls'),
                               width: centerWidth,
                               child: controls,
                             ),
-                            const SizedBox(width: groupGap),
-                            Expanded(child: roomyTools()),
+                            SizedBox(width: gap),
+                            Expanded(
+                              child: contentAdaptive
+                                  ? Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: roomyTools(),
+                                    )
+                                  : roomyTools(),
+                            ),
                           ],
                         ),
                       ),

@@ -104,6 +104,7 @@ IkPlaybackBar _workspacePlaybackBar({
         contextualErrors: contextualErrors,
         inlineLyrics: inlineLyrics,
         balancedLayout: balancedLayout,
+        contentAdaptive: balancedLayout,
       )
     : IkPlaybackBar(onOpen: onOpen, onAudio: onAudio);
 
