@@ -36,7 +36,9 @@ class IkLyricsStylePanel extends StatelessWidget {
   final Color backgroundColor, currentLineColor, otherLineColor;
   final ValueChanged<String?> onFontFamily;
   final ValueChanged<double> onFontSize, onShadowOpacity;
-  final ValueChanged<Color> onBackgroundColor, onCurrentLineColor, onOtherLineColor;
+  final ValueChanged<Color> onBackgroundColor,
+      onCurrentLineColor,
+      onOtherLineColor;
   final VoidCallback? onReset, onClose;
   final double? backgroundOpacity;
   final ValueChanged<double>? onBackgroundOpacity;
@@ -57,7 +59,12 @@ class IkLyricsStylePanel extends StatelessWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text(title, style: Theme.of(context).textTheme.titleSmall)),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
                 if (onClose != null)
                   IconButton(
                     tooltip: IkLyricsStyleStrings.close,
@@ -72,28 +79,67 @@ class IkLyricsStylePanel extends StatelessWidget {
               value: fontFamily ?? '',
               items: {
                 '': IkLyricsStyleStrings.inheritFont,
-                for (final font in {if (fontFamily != null) fontFamily!, ...systemFonts})
-                  font: font,
+                for (final font in {?fontFamily, ...systemFonts}) font: font,
               },
               onChanged: (font) => onFontFamily(font.isEmpty ? null : font),
               enabled: !busy,
               alignToDesign: true,
             ),
             const SizedBox(height: 6),
-            Text(IkLyricsStyleStrings.savedFonts, style: Theme.of(context).textTheme.bodySmall),
-            _range(IkLyricsStyleStrings.fontSize, fontSize, 14, 48, onFontSize, suffix: ' px'),
-            _color(context, IkLyricsStyleStrings.background, backgroundColor, onBackgroundColor),
-            _color(context, IkLyricsStyleStrings.currentLine, currentLineColor, onCurrentLineColor),
-            _color(context, IkLyricsStyleStrings.otherLines, otherLineColor, onOtherLineColor),
+            Text(
+              IkLyricsStyleStrings.savedFonts,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            _range(
+              IkLyricsStyleStrings.fontSize,
+              fontSize,
+              14,
+              48,
+              onFontSize,
+              suffix: ' px',
+            ),
+            _color(
+              context,
+              IkLyricsStyleStrings.background,
+              backgroundColor,
+              onBackgroundColor,
+            ),
+            _color(
+              context,
+              IkLyricsStyleStrings.currentLine,
+              currentLineColor,
+              onCurrentLineColor,
+            ),
+            _color(
+              context,
+              IkLyricsStyleStrings.otherLines,
+              otherLineColor,
+              onOtherLineColor,
+            ),
             if (backgroundOpacity != null && onBackgroundOpacity != null)
-              _range(IkLyricsStyleStrings.opacity, backgroundOpacity! * 100, 0, 100,
-                  (value) => onBackgroundOpacity!(value / 100), suffix: '%'),
-            _range(IkLyricsStyleStrings.shadow, shadowOpacity * 100, 0, 100,
-                (value) => onShadowOpacity(value / 100), suffix: '%'),
+              _range(
+                IkLyricsStyleStrings.opacity,
+                backgroundOpacity! * 100,
+                0,
+                100,
+                (value) => onBackgroundOpacity!(value / 100),
+                suffix: '%',
+              ),
+            _range(
+              IkLyricsStyleStrings.shadow,
+              shadowOpacity * 100,
+              0,
+              100,
+              (value) => onShadowOpacity(value / 100),
+              suffix: '%',
+            ),
             if (issue != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(issue!, style: TextStyle(color: colors.error, fontSize: 12)),
+                child: Text(
+                  issue!,
+                  style: TextStyle(color: colors.error, fontSize: 12),
+                ),
               ),
             if (onReset != null)
               Align(
@@ -109,24 +155,52 @@ class IkLyricsStylePanel extends StatelessWidget {
     );
   }
 
-  Widget _range(String label, double value, double min, double max,
-      ValueChanged<double> change, {required String suffix}) => Padding(
+  Widget _range(
+    String label,
+    double value,
+    double min,
+    double max,
+    ValueChanged<double> change, {
+    required String suffix,
+  }) => Padding(
     padding: const EdgeInsets.only(top: 12),
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(children: [Expanded(child: Text(label)), Text('${value.round()}$suffix')]),
-        _IkStyleSlider(value: value.clamp(min, max), min: min, max: max,
-            enabled: !busy, onCommit: change),
+        Row(
+          children: [
+            Expanded(child: Text(label)),
+            Text('${value.round()}$suffix'),
+          ],
+        ),
+        _IkStyleSlider(
+          value: value.clamp(min, max),
+          min: min,
+          max: max,
+          enabled: !busy,
+          onCommit: change,
+        ),
       ],
     ),
   );
 
-  Widget _color(BuildContext context, String label, Color value, ValueChanged<Color> change) {
+  Widget _color(
+    BuildContext context,
+    String label,
+    Color value,
+    ValueChanged<Color> change,
+  ) {
     const palette = [
-      Color(0xff11877f), Color(0xff78d9c5), Color(0xfff1f5f4), Colors.white,
-      Color(0xff172a32), Color(0xff71858e), Color(0xfff2cc75), Color(0xff80b8f0),
-      Color(0xffe9b5c6), Color(0xffa67435),
+      Color(0xff11877f),
+      Color(0xff78d9c5),
+      Color(0xfff1f5f4),
+      Colors.white,
+      Color(0xff172a32),
+      Color(0xff71858e),
+      Color(0xfff2cc75),
+      Color(0xff80b8f0),
+      Color(0xffe9b5c6),
+      Color(0xffa67435),
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 14),
@@ -141,7 +215,8 @@ class IkLyricsStylePanel extends StatelessWidget {
             children: [
               for (final color in {value.withValues(alpha: 1), ...palette})
                 Semantics(
-                  label: '$label #${color.toARGB32().toRadixString(16).substring(2)}',
+                  label:
+                      '$label #${color.toARGB32().toRadixString(16).substring(2)}',
                   selected: value.withValues(alpha: 1) == color,
                   button: true,
                   child: InkWell(
@@ -172,8 +247,13 @@ class IkLyricsStylePanel extends StatelessWidget {
 }
 
 class _IkStyleSlider extends StatefulWidget {
-  const _IkStyleSlider({required this.value, required this.min, required this.max,
-      required this.enabled, required this.onCommit});
+  const _IkStyleSlider({
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.enabled,
+    required this.onCommit,
+  });
   final double value, min, max;
   final bool enabled;
   final ValueChanged<double> onCommit;
@@ -192,7 +272,9 @@ class _IkStyleSliderState extends State<_IkStyleSlider> {
       max: widget.max,
       divisions: (widget.max - widget.min).round(),
       label: (_draft ?? widget.value).round().toString(),
-      onChanged: widget.enabled ? (value) => setState(() => _draft = value) : null,
+      onChanged: widget.enabled
+          ? (value) => setState(() => _draft = value)
+          : null,
       onChangeEnd: widget.enabled
           ? (value) {
               setState(() => _draft = null);

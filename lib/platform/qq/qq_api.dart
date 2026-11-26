@@ -1589,7 +1589,8 @@ class QqApi {
       body: response.statusCode == 200
           ? responseMapOf(response.data)
           : <String, dynamic>{},
-      accessDenied: text.startsWith('access deny') ||
+      accessDenied:
+          text.startsWith('access deny') ||
           text.startsWith('<!doctype html') ||
           text.startsWith('<html'),
     );

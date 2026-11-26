@@ -205,14 +205,15 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
       fontSize: _lyricsFontSize,
       backgroundColor: value.backgroundColor ?? VideoTheme.canvas(context),
       currentLineColor: value.currentLineColor ?? VideoTheme.accent(context),
-      otherLineColor: value.otherLineColor ??
+      otherLineColor:
+          value.otherLineColor ??
           Theme.of(context).colorScheme.onSurface.withValues(alpha: .62),
       shadowOpacity: value.shadowOpacity,
-      onFontFamily: (family) =>
-          unawaited(_saveLyricsStyle(value.copyWith(
-            fontFamily: family,
-            clearFont: family == null,
-          ))),
+      onFontFamily: (family) => unawaited(
+        _saveLyricsStyle(
+          value.copyWith(fontFamily: family, clearFont: family == null),
+        ),
+      ),
       onFontSize: (size) =>
           unawaited(_saveLyricsStyle(value.copyWith(fontSize: size))),
       onBackgroundColor: (color) =>
@@ -249,16 +250,17 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
         );
         final width = math.min(364.0, info.overlaySize.width - padding * 2);
         final desiredTop = info.anchorRect.bottom + 8;
-        final minimumHeight = math.min(180.0, info.overlaySize.height - padding * 2);
-        final top = desiredTop.clamp(
-          padding,
-          info.overlaySize.height - padding - minimumHeight,
-        ).toDouble();
+        final minimumHeight = math.min(
+          180.0,
+          info.overlaySize.height - padding * 2,
+        );
+        final top = desiredTop
+            .clamp(padding, info.overlaySize.height - padding - minimumHeight)
+            .toDouble();
         final height = math.min(620.0, info.overlaySize.height - top - padding);
-        final left = (info.anchorRect.right - width).clamp(
-          padding,
-          info.overlaySize.width - width - padding,
-        ).toDouble();
+        final left = (info.anchorRect.right - width)
+            .clamp(padding, info.overlaySize.width - width - padding)
+            .toDouble();
         return Positioned(
           top: top,
           left: left,
@@ -312,7 +314,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
       builder: (context, controller, _) => TextButton.icon(
         key: const ValueKey('ik-player-lyrics-style-toggle'),
         focusNode: _lyricsStyleButtonFocus,
-        onPressed: () => controller.isOpen ? controller.close() : controller.open(),
+        onPressed: () =>
+            controller.isOpen ? controller.close() : controller.open(),
         style: TextButton.styleFrom(
           foregroundColor: controller.isOpen
               ? VideoTheme.accent(context)
@@ -322,7 +325,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
               : null,
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.symmetric(horizontal: 10),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
         ),
         icon: const Icon(Icons.tune_rounded, size: 18),
         label: const Text(IkLyricsStyleStrings.style),
@@ -355,7 +360,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                     Icons.subtitles_outlined,
                     size: 18,
                     color: widget.desktopLyricsEnabled
-                        ? VideoTheme.accent(context) : null,
+                        ? VideoTheme.accent(context)
+                        : null,
                   ),
                   label: const Text(IkStrings.floating),
                   style: TextButton.styleFrom(
@@ -640,7 +646,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
 
   Widget _compactAlignedContent(BuildContext context) => Scaffold(
     backgroundColor: widget.refinedLayout
-        ? widget.lyricsPreferences?.value.backgroundColor ?? VideoTheme.canvas(context)
+        ? widget.lyricsPreferences?.value.backgroundColor ??
+              VideoTheme.canvas(context)
         : VideoTheme.canvas(context),
     body: SafeArea(
       child: Column(
@@ -652,39 +659,46 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                 children: [
                   if (widget.refinedLayout)
                     _refinedPlayerToolbar(context)
-                  else Row(
-                    children: [
-                      TextButton.icon(
-                        onPressed: () => Navigator.maybePop(context),
-                        icon: const Icon(Icons.keyboard_arrow_down_rounded),
-                        label: const Text(WindowsMusicStrings.back),
-                      ),
-                      const Spacer(),
-                      if (widget.onDesktopLyrics != null)
+                  else
+                    Row(
+                      children: [
                         TextButton.icon(
-                          onPressed: widget.onDesktopLyrics,
-                          icon: Icon(
-                            Icons.subtitles_outlined,
-                            size: 20,
-                            color: widget.desktopLyricsEnabled
-                                ? VideoTheme.accent(context)
-                                : null,
-                          ),
-                          label: const Text(IkStrings.floating),
+                          onPressed: () => Navigator.maybePop(context),
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                          label: const Text(WindowsMusicStrings.back),
                         ),
-                      if (widget.onFloatingLyricsSettings != null)
-                        TextButton.icon(
-                          key: const ValueKey('ik-player-floating-lyrics-settings'),
-                          onPressed: widget.onFloatingLyricsSettings,
-                          style: TextButton.styleFrom(
-                            visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                        const Spacer(),
+                        if (widget.onDesktopLyrics != null)
+                          TextButton.icon(
+                            onPressed: widget.onDesktopLyrics,
+                            icon: Icon(
+                              Icons.subtitles_outlined,
+                              size: 20,
+                              color: widget.desktopLyricsEnabled
+                                  ? VideoTheme.accent(context)
+                                  : null,
+                            ),
+                            label: const Text(IkStrings.floating),
                           ),
-                          icon: const Icon(Icons.settings_outlined, size: 18),
-                          label: const Text(IkLyricsStyleStrings.desktopSettings),
-                        ),
-                    ],
-                  ),
+                        if (widget.onFloatingLyricsSettings != null)
+                          TextButton.icon(
+                            key: const ValueKey(
+                              'ik-player-floating-lyrics-settings',
+                            ),
+                            onPressed: widget.onFloatingLyricsSettings,
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
+                            icon: const Icon(Icons.settings_outlined, size: 18),
+                            label: const Text(
+                              IkLyricsStyleStrings.desktopSettings,
+                            ),
+                          ),
+                      ],
+                    ),
                   const SizedBox(height: 12),
                   Expanded(
                     child: Center(
@@ -709,12 +723,14 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                             );
                             final informationWidth = wide
                                 ? (constraints.maxWidth - gap) *
-                                    (widget.refinedLayout ? .35 : .4)
+                                      (widget.refinedLayout ? .35 : .4)
                                 : constraints.maxWidth;
                             final coverSize = wide
                                 ? math.min(
-                                    math.min(widget.refinedLayout ? 320.0 : 420.0,
-                                        informationWidth * .92),
+                                    math.min(
+                                      widget.refinedLayout ? 320.0 : 420.0,
+                                      informationWidth * .92,
+                                    ),
                                     math.max(
                                       widget.refinedLayout ? 96.0 : 160.0,
                                       constraints.maxHeight - 210,
@@ -799,7 +815,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                         height: math.min(
                                           widget.refinedLayout ? 240 : 300,
                                           constraints.maxHeight *
-                                              (widget.refinedLayout ? .35 : .43),
+                                              (widget.refinedLayout
+                                                  ? .35
+                                                  : .43),
                                         ),
                                         child: information,
                                       ),
@@ -1887,7 +1905,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   Widget _lyrics(BuildContext context) {
     final style = widget.refinedLayout ? widget.lyricsPreferences?.value : null;
     final currentColor = style?.currentLineColor ?? VideoTheme.accent(context);
-    final otherColor = style?.otherLineColor ??
+    final otherColor =
+        style?.otherLineColor ??
         Theme.of(context).colorScheme.onSurface.withValues(alpha: .62);
     final shadows = style != null && style.shadowOpacity > 0
         ? [
@@ -2003,7 +2022,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                   }
                                 : null,
                             child: Container(
-                              width: widget.refinedLayout ? double.infinity : null,
+                              width: widget.refinedLayout
+                                  ? double.infinity
+                                  : null,
                               padding: const EdgeInsets.symmetric(
                                 vertical: 13,
                                 horizontal: 6,
@@ -2016,11 +2037,14 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                   Text(
                                     widget.lyrics[i].text,
                                     textAlign: widget.refinedLayout
-                                        ? TextAlign.center : null,
+                                        ? TextAlign.center
+                                        : null,
                                     style: TextStyle(
                                       fontFamily: style?.fontFamily,
                                       shadows: shadows,
-                                      fontSize: widget.alignToDesign || widget.refinedLayout
+                                      fontSize:
+                                          widget.alignToDesign ||
+                                              widget.refinedLayout
                                           ? _lyricsFontSize *
                                                 (!widget.timedLyrics ||
                                                         i == _active
@@ -2042,17 +2066,22 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                     Text(
                                       widget.lyrics[i].translation!,
                                       textAlign: widget.refinedLayout
-                                          ? TextAlign.center : null,
+                                          ? TextAlign.center
+                                          : null,
                                       style: TextStyle(
                                         fontFamily: style?.fontFamily,
                                         shadows: shadows,
-                                        fontSize: widget.alignToDesign || widget.refinedLayout
+                                        fontSize:
+                                            widget.alignToDesign ||
+                                                widget.refinedLayout
                                             ? _lyricsFontSize * 13 / 22
                                             : 13,
                                         height: 1.6,
                                         color: widget.refinedLayout
-                                            ? (i == _active ? currentColor : otherColor)
-                                                .withValues(alpha: .72)
+                                            ? (i == _active
+                                                      ? currentColor
+                                                      : otherColor)
+                                                  .withValues(alpha: .72)
                                             : VideoTheme.secondaryText(context),
                                       ),
                                     ),

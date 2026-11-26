@@ -122,11 +122,10 @@ class _SourceAudio
     this.isolateRequests = false,
     this.quickRecovery = false,
     this.loadTimeout = const Duration(seconds: 10),
-  })
-    : _gain = userGain?.attach(
-        delegate.setVolume,
-        initialVolume: delegate.volume,
-      );
+  }) : _gain = userGain?.attach(
+         delegate.setVolume,
+         initialVolume: delegate.volume,
+       );
   final PlayerAudioController delegate;
   final PreparedSourceRouter router;
   final bool isolateRequests;
@@ -266,9 +265,7 @@ class _SourceAudio
             SourceStrings.loadCancelled,
           ),
         ),
-      ]).timeout(
-        remaining < loadRemaining ? remaining : loadRemaining,
-      );
+      ]).timeout(remaining < loadRemaining ? remaining : loadRemaining);
       if (token.isCancelled) throw token.cancelError!;
       if (isolateRequests && (_disposed || token != router.mediaToken)) {
         throw const SourceFailure('cancelled', SourceStrings.loadCancelled);
@@ -318,6 +315,7 @@ class _SourceAudio
         await delegate.setUrl(url);
         if (durationSubscription != null) await ready.future;
       }
+
       await Future.any<void>([
         load(),
         failure.future,
@@ -621,12 +619,12 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       state.error == null &&
       state.currentSong == _song &&
       router._hasLoadedMedia &&
-      (!router.guarded ||
-          (_active != null && _session?.cancelled == false));
+      (!router.guarded || (_active != null && _session?.cancelled == false));
 
   bool get _usesManagedPlayback =>
       _multiEnabled ||
-      (quickSourceRecovery && state.currentSong?.platform != PlatformType.local) ||
+      (quickSourceRecovery &&
+          state.currentSong?.platform != PlatformType.local) ||
       (preservePlaybackOnSettingsChange &&
           router.guarded &&
           state.currentSong == _song);
@@ -764,13 +762,10 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       onChanged: () {
         if (identical(_session, session)) _report();
       },
-      budget: quickSourceRecovery
-          ? quickBudget
-          : const Duration(seconds: 45),
+      budget: quickSourceRecovery ? quickBudget : const Duration(seconds: 45),
       resolveTimeout: quickSourceRecovery
           ? quickResolveTimeout
           : const Duration(seconds: 15),
-      skipUnreachableSources: quickSourceRecovery,
     );
     _session = session;
     router.timeLeft = () => session.timeLeft;
@@ -873,8 +868,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
                     ? IkSourceRecoveryStrings.budgetUsed(
                         session.attempts
                             .where(
-                              (attempt) =>
-                                  attempt.stage != SourceStage.skipped,
+                              (attempt) => attempt.stage != SourceStage.skipped,
                             )
                             .length,
                         session.remaining,
@@ -1007,9 +1001,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
       await pause();
       return;
     }
-    if (_usesManagedPlayback &&
-        state.currentSong != null &&
-        !state.isPlaying) {
+    if (_usesManagedPlayback && state.currentSong != null && !state.isPlaying) {
       if (_session?.canContinue == true && _session!.budgetExpired) {
         await continueSources();
         return;

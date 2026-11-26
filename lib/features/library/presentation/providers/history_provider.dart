@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../l10n/ik_recent_strings.dart';
 import '../../../../core/database/app_database.dart';
 import '../../../../core/database/song_record_mapping.dart';
 import '../../../../models/song.dart';
@@ -204,7 +205,7 @@ class HistoryNotifier extends StateNotifier<HistoryState> {
         if (mounted) {
           state = state.copyWith(
             isLoading: false,
-            error: () => '移除失败，请重试',
+            error: () => IkRecentStrings.removeFailed,
           );
         }
         return false;

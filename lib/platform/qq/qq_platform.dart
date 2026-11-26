@@ -1091,8 +1091,8 @@ class QqPlatform extends MusicPlatform {
           'subcode',
           if (isFeed && identical(node, data)) 'retcode',
         ]) {
-          final codeRequired = key == 'code' && !identical(node, data) ||
-              key == 'retcode';
+          final codeRequired =
+              key == 'code' && !identical(node, data) || key == 'retcode';
           if (!codeRequired && !node.containsKey(key)) continue;
           final code = _dailyThirtyCode(node[key]);
           if (code == null) {
@@ -1132,7 +1132,8 @@ class QqPlatform extends MusicPlatform {
           return outcome(PersonalDailyStatus.invalidResponse);
         }
         for (final section in [shelf, if (niches is List) ...niches]) {
-          if (section is! Map) return outcome(PersonalDailyStatus.invalidResponse);
+          if (section is! Map)
+            return outcome(PersonalDailyStatus.invalidResponse);
           final entries = section['v_card'];
           if (entries == null) continue;
           if (entries is! List || entries.any((entry) => entry is! Map)) {
@@ -1165,7 +1166,8 @@ class QqPlatform extends MusicPlatform {
           code: 'daily_thirty_unavailable',
         );
       }
-      if (dailyIds.length != 1) return outcome(PersonalDailyStatus.invalidResponse);
+      if (dailyIds.length != 1)
+        return outcome(PersonalDailyStatus.invalidResponse);
       final playlistId = dailyIds.single;
       final uniqueSongs = <String, Song>{};
       var fetched = 0;
@@ -1179,20 +1181,26 @@ class QqPlatform extends MusicPlatform {
           songBegin: fetched,
           songNum: 50,
         );
-        if (!scopeIsCurrent()) return outcome(PersonalDailyStatus.sessionChanged);
+        if (!scopeIsCurrent())
+          return outcome(PersonalDailyStatus.sessionChanged);
         final detail = payload(response);
         if (detail.failure != null) return detail.failure!;
         final data = detail.data!;
         final rows = data['songlist'];
         final pageTotal = _personalDailyInt(data['total_song_num']);
         final more = data['hasmore'];
-        final moreValue = more is bool ? (more ? 1 : 0) : _personalDailyInt(more);
+        final moreValue = more is bool
+            ? (more ? 1 : 0)
+            : _personalDailyInt(more);
         if (rows is! List ||
             pageTotal == null ||
             pageTotal < 0 ||
             (total != null && total != pageTotal) ||
             (moreValue != 0 && moreValue != 1)) {
-          return outcome(PersonalDailyStatus.invalidResponse, rawCount: fetched);
+          return outcome(
+            PersonalDailyStatus.invalidResponse,
+            rawCount: fetched,
+          );
         }
         final metadata = data['dirinfo'];
         for (final fields in [data, if (metadata is Map) metadata]) {
@@ -1209,12 +1217,18 @@ class QqPlatform extends MusicPlatform {
         if (fetched > total ||
             (hasMore && (rows.isEmpty || fetched >= total)) ||
             (!hasMore && fetched != total)) {
-          return outcome(PersonalDailyStatus.invalidResponse, rawCount: fetched);
+          return outcome(
+            PersonalDailyStatus.invalidResponse,
+            rawCount: fetched,
+          );
         }
         for (final row in rows) {
           final song = _parsePersonalDailySong(row);
           if (song == null) {
-            return outcome(PersonalDailyStatus.invalidResponse, rawCount: fetched);
+            return outcome(
+              PersonalDailyStatus.invalidResponse,
+              rawCount: fetched,
+            );
           }
           uniqueSongs.putIfAbsent(song.id, () => song);
         }

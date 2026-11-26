@@ -26,20 +26,21 @@ class IkPlaylistCatalogState {
 }
 
 /// 按平台保留完整已加载目录；页面往返不重新请求首批。
-final ikPlaylistCatalogProvider = StateNotifierProvider.family<
-  IkPlaylistCatalogNotifier,
-  IkPlaylistCatalogState,
-  PlatformType
->((ref, platform) {
-  return IkPlaylistCatalogNotifier(
-    platform,
-    ref.watch(ikPublicRecommendationsProvider),
-  );
-});
+final ikPlaylistCatalogProvider =
+    StateNotifierProvider.family<
+      IkPlaylistCatalogNotifier,
+      IkPlaylistCatalogState,
+      PlatformType
+    >((ref, platform) {
+      return IkPlaylistCatalogNotifier(
+        platform,
+        ref.watch(ikPublicRecommendationsProvider),
+      );
+    });
 
 class IkPlaylistCatalogNotifier extends StateNotifier<IkPlaylistCatalogState> {
   IkPlaylistCatalogNotifier(this.platform, this.client)
-      : super(const IkPlaylistCatalogState(loading: true)) {
+    : super(const IkPlaylistCatalogState(loading: true)) {
     scheduleMicrotask(refresh);
   }
 
@@ -86,7 +87,8 @@ class IkPlaylistCatalogNotifier extends StateNotifier<IkPlaylistCatalogState> {
           for (final item in previous.playlists) item.id: item,
         for (final item in batch.playlists) item.id: item,
       };
-      if (!refreshing && batch.rawCount > 0 &&
+      if (!refreshing &&
+          batch.rawCount > 0 &&
           merged.length == previous.playlists.length) {
         throw const FormatException('Catalog page made no progress');
       }
@@ -108,8 +110,8 @@ class IkPlaylistCatalogNotifier extends StateNotifier<IkPlaylistCatalogState> {
         error: error is FormatException
             ? IkRecommendationCatalogStrings.invalid
             : refreshing
-                ? IkRecommendationCatalogStrings.failed
-                : IkRecommendationCatalogStrings.nextFailed,
+            ? IkRecommendationCatalogStrings.failed
+            : IkRecommendationCatalogStrings.nextFailed,
       );
     }
   }

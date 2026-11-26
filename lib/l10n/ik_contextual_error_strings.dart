@@ -1,5 +1,6 @@
 /// IK 可选错误呈现使用操作上下文，真实失败原因保持原文。
 abstract final class IkContextualErrorStrings {
+  static String operationFailed(Object error) => '操作失败：$error';
   static const reconnect = '连接账号';
   static const retrySync = '重新同步';
   static const playbackNotice = '播放提示';

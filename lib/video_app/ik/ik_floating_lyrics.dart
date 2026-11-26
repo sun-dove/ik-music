@@ -35,7 +35,8 @@ class _IkFloatingLyricsSettingsBridgeState
   @override
   void initState() {
     super.initState();
-    _settingsSubscription = FloatingLyricsService.instance
+    _settingsSubscription = FloatingLyricsService
+        .instance
         .settingsRequestedStream
         .listen((_) {
           if (mounted) widget.onOpenSettings();

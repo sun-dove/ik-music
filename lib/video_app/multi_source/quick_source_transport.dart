@@ -23,10 +23,26 @@ abstract final class QuickSourceTransport {
     Duration timeout = const Duration(seconds: 3),
   }) {
     final scope = _QuickSourceScope(token, failedHosts, timeout);
-    return runZoned(
-      () => Future.any<T>([request(), scope.failure.future]),
-      zoneValues: {_scopeKey: scope},
-    );
+    return runZoned(() async {
+      try {
+        final result = await request();
+        if (token.isCancelled) throw token.cancelError!;
+        return result;
+      } catch (error, stack) {
+        // 详情和备用路由允许自行恢复；只有最终取流失败才使用传输证据。
+        final failure = scope.failure;
+        if (!token.isCancelled &&
+            failure != null &&
+            const {
+              'network',
+              'requestTimeout',
+              'serverError',
+            }.contains(sourceFailure(error).code)) {
+          Error.throwWithStackTrace(failure, stack);
+        }
+        rethrow;
+      }
+    }, zoneValues: {_scopeKey: scope});
   }
 }
 
@@ -35,8 +51,7 @@ class _QuickSourceScope {
     : deadline = DateTime.now().add(timeout);
   final CancelToken token;
   final Set<String> failedHosts;
-  final activeHosts = <String>{};
-  final failure = Completer<Never>();
+  SourceFailure? failure;
   final DateTime deadline;
 }
 
@@ -60,15 +75,11 @@ class _QuickSourceInterceptor extends Interceptor {
       return;
     }
     if (scope.failedHosts.contains(options.uri.host.toLowerCase())) {
-      if (!scope.failure.isCompleted) {
-        scope.failure.completeError(
-          const SourceFailure(
-            'network',
-            SourceStrings.sourceUnavailable,
-            sourceWide: true,
-          ),
-        );
-      }
+      scope.failure = const SourceFailure(
+        'network',
+        SourceStrings.sourceUnavailable,
+        sourceWide: true,
+      );
       handler.reject(
         DioException(
           requestOptions: options,
@@ -80,9 +91,7 @@ class _QuickSourceInterceptor extends Interceptor {
     }
     final existingToken = options.cancelToken;
     if (existingToken != null && existingToken != scope.token) {
-      unawaited(
-        scope.token.whenCancel.then((_) => existingToken.cancel()),
-      );
+      unawaited(scope.token.whenCancel.then((_) => existingToken.cancel()));
     } else {
       options.cancelToken = scope.token;
     }
@@ -94,65 +103,46 @@ class _QuickSourceInterceptor extends Interceptor {
     options.sendTimeout = limit(options.sendTimeout);
     options.receiveTimeout = limit(options.receiveTimeout);
     options.extra[QuickSourceTransport._requestScopeKey] = scope;
-    final host = options.uri.host.toLowerCase();
-    scope.activeHosts.add(host);
-    unawaited(
-      scope.token.whenCancel.then((_) {
-        if (scope.activeHosts.contains(host) &&
-            !DateTime.now().isBefore(scope.deadline)) {
-          scope.failedHosts.add(host);
-        }
-      }),
-    );
     handler.next(options);
   }
 
   @override
   void onResponse(Response response, ResponseInterceptorHandler handler) {
-    final scope = response.requestOptions.extra[
-      QuickSourceTransport._requestScopeKey
-    ];
-    if (scope is _QuickSourceScope) {
-      final host = response.requestOptions.uri.host.toLowerCase();
-      scope.activeHosts.remove(host);
-      if (!scope.token.isCancelled && (response.statusCode ?? 0) >= 500) {
-        scope.failedHosts.add(host);
-        if (!scope.failure.isCompleted) {
-          scope.failure.completeError(
-            const SourceFailure(
+    final scope =
+        response.requestOptions.extra[QuickSourceTransport._requestScopeKey];
+    if (scope is _QuickSourceScope && !scope.token.isCancelled) {
+      scope.failure = (response.statusCode ?? 0) >= 500
+          ? const SourceFailure(
               'serverError',
               IkSourceRecoveryStrings.connectionFailed,
-              sourceWide: true,
-            ),
-          );
-        }
-      }
+            )
+          : null;
     }
     handler.next(response);
   }
 
   @override
   void onError(DioException error, ErrorInterceptorHandler handler) {
-    final scope = error.requestOptions.extra[
-      QuickSourceTransport._requestScopeKey
-    ];
-    final unreachable = switch (error.type) {
+    final scope =
+        error.requestOptions.extra[QuickSourceTransport._requestScopeKey];
+    final transportFailure = switch (error.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
       DioExceptionType.receiveTimeout ||
       DioExceptionType.connectionError ||
       DioExceptionType.badCertificate => true,
-      DioExceptionType.badResponse =>
-        (error.response?.statusCode ?? 0) >= 500,
+      DioExceptionType.badResponse => (error.response?.statusCode ?? 0) >= 500,
       _ => false,
     };
-    if (scope is _QuickSourceScope) {
-      scope.activeHosts.remove(error.requestOptions.uri.host.toLowerCase());
-    }
     if (scope is _QuickSourceScope &&
         !scope.token.isCancelled &&
-        unreachable) {
-      scope.failedHosts.add(error.requestOptions.uri.host.toLowerCase());
+        transportFailure) {
+      final unreachable =
+          error.type == DioExceptionType.connectionError ||
+          error.type == DioExceptionType.badCertificate;
+      if (unreachable) {
+        scope.failedHosts.add(error.requestOptions.uri.host.toLowerCase());
+      }
       final text = '${error.message ?? ''} ${error.error ?? ''}'.toLowerCase();
       final dns = [
         'failed host lookup',
@@ -162,19 +152,18 @@ class _QuickSourceInterceptor extends Interceptor {
         'failed to resolve',
         'could not resolve',
       ].any(text.contains);
-      if (!scope.failure.isCompleted) {
-        scope.failure.completeError(
-          SourceFailure(
-            dns ? 'dns' : 'network',
-            dns
-                ? IkSourceRecoveryStrings.dnsFailed
-                : IkSourceRecoveryStrings.connectionFailed,
-            sourceWide: true,
-          ),
-          error.stackTrace,
-        );
-      }
-      // 明确不可达不再交给共享 RetryInterceptor 叠加重试和退避。
+      scope.failure = SourceFailure(
+        dns
+            ? 'dns'
+            : error.type == DioExceptionType.badResponse
+            ? 'serverError'
+            : 'network',
+        dns
+            ? IkSourceRecoveryStrings.dnsFailed
+            : IkSourceRecoveryStrings.connectionFailed,
+        sourceWide: unreachable,
+      );
+      // 当前请求快速失败，但仍让平台适配器决定是否可以继续备用路由。
       handler.reject(error);
       return;
     }

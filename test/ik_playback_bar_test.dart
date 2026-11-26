@@ -85,8 +85,14 @@ void main() {
   });
 
   Future<({ProviderContainer container, _BarPlayer player, _Likes likes})>
-  mount(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 400);
+  mount(
+    WidgetTester tester, {
+    double width = 1200,
+    double scale = 1,
+    bool balancedLayout = false,
+    VoidCallback? onAudio,
+  }) async {
+    tester.view.physicalSize = Size(width, 400);
     tester.view.devicePixelRatio = 1;
     final player = _BarPlayer();
     final likes = _Likes(database);
@@ -104,10 +110,21 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: TextScaler.linear(scale)),
+            child: child!,
+          ),
           home: Scaffold(
             body: Align(
               alignment: Alignment.bottomCenter,
-              child: IkPlaybackBar(onOpen: () {}, onAudio: () {}),
+              child: balancedLayout
+                  ? IkPlaybackBar.aligned(
+                      onOpen: null,
+                      onAudio: onAudio ?? () {},
+                      balancedLayout: true,
+                    )
+                  : IkPlaybackBar(onOpen: () {}, onAudio: () {}),
             ),
           ),
         ),
@@ -131,6 +148,79 @@ void main() {
       tester.widget<TextButton>(find.byKey(const ValueKey('ik-bar-lyrics')));
   Slider seekSlider(WidgetTester tester) =>
       tester.widget<Slider>(find.byKey(const ValueKey('ik-bar-seek')));
+
+  for (final (width, scale, singleRow) in <(double, double, bool)>[
+    (1024, 1, true),
+    (800, 1, false),
+    (1024, 1.5, false),
+    (1920, 1, true),
+  ]) {
+    testWidgets('底栏自适应 $width / $scale 排列与操作', (tester) async {
+      var audioOpens = 0;
+      final mounted = await mount(
+        tester,
+        width: width,
+        scale: scale,
+        balancedLayout: true,
+        onAudio: () => audioOpens++,
+      );
+      final song = find.ancestor(
+        of: find.text(_track.name),
+        matching: find.byType(InkWell),
+      );
+      final heart = find.byTooltip(VideoStrings.like);
+      final controls = find.byKey(const ValueKey('ik-bar-centered-controls'));
+      final play = find.byTooltip(VideoStrings.play);
+      final seek = find.byKey(const ValueKey('ik-bar-seek'));
+      final audio = find.byTooltip(IkWorkspaceStrings.audio);
+      final queue = find.byKey(const ValueKey('ik-bar-queue'));
+
+      expect(tester.takeException(), isNull);
+      expect(tester.getCenter(play).dx, closeTo(width / 2, 1));
+      expect(tester.getCenter(controls).dx, closeTo(width / 2, 1));
+      expect(tester.getSize(controls).width, lessThanOrEqualTo(680));
+      expect(tester.getCenter(seek).dy, greaterThan(tester.getCenter(play).dy));
+      expect(
+        tester.getRect(heart).left - tester.getRect(song).right,
+        inInclusiveRange(0, 12),
+      );
+      if (singleRow) {
+        final centerY = tester.getCenter(controls).dy;
+        expect(tester.getCenter(song).dy, closeTo(centerY, 1));
+        expect(tester.getCenter(audio).dy, closeTo(centerY, 1));
+        expect(
+          tester.getRect(heart).right,
+          lessThan(tester.getRect(controls).left),
+        );
+      } else {
+        expect(
+          tester.getRect(song).bottom,
+          lessThanOrEqualTo(tester.getRect(controls).top),
+        );
+        expect(
+          tester.getRect(queue).bottom,
+          lessThanOrEqualTo(tester.getRect(controls).top),
+        );
+      }
+      if (width == 1024 && singleRow) {
+        expect(tester.getSize(seek).width, lessThan(360));
+      }
+      if (width == 1920) {
+        expect(tester.getRect(song).left, greaterThan(100));
+        expect(width - tester.getRect(queue).right, greaterThan(100));
+      }
+
+      for (final target in [heart, play, seek, audio, queue]) {
+        expect(target.hitTestable(), findsOneWidget);
+      }
+      await tester.tap(seek);
+      expect(mounted.player.seeks, isNotEmpty);
+      expect(mounted.player.seeks.last, greaterThan(Duration.zero));
+      await tester.tap(audio);
+      expect(audioOpens, 1);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   Future<void> finishLike(
     WidgetTester tester,

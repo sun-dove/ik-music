@@ -373,16 +373,16 @@ class VideoCover extends StatelessWidget {
         child: url == null || url!.isEmpty
             ? fallback
             : neteaseUri == null
-                ? Image.network(
-                    url!,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => fallback,
-                  )
-                : Image(
-                    image: _NeteaseCoverImage(neteaseUri),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => fallback,
-                  ),
+            ? Image.network(
+                url!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallback,
+              )
+            : Image(
+                image: _NeteaseCoverImage(neteaseUri),
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => fallback,
+              ),
       ),
     );
   }
@@ -393,8 +393,9 @@ class _NeteaseCoverImage extends ImageProvider<_NeteaseCoverImage> {
   final Uri uri;
 
   @override
-  Future<_NeteaseCoverImage> obtainKey(ImageConfiguration configuration) async =>
-      this;
+  Future<_NeteaseCoverImage> obtainKey(
+    ImageConfiguration configuration,
+  ) async => this;
 
   @override
   ImageStreamCompleter loadImage(

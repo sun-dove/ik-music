@@ -44,8 +44,7 @@ class VideoQqPlatform extends QqPlatform {
     this.onResolved,
     bool Function()? useOgg640,
     this.dailyThirtyRecommendations = false,
-  })
-    : _useOgg640 = useOgg640 ?? (() => false);
+  }) : _useOgg640 = useOgg640 ?? (() => false);
 
   final void Function(VideoStreamInfo)? onResolved;
   final bool Function() _useOgg640;

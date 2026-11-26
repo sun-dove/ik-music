@@ -286,12 +286,14 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                                         ? PlatformPlaylistsPage.compactEmbedded(
                                             jsonFormatLabel:
                                                 IkStrings.playlistJson,
-                                            playlistArtwork: widget.playlistArtwork,
+                                            playlistArtwork:
+                                                widget.playlistArtwork,
                                           )
                                         : PlatformPlaylistsPage.embedded(
                                             jsonFormatLabel:
                                                 IkStrings.playlistJson,
-                                            playlistArtwork: widget.playlistArtwork,
+                                            playlistArtwork:
+                                                widget.playlistArtwork,
                                           ),
                                   'local' => const LocalMusicPage.embedded(),
                                   'downloads' => widget.downloadsBuilder!(
@@ -341,14 +343,16 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
   );
 
   Iterable<PlatformType> get _syncPlatforms => PlatformType.musicServices.where(
-    (platform) => widget.loggedIn.contains(platform) ||
+    (platform) =>
+        widget.loggedIn.contains(platform) ||
         widget.expiredPlatform == platform ||
         widget.libraries[platform]?.error != null,
   );
 
   Widget _compactSyncControl(PlatformType platform) {
     final error = widget.libraries[platform]?.error;
-    final needsAccount = !widget.loggedIn.contains(platform) ||
+    final needsAccount =
+        !widget.loggedIn.contains(platform) ||
         error?.kind == VideoFailureKind.notLoggedIn ||
         error?.kind == VideoFailureKind.sessionExpired;
     return _IkCompactSyncControl(
@@ -798,7 +802,8 @@ class _IkCompactSyncControlState extends State<_IkCompactSyncControl> {
     final colors = Theme.of(context).colorScheme;
     final platform = videoPlatformLabel(widget.platform);
     final hasIssue = widget.error != null || widget.needsAccount;
-    final canSync = !widget.needsAccount &&
+    final canSync =
+        !widget.needsAccount &&
         (widget.error == null || widget.error!.canRetry);
     final sync = TextButton.icon(
       onPressed: widget.busy || !canSync ? null : widget.onSync,
@@ -832,7 +837,9 @@ class _IkCompactSyncControlState extends State<_IkCompactSyncControl> {
             style: MenuStyle(
               elevation: const WidgetStatePropertyAll(8),
               backgroundColor: WidgetStatePropertyAll(colors.surface),
-              surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+              surfaceTintColor: const WidgetStatePropertyAll(
+                Colors.transparent,
+              ),
               padding: const WidgetStatePropertyAll(EdgeInsets.all(16)),
               shape: WidgetStatePropertyAll(
                 RoundedRectangleBorder(
@@ -844,7 +851,8 @@ class _IkCompactSyncControlState extends State<_IkCompactSyncControl> {
             menuChildren: [
               SizedBox(
                 width: (MediaQuery.sizeOf(context).width - 72)
-                    .clamp(160.0, 320.0).toDouble(),
+                    .clamp(160.0, 320.0)
+                    .toDouble(),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -854,7 +862,9 @@ class _IkCompactSyncControlState extends State<_IkCompactSyncControl> {
                         Expanded(
                           child: Text(
                             widget.needsAccount
-                                ? IkContextualErrorStrings.syncNeedsAccount(platform)
+                                ? IkContextualErrorStrings.syncNeedsAccount(
+                                    platform,
+                                  )
                                 : IkContextualErrorStrings.syncFailed(platform),
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
@@ -882,7 +892,8 @@ class _IkCompactSyncControlState extends State<_IkCompactSyncControl> {
                         ),
                       ),
                     ),
-                    if (widget.needsAccount || widget.error?.canRetry == true) ...[
+                    if (widget.needsAccount ||
+                        widget.error?.canRetry == true) ...[
                       const SizedBox(height: 12),
                       TextButton.icon(
                         onPressed: widget.busy
@@ -917,7 +928,8 @@ class _IkCompactSyncControlState extends State<_IkCompactSyncControl> {
               onPressed: widget.busy
                   ? null
                   : () => controller.isOpen
-                      ? controller.close() : controller.open(),
+                        ? controller.close()
+                        : controller.open(),
               style: TextButton.styleFrom(
                 foregroundColor: colors.error,
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),

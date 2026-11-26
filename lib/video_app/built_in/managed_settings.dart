@@ -3,6 +3,7 @@ import '../../l10n/ik_source_catalog_strings.dart';
 import 'dart:async';
 import 'dart:convert';
 
+import '../../l10n/ik_source_update_strings.dart';
 import '../../models/audio_quality.dart';
 import '../custom_source/custom_source_storage.dart';
 import '../lx_source/lx_source.dart';
@@ -296,17 +297,22 @@ class IkManagedSourceSettings extends WindowsSourceSettings {
     bool automatic = false,
   }) => serialize(() async {
     if (writesBlocked) {
-      throw const LxSourceException('storage', IkSourceCatalogStrings.saveFailed);
+      throw const LxSourceException(
+        'storage',
+        IkSourceCatalogStrings.saveFailed,
+      );
     }
     if (expectedBase != null && (editing || !identical(value, expectedBase))) {
-      throw const LxSourceException('busy', '音源正在编辑，自动更新已暂缓');
+      throw const LxSourceException('busy', IkSourceUpdateStrings.editDeferred);
     }
     final next = _mergeDraft(draft);
     final records = {...managed.records};
     for (final key in records.keys.toList()) {
       final record = records[key]!;
       if (record.entryId == null) continue;
-      final entry = next.entries.where((e) => e.id == record.entryId).firstOrNull;
+      final entry = next.entries
+          .where((e) => e.id == record.entryId)
+          .firstOrNull;
       if (entry == null) {
         records[key] = record.copyWith(removed: true, clearPending: true);
         continue;
@@ -327,13 +333,16 @@ class IkManagedSourceSettings extends WindowsSourceSettings {
           runtimeId: runtimeId,
           checkedAt: DateTime.now().toUtc().toIso8601String(),
           previous: old != null && old.config.sha256 != accepted.scriptHash
-              ? old.config : null,
+              ? old.config
+              : null,
           previousContentSha256:
               old != null && old.config.sha256 != accepted.scriptHash
-                  ? record.contentSha256 : null,
+              ? record.contentSha256
+              : null,
           previousRuntimeId:
               old != null && old.config.sha256 != accepted.scriptHash
-                  ? record.runtimeId : null,
+              ? record.runtimeId
+              : null,
           clearPending: true,
           clearFailure: true,
         );

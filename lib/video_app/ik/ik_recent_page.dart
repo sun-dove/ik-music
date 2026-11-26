@@ -116,6 +116,7 @@ class IkRecentPage extends ConsumerWidget {
                 );
               }
             }
+
             final row = alignToDesign
                 ? Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -135,15 +136,12 @@ class IkRecentPage extends ConsumerWidget {
                             )
                           : onMoreWithContext == null
                           ? null
-                          : (buttonContext) => onMoreWithContext!(
-                              buttonContext,
-                              songs[index],
-                            ),
+                          : (buttonContext) =>
+                                onMoreWithContext!(buttonContext, songs[index]),
                       playing: group != null
                           ? playingIndex == index
                           : currentSong?.id == songs[index].id &&
-                                currentSong?.platform ==
-                                    songs[index].platform,
+                                currentSong?.platform == songs[index].platform,
                       detail: IkAlignmentStrings.listenedAt(
                         group?.latest.listenedAt ??
                             history.entries[index].listenedAt,
@@ -158,8 +156,7 @@ class IkRecentPage extends ConsumerWidget {
                     onMore: more,
                     playing: group != null
                         ? playingIndex == index
-                        : currentSong?.dedupeKey ==
-                              songs[index].dedupeKey,
+                        : currentSong?.dedupeKey == songs[index].dedupeKey,
                   );
             if (group == null) return row;
             return GestureDetector(
@@ -256,19 +253,10 @@ String? _recentContentKey(Song song) {
   String normalized(String text) =>
       text.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
   final title = normalized(song.name);
-  final artists = song.artists
-      .map((artist) => normalized(artist.name))
-      .toSet()
-      .toList()
-    ..sort();
-  const unknownArtists = {
-    '',
-    'unknown',
-    'unknown artist',
-    '未知',
-    '未知歌手',
-    '未知艺术家',
-  };
+  final artists =
+      song.artists.map((artist) => normalized(artist.name)).toSet().toList()
+        ..sort();
+  const unknownArtists = IkRecentStrings.unknownArtists;
   if (title.isEmpty ||
       artists.isEmpty ||
       artists.any(unknownArtists.contains)) {
@@ -280,10 +268,8 @@ String? _recentContentKey(Song song) {
 int _recentPlayingIndex(List<_RecentSongGroup> groups, Song? current) {
   if (current == null) return -1;
   final exact = groups.indexWhere(
-    (group) => group.identities.contains((
-      id: current.id,
-      platform: current.platform,
-    )),
+    (group) =>
+        group.identities.contains((id: current.id, platform: current.platform)),
   );
   if (exact >= 0) return exact;
   final contentKey = _recentContentKey(current);

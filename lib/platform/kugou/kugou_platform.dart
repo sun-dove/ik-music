@@ -1350,7 +1350,6 @@ class KugouPlatform extends MusicPlatform {
 
   /// Songs from the mobile homepage module: `data` (10 songs) plus the songs
   /// embedded in `special.list.info[]`, de-duplicated by hash.
-  @visibleForTesting
   Future<List<Song>> fetchHomepageRecommendations() async {
     final res = await _api.getHomepage();
     final songs = <Song>[];

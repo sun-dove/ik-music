@@ -76,7 +76,8 @@ GoRouter _createWorkspaceRouter({
                   child: const SizedBox.shrink(),
                 ),
               )
-            else if (refinedRecommendations && route is GoRoute &&
+            else if (refinedRecommendations &&
+                route is GoRoute &&
                 route.path == '/daily')
               GoRoute(
                 path: route.path,
@@ -113,7 +114,8 @@ GoRouter _createWorkspaceRouter({
                     platform: platform,
                     playlistId: id,
                     playlistName:
-                        state.uri.queryParameters['name'] ?? IkStrings.playlists,
+                        state.uri.queryParameters['name'] ??
+                        IkStrings.playlists,
                     coverUrl: state.uri.queryParameters['cover'],
                     desktopTable: true,
                   );

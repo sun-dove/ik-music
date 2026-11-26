@@ -83,13 +83,19 @@ class _FirstSongArtwork extends ConsumerWidget {
   }
 }
 
-Widget _artwork(BuildContext context, String? value, double size, Widget fallback) {
+Widget _artwork(
+  BuildContext context,
+  String? value,
+  double size,
+  Widget fallback,
+) {
   final uri = value == null ? null : Uri.tryParse(value.trim());
   if (uri == null ||
       (uri.scheme != 'file' &&
           (!uri.hasAuthority ||
               (uri.scheme.isNotEmpty &&
-                  uri.scheme != 'http' && uri.scheme != 'https')))) {
+                  uri.scheme != 'http' &&
+                  uri.scheme != 'https')))) {
     return fallback;
   }
   final ImageProvider provider;
@@ -116,7 +122,9 @@ class _PlaylistArtworkImage extends ImageProvider<_PlaylistArtworkImage> {
   final Uri uri;
 
   @override
-  Future<_PlaylistArtworkImage> obtainKey(ImageConfiguration configuration) async => this;
+  Future<_PlaylistArtworkImage> obtainKey(
+    ImageConfiguration configuration,
+  ) async => this;
 
   @override
   ImageStreamCompleter loadImage(
@@ -144,7 +152,8 @@ class _PlaylistArtworkImage extends ImageProvider<_PlaylistArtworkImage> {
   Future<Uint8List> _networkBytes() async {
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 12)
-      ..userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+      ..userAgent =
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
           'AppleWebKit/537.36 (KHTML, like Gecko) '
           'Chrome/131.0.0.0 Safari/537.36';
     try {
@@ -155,7 +164,9 @@ class _PlaylistArtworkImage extends ImageProvider<_PlaylistArtworkImage> {
           throw HttpException('Image HTTP ${response.statusCode}', uri: uri);
         }
         final bytes = BytesBuilder(copy: false);
-        await for (final chunk in response) { bytes.add(chunk); }
+        await for (final chunk in response) {
+          bytes.add(chunk);
+        }
         return bytes.takeBytes();
       })().timeout(const Duration(seconds: 15));
     } finally {
@@ -164,7 +175,8 @@ class _PlaylistArtworkImage extends ImageProvider<_PlaylistArtworkImage> {
   }
 
   @override
-  bool operator ==(Object other) => other is _PlaylistArtworkImage && other.uri == uri;
+  bool operator ==(Object other) =>
+      other is _PlaylistArtworkImage && other.uri == uri;
 
   @override
   int get hashCode => uri.hashCode;

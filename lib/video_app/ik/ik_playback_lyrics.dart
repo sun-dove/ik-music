@@ -39,7 +39,9 @@ class IkPlaybackLyrics extends ConsumerWidget {
       if (document != null && document.lines.isNotEmpty) {
         final index = document.format == LyricsFormat.unknown
             ? 0
-            : document.lines.lastIndexWhere((line) => line.timestamp <= position);
+            : document.lines.lastIndexWhere(
+                (line) => line.timestamp <= position,
+              );
         if (index < 0) {
           text = IkPlaybackLyricsStrings.intro;
         } else {
@@ -53,7 +55,9 @@ class IkPlaybackLyrics extends ConsumerWidget {
     final style = Theme.of(context).textTheme.bodySmall!.copyWith(
       fontSize: compact ? 14 : 13,
       height: 1.5,
-      color: hasLine ? colors.onSurfaceVariant : colors.onSurfaceVariant.withValues(alpha: .65),
+      color: hasLine
+          ? colors.onSurfaceVariant
+          : colors.onSurfaceVariant.withValues(alpha: .65),
     );
     return Semantics(
       key: const ValueKey('ik-bar-current-lyrics'),
@@ -66,41 +70,51 @@ class IkPlaybackLyrics extends ConsumerWidget {
           onTap: onOpen,
           borderRadius: BorderRadius.circular(8),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4, vertical: compact ? 2 : 12),
+            padding: EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: compact ? 2 : 12,
+            ),
             child: Row(
               children: [
                 if (compact) ...[
                   Icon(Icons.lyrics_outlined, size: 16, color: colors.primary),
                   const SizedBox(width: 7),
                 ],
-                Expanded(child: LayoutBuilder(
-              builder: (context, constraints) {
-                final direction = Directionality.of(context);
-                final painter = TextPainter(
-                  text: TextSpan(text: text, style: style),
-                  maxLines: 1,
-                  textDirection: direction,
-                  textScaler: MediaQuery.textScalerOf(context),
-                )..layout();
-                final textWidth = painter.width;
-                final textHeight = painter.height;
-                painter.dispose();
-                final overflow = textWidth - constraints.maxWidth;
-                if (!hasLine || overflow <= 1) {
-                  return Text(text, maxLines: 1, overflow: TextOverflow.ellipsis, style: style);
-                }
-                return _RollingPlaybackLine(
-                  key: ValueKey(text),
-                  text: text,
-                  style: style,
-                  textWidth: textWidth,
-                  textHeight: textHeight,
-                  overflow: overflow,
-                  direction: direction,
-                  playing: isPlaying && !isTransitioning,
-                );
-              },
-                )),
+                Expanded(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final direction = Directionality.of(context);
+                      final painter = TextPainter(
+                        text: TextSpan(text: text, style: style),
+                        maxLines: 1,
+                        textDirection: direction,
+                        textScaler: MediaQuery.textScalerOf(context),
+                      )..layout();
+                      final textWidth = painter.width;
+                      final textHeight = painter.height;
+                      painter.dispose();
+                      final overflow = textWidth - constraints.maxWidth;
+                      if (!hasLine || overflow <= 1) {
+                        return Text(
+                          text,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: style,
+                        );
+                      }
+                      return _RollingPlaybackLine(
+                        key: ValueKey(text),
+                        text: text,
+                        style: style,
+                        textWidth: textWidth,
+                        textHeight: textHeight,
+                        overflow: overflow,
+                        direction: direction,
+                        playing: isPlaying && !isTransitioning,
+                      );
+                    },
+                  ),
+                ),
               ],
             ),
           ),
@@ -174,7 +188,8 @@ class _RollingPlaybackLineState extends State<_RollingPlaybackLine>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _motionAllowed = TickerMode.of(context) &&
+    _motionAllowed =
+        TickerMode.valuesOf(context).enabled &&
         !MediaQuery.disableAnimationsOf(context);
     _syncMotion();
   }
@@ -213,7 +228,8 @@ class _RollingPlaybackLineState extends State<_RollingPlaybackLine>
               animation: _motion,
               builder: (context, child) => Transform.translate(
                 offset: Offset(
-                  widget.overflow * Curves.easeInOut.transform(_motion.value) *
+                  widget.overflow *
+                      Curves.easeInOut.transform(_motion.value) *
                       (rtl ? 1 : -1),
                   0,
                 ),

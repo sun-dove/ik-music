@@ -396,7 +396,8 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
                               SizedBox(
                                 width: 145,
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Expanded(
                                       child: SingleChildScrollView(
@@ -1671,10 +1672,16 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
               IkWorkspaceStrings.lyricsLock,
               Switch(
                 value: settings.isLocked,
-                onChanged: capability.supported && settings.enabled &&
+                onChanged:
+                    capability.supported &&
+                        settings.enabled &&
                         !_busy.contains('lyric-style')
-                    ? (locked) => _run('lyric-style', () => ref
-                        .read(floatingLyricsProvider.notifier).setLocked(locked))
+                    ? (locked) => _run(
+                        'lyric-style',
+                        () => ref
+                            .read(floatingLyricsProvider.notifier)
+                            .setLocked(locked),
+                      )
                     : null,
               ),
               description: IkLyricsStyleStrings.unlockHint,
@@ -1695,9 +1702,14 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
           backgroundOpacity: value.backgroundOpacity,
           busy: !capability.supported || _busy.contains('lyric-style'),
           issue: _errors['lyric-style'],
-          onFontFamily: (font) => _run('lyric-style', () => actions.setFontFamily(
-              font ?? widget.appearance?.fontFamily ?? 'Microsoft YaHei UI')),
-          onFontSize: (size) => _run('lyric-style', () => actions.setFontSize(size)),
+          onFontFamily: (font) => _run(
+            'lyric-style',
+            () => actions.setFontFamily(
+              font ?? widget.appearance?.fontFamily ?? 'Microsoft YaHei UI',
+            ),
+          ),
+          onFontSize: (size) =>
+              _run('lyric-style', () => actions.setFontSize(size)),
           onBackgroundColor: (color) =>
               _run('lyric-style', () => actions.setBackgroundColor(color)),
           onCurrentLineColor: (color) =>

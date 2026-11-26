@@ -95,10 +95,12 @@ class _IkPersonalDailyPageState extends ConsumerState<IkPersonalDailyPage> {
       presentation: presentation,
       onRetryFallback: presentation == null || state.result == null
           ? null
-          : () => ref.invalidate(ikDailyFallbackProvider((
-              platform: platform,
-              personal: state.result!,
-            ))),
+          : () => ref.invalidate(
+              ikDailyFallbackProvider((
+                platform: platform,
+                personal: state.result!,
+              )),
+            ),
       currentSong: currentSong,
       likedKeys: likedKeys,
       likeBusy: likeAction.busy,
@@ -382,8 +384,8 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
   Widget _refined(BuildContext context, IkDailyPresentationState view) {
     final colors = Theme.of(context).colorScheme;
     final result = state.result?.platform == platform ? state.result : null;
-    final personalSuccess = !state.isLoading &&
-        result?.status == PersonalDailyStatus.success;
+    final personalSuccess =
+        !state.isLoading && result?.status == PersonalDailyStatus.success;
     final songs = personalSuccess
         ? result!.songs
         : view.fallback?.songs ?? const <Song>[];
@@ -427,11 +429,15 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                       key: ValueKey('ik-daily-platform-${item.name}'),
                       onPressed: () => onPlatform(item),
                       style: TextButton.styleFrom(
-                        foregroundColor: item == platform ? colors.primary : colors.onSurfaceVariant,
+                        foregroundColor: item == platform
+                            ? colors.primary
+                            : colors.onSurfaceVariant,
                         backgroundColor: item == platform
                             ? colors.primary.withValues(alpha: .10)
                             : Colors.transparent,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(9),
+                        ),
                       ),
                       child: Text(IkPersonalDailyStrings.platformLabel(item)),
                     ),
@@ -465,7 +471,9 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                               children: [
                                 Text(
                                   IkPersonalDailyStrings.stateTitle(result),
-                                  style: TextStyle(color: colors.onSurfaceVariant),
+                                  style: TextStyle(
+                                    color: colors.onSurfaceVariant,
+                                  ),
                                 ),
                                 if (action != null)
                                   TextButton(
@@ -473,16 +481,22 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                                     onPressed: actionCallback(),
                                     child: Text(action),
                                   ),
-                                if (result?.status == PersonalDailyStatus.verificationRequired)
+                                if (result?.status ==
+                                    PersonalDailyStatus.verificationRequired)
                                   TextButton(
                                     onPressed: onRetry,
-                                    child: const Text(IkPersonalDailyStrings.verificationRetry),
+                                    child: const Text(
+                                      IkPersonalDailyStrings.verificationRetry,
+                                    ),
                                   ),
                               ],
                             ),
                           if (source != null) ...[
                             const SizedBox(height: 6),
-                            Text(source, style: Theme.of(context).textTheme.titleSmall),
+                            Text(
+                              source,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
                             const SizedBox(height: 10),
                           ],
                           Wrap(
@@ -492,18 +506,31 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                             children: [
                               FilledButton.icon(
                                 key: const Key('ik-daily-play-all'),
-                                onPressed: songs.isEmpty ? null : () => onPlay(songs.first, songs),
-                                icon: const Icon(Icons.play_arrow_rounded, size: 18),
-                                label: const Text(IkPersonalDailyStrings.playAll),
+                                onPressed: songs.isEmpty
+                                    ? null
+                                    : () => onPlay(songs.first, songs),
+                                icon: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  IkPersonalDailyStrings.playAll,
+                                ),
                               ),
                               if (songs.isNotEmpty)
-                                Text(IkPersonalDailyStrings.count(songs.length)),
+                                Text(
+                                  IkPersonalDailyStrings.count(songs.length),
+                                ),
                             ],
                           ),
-                          if (personalSuccess && result!.validCount > songs.length) ...[
+                          if (personalSuccess &&
+                              result!.validCount > songs.length) ...[
                             const SizedBox(height: 8),
                             Text(
-                              IkPersonalDailyStrings.fullCount(result.validCount, songs.length),
+                              IkPersonalDailyStrings.fullCount(
+                                result.validCount,
+                                songs.length,
+                              ),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],
@@ -513,10 +540,14 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                           ],
                           if (loading) ...[
                             const SizedBox(height: 16),
-                            const LinearProgressIndicator(key: Key('ik-daily-progress')),
+                            const LinearProgressIndicator(
+                              key: Key('ik-daily-progress'),
+                            ),
                             if (view.fallbackLoading) ...[
                               const SizedBox(height: 8),
-                              const Text(IkRecommendationCatalogStrings.publicLoading),
+                              const Text(
+                                IkRecommendationCatalogStrings.publicLoading,
+                              ),
                             ],
                           ],
                           if (view.fallbackError case final error?) ...[
@@ -524,7 +555,9 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                             Text(error),
                             TextButton(
                               onPressed: onRetryFallback,
-                              child: const Text(IkRecommendationCatalogStrings.publicRetry),
+                              child: const Text(
+                                IkRecommendationCatalogStrings.publicRetry,
+                              ),
                             ),
                           ],
                         ],
@@ -546,12 +579,19 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                             key: ValueKey('ik-daily-song-${song.id}'),
                             song: song,
                             index: index,
-                            playing: currentSong?.id == song.id && currentSong?.platform == song.platform,
-                            liked: likedKeys.contains('${song.platform.name}:${song.id}'),
+                            playing:
+                                currentSong?.id == song.id &&
+                                currentSong?.platform == song.platform,
+                            liked: likedKeys.contains(
+                              '${song.platform.name}:${song.id}',
+                            ),
                             onPlay: () => onPlay(song, songs),
-                            onLike: () { if (!likeBusy) onLike(song); },
+                            onLike: () {
+                              if (!likeBusy) onLike(song);
+                            },
                             onMore: () => onMore(context, song),
-                            onMoreWithContext: (buttonContext) => onMore(buttonContext, song),
+                            onMoreWithContext: (buttonContext) =>
+                                onMore(buttonContext, song),
                           );
                         },
                       ),

@@ -14,10 +14,8 @@ import '../../platform/netease/netease_platform.dart';
 import '../../platform/qq/qq_endpoints.dart';
 import '../../platform/qq/qq_platform.dart';
 
-String? playlistSongCover(Song? song) => _text([
-  song?.coverUrl,
-  song?.album?.coverUrl,
-]);
+String? playlistSongCover(Song? song) =>
+    _text([song?.coverUrl, song?.album?.coverUrl]);
 
 final _coverQueueProvider = Provider((ref) => _CoverQueue());
 
@@ -30,16 +28,21 @@ final playlistFirstCoverProvider = FutureProvider.autoDispose
       var current = true;
       ref.onDispose(() => current = false);
       if (playlist.songCount <= 0) return null;
-      if (playlist.platform != PlatformType.local && account == null) return null;
+      if (playlist.platform != PlatformType.local && account == null)
+        return null;
       final adapter = playlist.platform == PlatformType.local
           ? null
           : PlatformRegistry.get(playlist.platform);
       final revision = adapter?.personalDailySessionRevision;
       void onSessionChanged() => ref.invalidateSelf();
       adapter?.personalDailySessionChanges?.addListener(onSessionChanged);
-      ref.onDispose(() =>
-          adapter?.personalDailySessionChanges?.removeListener(onSessionChanged));
-      bool scopeIsCurrent() => current &&
+      ref.onDispose(
+        () => adapter?.personalDailySessionChanges?.removeListener(
+          onSessionChanged,
+        ),
+      );
+      bool scopeIsCurrent() =>
+          current &&
           adapter?.personalDailySessionRevision == revision &&
           ref.read(authProvider).userFor(playlist.platform) == account;
       final local = playlist.platform == PlatformType.local
@@ -71,10 +74,16 @@ final playlistFirstCoverProvider = FutureProvider.autoDispose
               : '${QqEndpoints.songCover}$mid.jpg';
         }
         if (adapter is NeteasePlatform) {
-          final response = await adapter.api.getPlaylistDetail(playlist.id, n: 1);
+          final response = await adapter.api.getPlaylistDetail(
+            playlist.id,
+            n: 1,
+          );
           _check(response);
           final song = _first(_map(response['playlist'])['tracks']);
-          return _text([_map(song['al'])['picUrl'], _map(song['album'])['picUrl']]);
+          return _text([
+            _map(song['al'])['picUrl'],
+            _map(song['album'])['picUrl'],
+          ]);
         }
         return null;
       }, scopeIsCurrent);
@@ -92,7 +101,8 @@ Future<String?> _kugouCover(
 ) async {
   final api = adapter.api;
   Map<String, dynamic> response;
-  final ownPlaylist = playlist.editId?.isNotEmpty == true ||
+  final ownPlaylist =
+      playlist.editId?.isNotEmpty == true ||
       (playlist.editable && RegExp(r'^\d+$').hasMatch(playlist.id));
   if (ownPlaylist) {
     response = await api.getUserPlaylistCoverPreview(playlist.editableId);
@@ -128,7 +138,9 @@ Future<String?> _kugouCover(
     row['filehash'],
     _map(row['audio_info'])['hash'],
   ]);
-  if (hash == null || !RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(hash) || !current()) {
+  if (hash == null ||
+      !RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(hash) ||
+      !current()) {
     return null;
   }
   final metadata = await api.getSongInfo(hash);
@@ -140,7 +152,12 @@ Future<String?> _kugouCover(
 
 String? _kugouPlaylistImage(Map response) {
   final data = _map(response['data']);
-  for (final node in [_map(data['list_info']), _map(response['list_info']), data, response]) {
+  for (final node in [
+    _map(data['list_info']),
+    _map(response['list_info']),
+    data,
+    response,
+  ]) {
     final cover = _kugouImage([
       node['pic'],
       node['imgurl'],
@@ -155,27 +172,30 @@ String? _kugouPlaylistImage(Map response) {
 }
 
 String? _kugouSongImage(Map row) => _kugouImage([
-    _map(row['trans_param'])['union_cover'],
-    row['album_img'],
-    row['image'],
-    row['cover'],
-    row['album_sizable_cover'],
-    row['sizable_cover'],
-    row['imgUrl'],
-    row['imgurl'],
-    _map(row['info'])['image'],
-    _map(row['albuminfo'])['cover'],
-    _map(row['albuminfo'])['image'],
-    _map(row['album_info'])['cover'],
-  ]);
+  _map(row['trans_param'])['union_cover'],
+  row['album_img'],
+  row['image'],
+  row['cover'],
+  row['album_sizable_cover'],
+  row['sizable_cover'],
+  row['imgUrl'],
+  row['imgurl'],
+  _map(row['info'])['image'],
+  _map(row['albuminfo'])['cover'],
+  _map(row['albuminfo'])['image'],
+  _map(row['album_info'])['cover'],
+]);
 
 String? _kugouImage(Iterable<Object?> values) {
   for (final value in values) {
     final text = _text([value])?.replaceAll('{size}', '480');
     if (text == null) continue;
     final uri = Uri.tryParse(text);
-    if (uri == null || uri.host.isEmpty ||
-        (uri.scheme.isNotEmpty && uri.scheme != 'http' && uri.scheme != 'https')) {
+    if (uri == null ||
+        uri.host.isEmpty ||
+        (uri.scheme.isNotEmpty &&
+            uri.scheme != 'http' &&
+            uri.scheme != 'https')) {
       continue;
     }
     return uri.scheme.isEmpty ? uri.replace(scheme: 'https').toString() : text;
@@ -201,9 +221,8 @@ Map _qqSong(Map row) {
 }
 
 Map _map(Object? value) => value is Map ? value : const {};
-Map _first(Object? value) => value is List && value.isNotEmpty
-    ? _map(value.first)
-    : const {};
+Map _first(Object? value) =>
+    value is List && value.isNotEmpty ? _map(value.first) : const {};
 String? _text(Iterable<Object?> values) {
   for (final value in values) {
     if (value is! String) continue;
@@ -217,7 +236,13 @@ void _check(Map response) {
   if (response.isEmpty || response['status'] == 0) {
     throw const FormatException('Playlist preview unavailable');
   }
-  for (final key in const ['code', 'subcode', 'error_code', 'errcode', 'errno']) {
+  for (final key in const [
+    'code',
+    'subcode',
+    'error_code',
+    'errcode',
+    'errno',
+  ]) {
     if (!response.containsKey(key)) continue;
     final code = int.tryParse('${response[key]}');
     if (code != 0 && !(key == 'code' && code == 200)) {

@@ -12,7 +12,9 @@ import '../../l10n/ik_workspace_strings.dart';
 import '../../models/platform_type.dart';
 import '../ui/video_shell.dart';
 
-Future<void> showIkQueueRefined(BuildContext context) => showGeneralDialog<void>(
+Future<void> showIkQueueRefined(
+  BuildContext context,
+) => showGeneralDialog<void>(
   context: context,
   useRootNavigator: true,
   barrierDismissible: true,
@@ -22,9 +24,10 @@ Future<void> showIkQueueRefined(BuildContext context) => showGeneralDialog<void>
   transitionBuilder: (context, animation, _, child) => FadeTransition(
     opacity: animation,
     child: SlideTransition(
-      position: Tween(begin: const Offset(.04, 0), end: Offset.zero).animate(
-        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-      ),
+      position: Tween(
+        begin: const Offset(.04, 0),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
       child: child,
     ),
   ),
@@ -53,7 +56,9 @@ Future<void> showIkQueueRefined(BuildContext context) => showGeneralDialog<void>
                 clipBehavior: Clip.antiAlias,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(color: colors.outlineVariant.withValues(alpha: .4)),
+                  side: BorderSide(
+                    color: colors.outlineVariant.withValues(alpha: .4),
+                  ),
                 ),
                 child: const _QueueContent(),
               ),
@@ -94,10 +99,8 @@ class _QueueContentState extends ConsumerState<_QueueContent> {
               Expanded(
                 child: Text(
                   IkStrings.nextUp,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium
+                      ?.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
                 ),
               ),
               Text(
@@ -144,12 +147,19 @@ class _QueueContentState extends ConsumerState<_QueueContent> {
                                 song: song,
                                 position: event.globalPosition,
                                 isLocal: song.platform == PlatformType.local,
-                                isLiked: ref.read(likesProvider).songs.contains(song),
+                                isLiked: ref
+                                    .read(likesProvider)
+                                    .songs
+                                    .contains(song),
                               ),
                             ),
                             child: InkWell(
-                              onTap: () => ref.read(playerProvider.notifier)
-                                  .playPlaylist(player.playlist, startIndex: index),
+                              onTap: () => ref
+                                  .read(playerProvider.notifier)
+                                  .playPlaylist(
+                                    player.playlist,
+                                    startIndex: index,
+                                  ),
                               child: Padding(
                                 padding: const EdgeInsets.all(10),
                                 child: Row(
@@ -164,7 +174,8 @@ class _QueueContentState extends ConsumerState<_QueueContent> {
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Text(
                                             song.name,
@@ -172,8 +183,12 @@ class _QueueContentState extends ConsumerState<_QueueContent> {
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               fontSize: 14,
-                                              fontWeight: current ? FontWeight.w600 : FontWeight.w500,
-                                              color: current ? colors.primary : colors.onSurface,
+                                              fontWeight: current
+                                                  ? FontWeight.w600
+                                                  : FontWeight.w500,
+                                              color: current
+                                                  ? colors.primary
+                                                  : colors.onSurface,
                                             ),
                                           ),
                                           const SizedBox(height: 4),
@@ -181,7 +196,10 @@ class _QueueContentState extends ConsumerState<_QueueContent> {
                                             song.artistNames,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: colors.onSurfaceVariant,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -189,14 +207,19 @@ class _QueueContentState extends ConsumerState<_QueueContent> {
                                     const SizedBox(width: 10),
                                     if (current)
                                       Icon(
-                                        player.isPlaying ? Icons.graphic_eq_rounded : Icons.pause_rounded,
+                                        player.isPlaying
+                                            ? Icons.graphic_eq_rounded
+                                            : Icons.pause_rounded,
                                         size: 18,
                                         color: colors.primary,
                                       )
                                     else
                                       Text(
                                         '${song.duration.inMinutes}:${(song.duration.inSeconds % 60).toString().padLeft(2, '0')}',
-                                        style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant),
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: colors.onSurfaceVariant,
+                                        ),
                                       ),
                                   ],
                                 ),

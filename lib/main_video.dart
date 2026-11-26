@@ -147,9 +147,13 @@ Future<void> main() async {
     localSourceBridge = IkLocalLxSourceBridge(
       settings: sourceSettings,
       engine: sourceEngine,
-      directory: Directory('${File(Platform.resolvedExecutable).parent.path}/local-lx-sources'),
+      directory: Directory(
+        '${File(Platform.resolvedExecutable).parent.path}/local-lx-sources',
+      ),
       runtimeId: '${Platform.operatingSystem}-lx3',
-      isSourceWorkBusy: () => catalogCoordinator.busy || sourceUpdater?.busy == true ||
+      isSourceWorkBusy: () =>
+          catalogCoordinator.busy ||
+          sourceUpdater?.busy == true ||
           container.read(playerProvider).isTransitioning,
     );
   }
@@ -311,10 +315,11 @@ Future<void> main() async {
       playerProvider.overrideWith(
         (ref) => IkCatalogPlayerNotifier(
           preservePlaybackOnSettingsChange: PlatformUtils.isWindows,
-          quickSourceRecovery: PlatformUtils.isWindows || PlatformUtils.isAndroid,
-          quickResolveTimeout: const Duration(seconds: 2),
-          quickLoadTimeout: const Duration(milliseconds: 2500),
-          quickBudget: const Duration(seconds: 6),
+          quickSourceRecovery:
+              PlatformUtils.isWindows || PlatformUtils.isAndroid,
+          quickResolveTimeout: const Duration(seconds: 5),
+          quickLoadTimeout: const Duration(seconds: 5),
+          quickBudget: const Duration(seconds: 15),
           userGain: ref.read(ikUserGainProvider.notifier),
           catalogCoordinator: catalogCoordinator,
           settings: sourceSettings,

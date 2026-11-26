@@ -1020,7 +1020,9 @@ class KugouApi {
   }
 
   /// 只读取自建歌单首曲及封面，供 Windows 歌单图片回退使用。
-  Future<Map<String, dynamic>> getUserPlaylistCoverPreview(String listid) async {
+  Future<Map<String, dynamic>> getUserPlaylistCoverPreview(
+    String listid,
+  ) async {
     final data = {
       'listid': listid,
       'userid': _userid ?? '0',

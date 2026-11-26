@@ -63,9 +63,8 @@ class IkPlaybackBar extends ConsumerWidget {
     required this.onAudio,
     this.inlineLyrics = false,
     this.balancedLayout = false,
-  })
-    : _stableSeekSemantics = false,
-      contextualErrors = false;
+  }) : _stableSeekSemantics = false,
+       contextualErrors = false;
   const IkPlaybackBar.aligned({
     super.key,
     required this.onOpen,
@@ -100,13 +99,15 @@ class IkPlaybackBar extends ConsumerWidget {
     final source = balancedLayout && contextualErrors
         ? ref.watch(sourcePlaybackViewProvider)
         : null;
-    final showCompactFailure = source != null &&
+    final showCompactFailure =
+        source != null &&
         (player.error?.isNotEmpty ?? false) &&
         !player.isPlaying &&
         !player.isTransitioning &&
         !source.busy;
     final reset = player.error == IkContextualErrorStrings.playerResetReason;
-    final canContinue = !reset &&
+    final canContinue =
+        !reset &&
         source?.canContinue == true &&
         notifier is MultiSourceVideoPlayerNotifier;
     final compactNotice = !showCompactFailure
@@ -121,15 +122,14 @@ class IkPlaybackBar extends ConsumerWidget {
                 ? IkPlaybackNoticeStrings.pending
                 : IkPlaybackNoticeStrings.failed,
             reason: player.error!,
-            details: source!.details,
+            details: source.details,
             actionLabel: canContinue
                 ? IkPlaybackNoticeStrings.continueTrying
                 : reset
                 ? IkContextualErrorStrings.replay
                 : IkRuntimeStrings.retry,
             onAction: canContinue
-                ? () => (notifier as MultiSourceVideoPlayerNotifier)
-                    .continueSources()
+                ? () => notifier.continueSources()
                 : song == null
                 ? null
                 : () => notifier.playSong(song),
@@ -141,45 +141,45 @@ class IkPlaybackBar extends ConsumerWidget {
         );
     final scheme = Theme.of(context).colorScheme;
     final songInformation = InkWell(
-            onTap: song == null ? null : onOpen,
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.all(4),
-              child: Row(
+      onTap: song == null ? null : onOpen,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          children: [
+            VideoCover(url: song?.coverUrl, size: 44, radius: 8),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  VideoCover(url: song?.coverUrl, size: 44, radius: 8),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          song?.name ?? IkWorkspaceStrings.noTrack,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        if (song != null)
-                          Text(
-                            song.artistNames,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: scheme.onSurfaceVariant,
-                            ),
-                          ),
-                      ],
+                  Text(
+                    song?.name ?? IkWorkspaceStrings.noTrack,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
+                  if (song != null)
+                    Text(
+                      song.artistNames,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
                 ],
               ),
             ),
-          );
+          ],
+        ),
+      ),
+    );
     final likeButton = song == null
         ? null
         : IconButton(
@@ -196,7 +196,7 @@ class IkPlaybackBar extends ConsumerWidget {
     final title = Row(
       children: [
         Expanded(child: songInformation),
-        if (likeButton != null) likeButton,
+        ?likeButton,
       ],
     );
     Widget wideTitle() => !inlineLyrics || song == null
@@ -210,13 +210,16 @@ class IkPlaybackBar extends ConsumerWidget {
                 children: [
                   SizedBox(
                     width: (constraints.maxWidth * .3)
-                        .clamp(180.0, 208.0).toDouble(),
+                        .clamp(180.0, 208.0)
+                        .toDouble(),
                     child: songInformation,
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: IkPlaybackLyrics(
-                      key: ValueKey('ik-bar-lyrics-${song.platform.name}-${song.id}'),
+                      key: ValueKey(
+                        'ik-bar-lyrics-${song.platform.name}-${song.id}',
+                      ),
                       position: player.position,
                       isPlaying: player.isPlaying,
                       isTransitioning: player.isTransitioning,
@@ -224,108 +227,99 @@ class IkPlaybackBar extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  if (likeButton != null) likeButton,
+                  ?likeButton,
                 ],
               );
             },
           );
     final transportButtons = <Widget>[
-            IconButton(
-              tooltip: VideoStrings.shuffle,
-              onPressed: notifier.toggleShuffle,
-              color: player.isShuffle ? scheme.primary : null,
-              icon: const Icon(Icons.shuffle_rounded, size: 18),
-            ),
-            IconButton(
-              tooltip: VideoStrings.previousSong,
-              onPressed: song == null ? null : notifier.skipToPrevious,
-              icon: const Icon(Icons.skip_previous_rounded),
-            ),
-            IconButton.filled(
-              tooltip: player.isPlaying
-                  ? VideoStrings.pause
-                  : VideoStrings.play,
-              onPressed: song == null || player.isTransitioning
-                  ? null
-                  : notifier.togglePlay,
-              icon: player.isTransitioning
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      player.isPlaying
-                          ? Icons.pause_rounded
-                          : Icons.play_arrow_rounded,
-                    ),
-            ),
-            IconButton(
-              tooltip: VideoStrings.nextSong,
-              onPressed: song == null ? null : notifier.skipToNext,
-              icon: const Icon(Icons.skip_next_rounded),
-            ),
-            IconButton(
-              tooltip: VideoStrings.repeatAll,
-              onPressed: notifier.cycleRepeatMode,
-              icon: Icon(
-                player.repeatMode == RepeatMode.one
-                    ? Icons.repeat_one_rounded
-                    : Icons.repeat_rounded,
-                size: 18,
+      IconButton(
+        tooltip: VideoStrings.shuffle,
+        onPressed: notifier.toggleShuffle,
+        color: player.isShuffle ? scheme.primary : null,
+        icon: const Icon(Icons.shuffle_rounded, size: 18),
+      ),
+      IconButton(
+        tooltip: VideoStrings.previousSong,
+        onPressed: song == null ? null : notifier.skipToPrevious,
+        icon: const Icon(Icons.skip_previous_rounded),
+      ),
+      IconButton.filled(
+        tooltip: player.isPlaying ? VideoStrings.pause : VideoStrings.play,
+        onPressed: song == null || player.isTransitioning
+            ? null
+            : notifier.togglePlay,
+        icon: player.isTransitioning
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : Icon(
+                player.isPlaying
+                    ? Icons.pause_rounded
+                    : Icons.play_arrow_rounded,
               ),
-              color: player.repeatMode == RepeatMode.off
-                  ? null
-                  : scheme.primary,
-            ),
-          ];
+      ),
+      IconButton(
+        tooltip: VideoStrings.nextSong,
+        onPressed: song == null ? null : notifier.skipToNext,
+        icon: const Icon(Icons.skip_next_rounded),
+      ),
+      IconButton(
+        tooltip: VideoStrings.repeatAll,
+        onPressed: notifier.cycleRepeatMode,
+        icon: Icon(
+          player.repeatMode == RepeatMode.one
+              ? Icons.repeat_one_rounded
+              : Icons.repeat_rounded,
+          size: 18,
+        ),
+        color: player.repeatMode == RepeatMode.off ? null : scheme.primary,
+      ),
+    ];
     final transport = Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: transportButtons,
     );
     final progress = Row(
-          children: [
-            Text(_time(player.position), style: const TextStyle(fontSize: 12)),
-            Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 4,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 10,
-                  ),
-                ),
-                child: _seekSemantics(
-                  Slider(
-                    key: const ValueKey('ik-bar-seek'),
-                    value: player.position.inMilliseconds.toDouble().clamp(
-                      0,
-                      player.duration.inMilliseconds.toDouble().clamp(
-                        1,
-                        double.infinity,
-                      ),
-                    ),
-                    max: player.duration.inMilliseconds.toDouble().clamp(
-                      1,
-                      double.infinity,
-                    ),
-                    onChanged:
-                        song == null ||
-                            player.isTransitioning ||
-                            player.duration <= Duration.zero
-                        ? null
-                        : (value) => notifier.seek(
-                            Duration(milliseconds: value.round()),
-                          ),
+      children: [
+        Text(_time(player.position), style: const TextStyle(fontSize: 12)),
+        Expanded(
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 3,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+            ),
+            child: _seekSemantics(
+              Slider(
+                key: const ValueKey('ik-bar-seek'),
+                value: player.position.inMilliseconds.toDouble().clamp(
+                  0,
+                  player.duration.inMilliseconds.toDouble().clamp(
+                    1,
+                    double.infinity,
                   ),
                 ),
+                max: player.duration.inMilliseconds.toDouble().clamp(
+                  1,
+                  double.infinity,
+                ),
+                onChanged:
+                    song == null ||
+                        player.isTransitioning ||
+                        player.duration <= Duration.zero
+                    ? null
+                    : (value) =>
+                          notifier.seek(Duration(milliseconds: value.round())),
               ),
             ),
-            Text(_time(player.duration), style: const TextStyle(fontSize: 12)),
-          ],
-        );
+          ),
+        ),
+        Text(_time(player.duration), style: const TextStyle(fontSize: 12)),
+      ],
+    );
     final controls = Column(
       mainAxisSize: MainAxisSize.min,
       children: [transport, progress],
@@ -368,54 +362,52 @@ class IkPlaybackBar extends ConsumerWidget {
     );
     final volume = volumeControl();
     final toolButtons = <Widget>[
-        Tooltip(
-          message: !lyricsCapability.supported
-              ? lyricsCapability.message
-              : lyricsIssue ??
-                    (failed
-                        ? IkRuntimeStrings.floatingFailed
-                        : IkStrings.floating),
-          child: TextButton(
-            key: const ValueKey('ik-bar-lyrics'),
-            onPressed: busy || !lyricsCapability.supported
-                ? null
-                : () => ref
-                      .read(ikLyricsActionProvider.notifier)
-                      .setEnabled(!lyrics),
-            style: TextButton.styleFrom(
-              minimumSize: const Size(44, 44),
-              foregroundColor: failed
-                  ? scheme.error
-                  : lyrics
-                  ? scheme.primary
-                  : scheme.onSurfaceVariant,
-            ),
-            child: const Text(IkWorkspaceStrings.lyricsShort),
+      Tooltip(
+        message: !lyricsCapability.supported
+            ? lyricsCapability.message
+            : lyricsIssue ??
+                  (failed
+                      ? IkRuntimeStrings.floatingFailed
+                      : IkStrings.floating),
+        child: TextButton(
+          key: const ValueKey('ik-bar-lyrics'),
+          onPressed: busy || !lyricsCapability.supported
+              ? null
+              : () => ref
+                    .read(ikLyricsActionProvider.notifier)
+                    .setEnabled(!lyrics),
+          style: TextButton.styleFrom(
+            minimumSize: const Size(44, 44),
+            foregroundColor: failed
+                ? scheme.error
+                : lyrics
+                ? scheme.primary
+                : scheme.onSurfaceVariant,
           ),
+          child: const Text(IkWorkspaceStrings.lyricsShort),
         ),
-        IconButton(
-          tooltip: IkWorkspaceStrings.audio,
-          onPressed: onAudio,
-          icon: const Icon(Icons.tune_rounded, size: 21),
-        ),
-        IconButton(
-          key: const ValueKey('ik-bar-queue'),
-          tooltip: IkStrings.nextUp,
-          onPressed: () => balancedLayout
-              ? showIkQueueRefined(context)
-              : showIkQueue(context),
-          icon: const Icon(Icons.queue_music_rounded, size: 23),
-        ),
-      ];
-    final tools = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: toolButtons,
-    );
+      ),
+      IconButton(
+        tooltip: IkWorkspaceStrings.audio,
+        onPressed: onAudio,
+        icon: const Icon(Icons.tune_rounded, size: 21),
+      ),
+      IconButton(
+        key: const ValueKey('ik-bar-queue'),
+        tooltip: IkStrings.nextUp,
+        onPressed: () =>
+            balancedLayout ? showIkQueueRefined(context) : showIkQueue(context),
+        icon: const Icon(Icons.queue_music_rounded, size: 23),
+      ),
+    ];
+    final tools = Row(mainAxisSize: MainAxisSize.min, children: toolButtons);
     final toolTextSize = MediaQuery.textScalerOf(context).scale(14);
     final toolButtonWidth = (toolTextSize + 32).clamp(48.0, 100.0).toDouble();
-    final toolButtonHeight = (toolTextSize * 1.5 + 20).clamp(48.0, 100.0).toDouble();
-    final roomyToolsWidth = 144 + toolButtons.length * toolButtonWidth +
-        toolButtons.length * 12;
+    final toolButtonHeight = (toolTextSize * 1.5 + 20)
+        .clamp(48.0, 100.0)
+        .toDouble();
+    final roomyToolsWidth =
+        144 + toolButtons.length * toolButtonWidth + toolButtons.length * 12;
     Widget roomyTools() {
       return Wrap(
         alignment: WrapAlignment.end,
@@ -425,10 +417,15 @@ class IkPlaybackBar extends ConsumerWidget {
         children: [
           volumeControl(width: 144),
           for (final button in toolButtons)
-            SizedBox(width: toolButtonWidth, height: toolButtonHeight, child: button),
+            SizedBox(
+              width: toolButtonWidth,
+              height: toolButtonHeight,
+              child: button,
+            ),
         ],
       );
     }
+
     Widget leftSongAndLyrics({Widget? playbackNotice}) {
       final currentSong = song;
       return LayoutBuilder(
@@ -436,9 +433,12 @@ class IkPlaybackBar extends ConsumerWidget {
           final textScaler = MediaQuery.textScalerOf(context);
           final scale = textScaler.scale(13) / 13;
           double measure(String text, TextStyle style) {
-            var effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
+            var effectiveStyle = DefaultTextStyle.of(context).style
+                .merge(style);
             if (MediaQuery.boldTextOf(context)) {
-              effectiveStyle = effectiveStyle.copyWith(fontWeight: FontWeight.bold);
+              effectiveStyle = effectiveStyle.copyWith(
+                fontWeight: FontWeight.bold,
+              );
             }
             final painter = TextPainter(
               text: TextSpan(text: text, style: effectiveStyle),
@@ -451,6 +451,7 @@ class IkPlaybackBar extends ConsumerWidget {
             painter.dispose();
             return width;
           }
+
           final nameWidth = measure(
             currentSong?.name ?? IkWorkspaceStrings.noTrack,
             const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -463,9 +464,11 @@ class IkPlaybackBar extends ConsumerWidget {
           final heartGap = likeButton == null ? 0.0 : 6.0;
           final naturalSongWidth = 64 + textWidth.ceilToDouble();
           final maximumSongWidth = (size.maxWidth - heartWidth - heartGap)
-              .clamp(64.0, 64 + 148 * scale).toDouble();
+              .clamp(64.0, 64 + 148 * scale)
+              .toDouble();
           final songWidth = naturalSongWidth < maximumSongWidth
-              ? naturalSongWidth : maximumSongWidth;
+              ? naturalSongWidth
+              : maximumSongWidth;
           final songGroup = Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -476,10 +479,13 @@ class IkPlaybackBar extends ConsumerWidget {
               ],
             ],
           );
-          final Widget? supplement = playbackNotice ??
+          final Widget? supplement =
+              playbackNotice ??
               (inlineLyrics && currentSong != null
                   ? IkPlaybackLyrics(
-                      key: ValueKey('ik-bar-lyrics-${currentSong.platform.name}-${currentSong.id}'),
+                      key: ValueKey(
+                        'ik-bar-lyrics-${currentSong.platform.name}-${currentSong.id}',
+                      ),
                       position: player.position,
                       isPlaying: player.isPlaying,
                       isTransitioning: player.isTransitioning,
@@ -491,8 +497,10 @@ class IkPlaybackBar extends ConsumerWidget {
             return Align(alignment: Alignment.centerLeft, child: songGroup);
           }
           final supplementLimit = 260 * scale.clamp(1.0, 1.35);
-          final availableSupplement = size.maxWidth - songWidth - heartWidth - heartGap - 12;
-          final supplementMinimum = (playbackNotice == null ? 120 : 160) * scale;
+          final availableSupplement =
+              size.maxWidth - songWidth - heartWidth - heartGap - 12;
+          final supplementMinimum =
+              (playbackNotice == null ? 120 : 160) * scale;
           if (availableSupplement >= supplementMinimum) {
             return Row(
               mainAxisSize: MainAxisSize.min,
@@ -501,7 +509,8 @@ class IkPlaybackBar extends ConsumerWidget {
                 const SizedBox(width: 12),
                 SizedBox(
                   width: availableSupplement < supplementLimit
-                      ? availableSupplement : supplementLimit.toDouble(),
+                      ? availableSupplement
+                      : supplementLimit.toDouble(),
                   child: supplement,
                 ),
               ],
@@ -515,7 +524,8 @@ class IkPlaybackBar extends ConsumerWidget {
               const SizedBox(height: 4),
               SizedBox(
                 width: size.maxWidth < supplementLimit
-                    ? size.maxWidth : supplementLimit.toDouble(),
+                    ? size.maxWidth
+                    : supplementLimit.toDouble(),
                 child: supplement,
               ),
             ],
@@ -523,6 +533,7 @@ class IkPlaybackBar extends ConsumerWidget {
         },
       );
     }
+
     return LayoutBuilder(
       builder: (context, constraints) => Container(
         decoration: BoxDecoration(
@@ -550,7 +561,8 @@ class IkPlaybackBar extends ConsumerWidget {
                 likeAction.issue!,
                 style: TextStyle(fontSize: 12, color: scheme.error),
               ),
-            if (contextualErrors && !balancedLayout &&
+            if (contextualErrors &&
+                !balancedLayout &&
                 (player.error?.isNotEmpty ?? false))
               _errorNotice(context, player, notifier)
             else if (!contextualErrors && player.error != null)
@@ -567,27 +579,41 @@ class IkPlaybackBar extends ConsumerWidget {
               builder: (context, size) {
                 final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
                 if (balancedLayout) {
-                  final sideMinimum = roomyToolsWidth + 24;
-                  final centerWidth = (size.maxWidth - 48 - sideMinimum * 2)
-                      .clamp(0.0, 680.0).toDouble();
-                  if (centerWidth >= 360) {
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(child: leftSongAndLyrics(playbackNotice: compactNotice)),
-                        const SizedBox(width: 24),
-                        SizedBox(
-                          key: const ValueKey('ik-bar-centered-controls'),
-                          width: centerWidth,
-                          child: controls,
+                  const groupGap = 16.0;
+                  final contentWidth = size.maxWidth
+                      .clamp(0.0, 1560.0)
+                      .toDouble();
+                  final centerWidth =
+                      (contentWidth - 2 * (roomyToolsWidth + groupGap))
+                          .clamp(0.0, 680.0)
+                          .toDouble();
+                  if (centerWidth >= 240 + 40 * scale) {
+                    return Center(
+                      child: SizedBox(
+                        width: contentWidth,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: leftSongAndLyrics(
+                                playbackNotice: compactNotice,
+                              ),
+                            ),
+                            const SizedBox(width: groupGap),
+                            SizedBox(
+                              key: const ValueKey('ik-bar-centered-controls'),
+                              width: centerWidth,
+                              child: controls,
+                            ),
+                            const SizedBox(width: groupGap),
+                            Expanded(child: roomyTools()),
+                          ],
                         ),
-                        const SizedBox(width: 24),
-                        Expanded(child: roomyTools()),
-                      ],
+                      ),
                     );
                   }
-                  final sideBySide = size.maxWidth >=
-                      roomyToolsWidth + 20 + 280 * scale;
+                  final sideBySide =
+                      size.maxWidth >= roomyToolsWidth + 20 + 280 * scale;
                   final responsiveControls = size.maxWidth >= 240
                       ? controls
                       : Column(
@@ -608,9 +634,16 @@ class IkPlaybackBar extends ConsumerWidget {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Expanded(child: leftSongAndLyrics(playbackNotice: compactNotice)),
+                            Expanded(
+                              child: leftSongAndLyrics(
+                                playbackNotice: compactNotice,
+                              ),
+                            ),
                             const SizedBox(width: 20),
-                            SizedBox(width: roomyToolsWidth, child: roomyTools()),
+                            SizedBox(
+                              width: roomyToolsWidth,
+                              child: roomyTools(),
+                            ),
                           ],
                         )
                       else ...[
@@ -627,39 +660,45 @@ class IkPlaybackBar extends ConsumerWidget {
                         child: ConstrainedBox(
                           key: const ValueKey('ik-bar-centered-controls'),
                           constraints: const BoxConstraints(maxWidth: 680),
-                          child: SizedBox(width: double.infinity, child: responsiveControls),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: responsiveControls,
+                          ),
                         ),
                       ),
                     ],
                   );
                 }
                 return size.maxWidth >= 850
-                  ? Row(
-                      children: [
-                        Expanded(flex: 10, child: balancedLayout ? title : wideTitle()),
-                        const SizedBox(width: 24),
-                        Expanded(flex: 12, child: controls),
-                        const SizedBox(width: 24),
-                        volume,
-                        tools,
-                      ],
-                    )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(child: title),
-                            if (size.maxWidth >= 470) tools,
-                          ],
-                        ),
-                        controls,
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [volume, if (size.maxWidth < 470) tools],
-                        ),
-                      ],
-                    );
+                    ? Row(
+                        children: [
+                          Expanded(
+                            flex: 10,
+                            child: balancedLayout ? title : wideTitle(),
+                          ),
+                          const SizedBox(width: 24),
+                          Expanded(flex: 12, child: controls),
+                          const SizedBox(width: 24),
+                          volume,
+                          tools,
+                        ],
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: title),
+                              if (size.maxWidth >= 470) tools,
+                            ],
+                          ),
+                          controls,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [volume, if (size.maxWidth < 470) tools],
+                          ),
+                        ],
+                      );
               },
             ),
           ],
@@ -671,9 +710,9 @@ class IkPlaybackBar extends ConsumerWidget {
   Widget _errorNotice(
     BuildContext context,
     PlayerState player,
-    PlayerNotifier notifier,
-    {bool canContinue = false}
-  ) {
+    PlayerNotifier notifier, {
+    bool canContinue = false,
+  }) {
     final colors = Theme.of(context).colorScheme;
     final reset = player.error == IkContextualErrorStrings.playerResetReason;
     final song = player.currentSong;
@@ -715,8 +754,10 @@ class IkPlaybackBar extends ConsumerWidget {
               ],
               if (canContinue && notifier is MultiSourceVideoPlayerNotifier)
                 TextButton(
-                  onPressed: player.isTransitioning ? null : notifier.continueSources,
-                  child: const Text('继续尝试'),
+                  onPressed: player.isTransitioning
+                      ? null
+                      : notifier.continueSources,
+                  child: const Text(IkPlaybackNoticeStrings.continueTrying),
                 ),
             ],
           ),

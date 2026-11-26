@@ -29,7 +29,8 @@ class IkDiscoveryCatalogPage extends ConsumerStatefulWidget {
       _IkDiscoveryCatalogPageState();
 }
 
-class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage> {
+class _IkDiscoveryCatalogPageState
+    extends ConsumerState<IkDiscoveryCatalogPage> {
   PlatformType _selected = PlatformType.netease;
   final _scroll = <PlatformType, ScrollController>{};
 
@@ -44,13 +45,15 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
     super.dispose();
   }
 
-  void _open(Playlist playlist) => widget.onNavigate(Uri(
-    path: '/playlist/${playlist.platform.name}/${playlist.id}',
-    queryParameters: {
-      'name': playlist.name,
-      if (playlist.coverUrl != null) 'cover': playlist.coverUrl!,
-    },
-  ).toString());
+  void _open(Playlist playlist) => widget.onNavigate(
+    Uri(
+      path: '/playlist/${playlist.platform.name}/${playlist.id}',
+      queryParameters: {
+        'name': playlist.name,
+        if (playlist.coverUrl != null) 'cover': playlist.coverUrl!,
+      },
+    ).toString(),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +122,8 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
                                 child: _DiscoveryEntryCard(
                                   icon: Icons.leaderboard_outlined,
                                   title: IkStrings.toplists,
-                                  subtitle: IkRecommendationCatalogStrings.publicSource,
+                                  subtitle: IkRecommendationCatalogStrings
+                                      .publicSource,
                                   wide: wide,
                                   onTap: () => widget.onNavigate('/toplists'),
                                 ),
@@ -150,8 +154,12 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
                                 label: IkRecommendationCatalogStrings.platform,
                                 value: platform,
                                 items: {
-                                  for (final source in PlatformType.musicServices)
-                                    source: IkPersonalDailyStrings.platformLabel(source),
+                                  for (final source
+                                      in PlatformType.musicServices)
+                                    source:
+                                        IkPersonalDailyStrings.platformLabel(
+                                          source,
+                                        ),
                                 },
                                 alignToDesign: true,
                                 dismissOnSystemBack: true,
@@ -163,19 +171,30 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
                                 onPressed: state.loading
                                     ? null
                                     : () => unawaited(notifier.refresh()),
-                                icon: const Icon(Icons.refresh_rounded, size: 20),
+                                icon: const Icon(
+                                  Icons.refresh_rounded,
+                                  size: 20,
+                                ),
                               ),
                             ],
                           );
-                          final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
+                          final scale =
+                              MediaQuery.textScalerOf(context).scale(14) / 14;
                           if (constraints.maxWidth < 440 * scale) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [title, const SizedBox(height: 12), controls],
+                              children: [
+                                title,
+                                const SizedBox(height: 12),
+                                controls,
+                              ],
                             );
                           }
                           return Row(
-                            children: [Expanded(child: title), controls],
+                            children: [
+                              Expanded(child: title),
+                              controls,
+                            ],
                           );
                         },
                       )
@@ -187,14 +206,20 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
                         children: [
                           for (final source in PlatformType.musicServices)
                             _CatalogPlatformTab(
-                              key: ValueKey('ik-catalog-platform-${source.name}'),
+                              key: ValueKey(
+                                'ik-catalog-platform-${source.name}',
+                              ),
                               selected: source == platform,
-                              label: IkPersonalDailyStrings.platformLabel(source),
+                              label: IkPersonalDailyStrings.platformLabel(
+                                source,
+                              ),
                               onTap: () => setState(() => _selected = source),
                             ),
                           IconButton(
                             tooltip: IkRecommendationCatalogStrings.refresh,
-                            onPressed: state.loading ? null : () => unawaited(notifier.refresh()),
+                            onPressed: state.loading
+                                ? null
+                                : () => unawaited(notifier.refresh()),
                             icon: const Icon(Icons.refresh_rounded, size: 20),
                           ),
                         ],
@@ -212,12 +237,15 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
                       runSpacing: 5,
                       children: [
                         Text(
-                          state.source ?? IkRecommendationCatalogStrings.source(platform),
+                          state.source ??
+                              IkRecommendationCatalogStrings.source(platform),
                           style: TextStyle(color: colors.onSurfaceVariant),
                         ),
                         if (state.initialized)
                           Text(
-                            IkRecommendationCatalogStrings.loaded(state.playlists.length),
+                            IkRecommendationCatalogStrings.loaded(
+                              state.playlists.length,
+                            ),
                             style: TextStyle(color: colors.onSurfaceVariant),
                           ),
                       ],
@@ -237,8 +265,10 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
                       ((constraints.crossAxisExtent + gap) / 206).ceil(),
                     );
                     final width =
-                        (constraints.crossAxisExtent - gap * (columns - 1)) / columns;
-                    final scale = MediaQuery.textScalerOf(context).scale(13) / 13;
+                        (constraints.crossAxisExtent - gap * (columns - 1)) /
+                        columns;
+                    final scale =
+                        MediaQuery.textScalerOf(context).scale(13) / 13;
                     return SliverGrid.builder(
                       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                         crossAxisCount: columns,
@@ -282,7 +312,9 @@ class _IkDiscoveryCatalogPageState extends ConsumerState<IkDiscoveryCatalogPage>
                       OutlinedButton.icon(
                         onPressed: () => unawaited(notifier.loadMore()),
                         icon: const Icon(Icons.expand_more_rounded, size: 18),
-                        label: const Text(IkRecommendationCatalogStrings.loadMore),
+                        label: const Text(
+                          IkRecommendationCatalogStrings.loadMore,
+                        ),
                       )
                     else
                       Text(
@@ -322,13 +354,19 @@ class _DiscoveryEntryCard extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final text = Column(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: wide ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+      crossAxisAlignment: wide
+          ? CrossAxisAlignment.start
+          : CrossAxisAlignment.center,
       children: [
         Text(
           title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 13, height: 1.3, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: 13,
+            height: 1.3,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         if (wide) ...[
           const SizedBox(height: 5),
@@ -336,7 +374,11 @@ class _DiscoveryEntryCard extends StatelessWidget {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(fontSize: 11, height: 1.3, color: colors.onSurfaceVariant),
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.3,
+              color: colors.onSurfaceVariant,
+            ),
           ),
         ],
       ],
@@ -424,7 +466,11 @@ class _CatalogPlatformTab extends StatelessWidget {
 }
 
 class _PlaylistCard extends StatelessWidget {
-  const _PlaylistCard({required this.playlist, required this.width, required this.onOpen});
+  const _PlaylistCard({
+    required this.playlist,
+    required this.width,
+    required this.onOpen,
+  });
   final Playlist playlist;
   final double width;
   final VoidCallback onOpen;
@@ -456,13 +502,20 @@ class _PlaylistCard extends StatelessWidget {
               playlist.name,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, height: 1.4, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             if (playlist.songCount > 0) ...[
               const SizedBox(height: 4),
               Text(
                 IkRecommendationCatalogStrings.songs(playlist.songCount),
-                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
             ],
           ],

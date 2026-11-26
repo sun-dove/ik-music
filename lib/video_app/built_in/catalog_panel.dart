@@ -205,7 +205,10 @@ class IkSourceCatalogPanel extends ConsumerWidget {
           data: theme.copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             key: const ValueKey('ik-catalog-details'),
-            tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            tilePadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
             childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
             expandedCrossAxisAlignment: CrossAxisAlignment.stretch,
             title: const Text(IkSourceWorkspaceStrings.builtInDetails),
@@ -256,7 +259,8 @@ class IkSourceCatalogPanel extends ConsumerWidget {
                       child: const Text(IkSourceCatalogStrings.check),
                     ),
                   OutlinedButton(
-                    onPressed: coordinator.busy ||
+                    onPressed:
+                        coordinator.busy ||
                             !coordinator.items.any((e) => e.retryable)
                         ? null
                         : () => unawaited(_run(context, coordinator.retry)),
@@ -287,7 +291,10 @@ class IkSourceCatalogPanel extends ConsumerWidget {
                       style: theme.textTheme.bodySmall,
                     ),
                     const SizedBox(height: 6),
-                    Text(item.entry.licenseNote, style: theme.textTheme.bodySmall),
+                    Text(
+                      item.entry.licenseNote,
+                      style: theme.textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 6),
                     SelectableText(
                       IkSourceCatalogStrings.fixedVersion(
@@ -305,7 +312,8 @@ class IkSourceCatalogPanel extends ConsumerWidget {
                               : () => unawaited(
                                   _run(
                                     context,
-                                    () => coordinator.retry(item.entry.sourceKey),
+                                    () =>
+                                        coordinator.retry(item.entry.sourceKey),
                                   ),
                                 ),
                           icon: const Icon(Icons.refresh_rounded, size: 17),

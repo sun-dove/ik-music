@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/ik_contextual_error_strings.dart';
 import '../../features/download/presentation/providers/download_provider.dart';
 import '../../features/download/presentation/providers/download_quality_provider.dart';
 import '../../features/library/presentation/providers/likes_provider.dart';
@@ -254,11 +255,16 @@ Future<SongActionResult?> showSongActionsMenuAt(
       deps: liveSongActionDeps(ref, context: context),
       isLiked: isLiked,
     );
-  } else if (selected is int && selected >= 0 && selected < extraActions.length) {
+  } else if (selected is int &&
+      selected >= 0 &&
+      selected < extraActions.length) {
     try {
       result = await extraActions[selected].onSelected();
     } catch (error) {
-      result = SongActionResult(message: '操作失败：$error', success: false);
+      result = SongActionResult(
+        message: IkContextualErrorStrings.operationFailed(error),
+        success: false,
+      );
     }
   } else {
     return null;

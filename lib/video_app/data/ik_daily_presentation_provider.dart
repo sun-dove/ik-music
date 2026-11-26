@@ -13,10 +13,11 @@ typedef IkDailyFallbackKey = ({
 });
 
 /// 严格结果对象随账号、凭据revision与日界变化而更换；旧公开响应不能接回新作用域。
-final ikDailyFallbackProvider = FutureProvider.autoDispose.family<
-  RecommendationResult,
-  IkDailyFallbackKey
->((ref, key) => ref.watch(ikPublicRecommendationsProvider).songs(key.platform));
+final ikDailyFallbackProvider = FutureProvider.autoDispose
+    .family<RecommendationResult, IkDailyFallbackKey>(
+      (ref, key) =>
+          ref.watch(ikPublicRecommendationsProvider).songs(key.platform),
+    );
 
 class IkDailyPresentationState {
   const IkDailyPresentationState({
@@ -32,45 +33,43 @@ class IkDailyPresentationState {
   final String? fallbackError;
 }
 
-final ikDailyPresentationProvider = Provider.autoDispose.family<
-  IkDailyPresentationState,
-  PlatformType
->((ref, platform) {
-  final personal = ref.watch(personalDailyProvider(platform));
-  final result = personal.result;
-  if (personal.isLoading || result == null ||
-      result.platform != platform ||
-      result.status == PersonalDailyStatus.success ||
-      result.status == PersonalDailyStatus.sessionChanged ||
-      (platform != PlatformType.qq && platform != PlatformType.kugou)) {
-    return IkDailyPresentationState(personal: personal);
-  }
-  final fallback = ref.watch(ikDailyFallbackProvider((
-    platform: platform,
-    personal: result,
-  )));
-  return fallback.when(
-    data: (value) {
-      final source = value.source;
-      final valid = source?.platform == platform &&
-          (source?.kind == RecommendationKind.fallbackToplist ||
-              source?.kind == RecommendationKind.fallbackHomepage) &&
-          value.songs.every((song) => song.platform == platform);
-      return IkDailyPresentationState(
-        personal: personal,
-        fallback: valid ? value : null,
-        fallbackError: valid && value.songs.isNotEmpty
-            ? null
-            : value.error ?? IkRecommendationCatalogStrings.publicUnavailable,
+final ikDailyPresentationProvider = Provider.autoDispose
+    .family<IkDailyPresentationState, PlatformType>((ref, platform) {
+      final personal = ref.watch(personalDailyProvider(platform));
+      final result = personal.result;
+      if (personal.isLoading ||
+          result == null ||
+          result.platform != platform ||
+          result.status == PersonalDailyStatus.success ||
+          result.status == PersonalDailyStatus.sessionChanged ||
+          (platform != PlatformType.qq && platform != PlatformType.kugou)) {
+        return IkDailyPresentationState(personal: personal);
+      }
+      final fallback = ref.watch(
+        ikDailyFallbackProvider((platform: platform, personal: result)),
       );
-    },
-    error: (_, _) => IkDailyPresentationState(
-      personal: personal,
-      fallbackError: IkRecommendationCatalogStrings.publicFailed,
-    ),
-    loading: () => IkDailyPresentationState(
-      personal: personal,
-      fallbackLoading: true,
-    ),
-  );
-});
+      return fallback.when(
+        data: (value) {
+          final source = value.source;
+          final valid =
+              source?.platform == platform &&
+              (source?.kind == RecommendationKind.fallbackToplist ||
+                  source?.kind == RecommendationKind.fallbackHomepage) &&
+              value.songs.every((song) => song.platform == platform);
+          return IkDailyPresentationState(
+            personal: personal,
+            fallback: valid ? value : null,
+            fallbackError: valid && value.songs.isNotEmpty
+                ? null
+                : value.error ??
+                      IkRecommendationCatalogStrings.publicUnavailable,
+          );
+        },
+        error: (_, _) => IkDailyPresentationState(
+          personal: personal,
+          fallbackError: IkRecommendationCatalogStrings.publicFailed,
+        ),
+        loading: () =>
+            IkDailyPresentationState(personal: personal, fallbackLoading: true),
+      );
+    });

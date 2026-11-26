@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 
 import '../l10n/app_localizations.dart';
 import '../l10n/ik_strings.dart';
+import '../l10n/ik_local_lx_strings.dart';
 import '../l10n/ik_alignment_strings.dart';
 import '../core/platform/platform_utils.dart';
 import '../core/widgets/song_actions_sheet.dart';
@@ -209,9 +210,11 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
                           return _workspacePlaybackBar(
                             alignToDesign: widget.alignToDesign,
                             contextualErrors: _newPages,
-                            inlineLyrics: widget.quickExperienceRefinements &&
+                            inlineLyrics:
+                                widget.quickExperienceRefinements &&
                                 PlatformUtils.isWindows,
-                            balancedLayout: widget.quickExperienceRefinements &&
+                            balancedLayout:
+                                widget.quickExperienceRefinements &&
                                 PlatformUtils.isWindows,
                             onOpen: () => context.push('/player'),
                             onAudio: () => context.push('/settings/audio'),
@@ -332,8 +335,7 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
     dismissSourceMenuOnBack: widget.dismissSourceMenuOnBack,
     pageInteractionRefinements: widget.pageInteractionRefinements,
     workspacePageRefinements: _newPages,
-    quickExperienceRefinements:
-        _newPages && widget.quickExperienceRefinements,
+    quickExperienceRefinements: _newPages && widget.quickExperienceRefinements,
     routeBody: routeBody,
     routePath: routePath,
     workspaceNavigator: _newPages ? _workspaceNavigator : null,
@@ -409,8 +411,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     with WidgetsBindingObserver {
   IkPlayerLyricsPreferences? _playerLyricsPreferences;
   IkPlayerLyricsPreferences get _playerLyricsStyle =>
-      _playerLyricsPreferences ??=
-          IkPlayerLyricsPreferences(widget.preferences.box);
+      _playerLyricsPreferences ??= IkPlayerLyricsPreferences(
+        widget.preferences.box,
+      );
   final _leaveChecks = <Object, Future<bool> Function()>{};
   bool _leavingWorkspacePage = false;
   bool _desktopLyricsSettingsOpen = false;
@@ -419,7 +422,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   Future<void> _openDesktopLyricsSettings() async {
     if (!widget.quickExperienceRefinements ||
         _leavingWorkspacePage ||
-        _desktopLyricsSettingsOpen) return;
+        _desktopLyricsSettingsOpen) {
+      return;
+    }
     final router = GoRouter.of(context);
     final origin = router.routerDelegate.currentConfiguration;
     if (router.routerDelegate.state.uri.path == '/settings/lyrics') return;
@@ -1009,7 +1014,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   void _openPlayer() {
     if (widget.redesign) {
-      if (widget.quickExperienceRefinements && PlatformUtils.isWindows &&
+      if (widget.quickExperienceRefinements &&
+          PlatformUtils.isWindows &&
           _leaveChecks.isNotEmpty) {
         unawaited(_openPlayerAfterSourceDraft());
         return;
@@ -1028,8 +1034,11 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     _leavingWorkspacePage = true;
     try {
       for (final check in List.of(_leaveChecks.values).reversed) {
-        if (!await check() || !mounted ||
-            !identical(router.routerDelegate.currentConfiguration, origin)) return;
+        if (!await check() ||
+            !mounted ||
+            !identical(router.routerDelegate.currentConfiguration, origin)) {
+          return;
+        }
       }
       if (mounted) unawaited(router.push<void>('/player'));
     } finally {
@@ -1072,8 +1081,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         ].whereType<String>().where((id) => id.trim().isNotEmpty).firstOrNull;
         return WindowsPlayerPage(
           refinedLayout: widget.quickExperienceRefinements,
-          lyricsPreferences:
-              widget.quickExperienceRefinements ? _playerLyricsStyle : null,
+          lyricsPreferences: widget.quickExperienceRefinements
+              ? _playerLyricsStyle
+              : null,
           systemFonts: widget.windowsAppearance?.fonts ?? const [],
           alignToDesign: widget.alignToDesign,
           compactLayout: widget.workspacePageRefinements,
@@ -1106,7 +1116,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                   alignToDesign: widget.alignToDesign,
                   contextualErrors: widget.workspacePageRefinements,
                   inlineLyrics: false,
-                  balancedLayout: widget.quickExperienceRefinements &&
+                  balancedLayout:
+                      widget.quickExperienceRefinements &&
                       PlatformUtils.isWindows,
                   onOpen: null,
                   onAudio: () => context.push('/settings/audio'),
@@ -1692,11 +1703,15 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   Widget _workspaceSettings([String? section]) => IkSettingsWorkspace(
     alignToDesign: widget.alignToDesign,
-    fixedNavigation: widget.quickExperienceRefinements && PlatformUtils.isWindows,
-    active: section != null ||
+    fixedNavigation:
+        widget.quickExperienceRefinements && PlatformUtils.isWindows,
+    active:
+        section != null ||
         (_index == 4 && widget.routePath == '/' && _imperativePages == 0),
-    sourceBuilder: widget.quickExperienceRefinements &&
-            PlatformUtils.isWindows && widget.sourceSettings != null &&
+    sourceBuilder:
+        widget.quickExperienceRefinements &&
+            PlatformUtils.isWindows &&
+            widget.sourceSettings != null &&
             widget.sourceEngine != null
         ? (_) => _embeddedSourceManager()
         : null,
@@ -2605,7 +2620,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
   }
 
   Future<void> _customSource() async {
-    if (widget.quickExperienceRefinements && PlatformUtils.isWindows &&
+    if (widget.quickExperienceRefinements &&
+        PlatformUtils.isWindows &&
         widget.workspacePageRefinements) {
       await _selectWorkspace(4, section: 'sources');
       return;
@@ -2759,7 +2775,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           if (localBridge != null) _localSourceMigrationPanel(localBridge),
           IgnorePointer(
             ignoring: updater?.busy == true || localBridge?.busy == true,
-            child: const IkSourceCatalogPanel(refinedLayout: true, showCheckAction: false),
+            child: const IkSourceCatalogPanel(
+              refinedLayout: true,
+              showCheckAction: false,
+            ),
           ),
         ],
       ),
@@ -2770,8 +2789,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       onImport: (link, token) async {
         final dio = createLxDio();
         try {
-          return await LxSourceImporterV3(dio: dio, engine: engine)
-              .importLink(link, cancelToken: token);
+          return await LxSourceImporterV3(
+            dio: dio,
+            engine: engine,
+          ).importLink(link, cancelToken: token);
         } finally {
           dio.close(force: true);
         }
@@ -2792,20 +2813,34 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (_leavingWorkspacePage) return;
         final router = GoRouter.of(context);
         final origin = router.routerDelegate.currentConfiguration;
-        await _httpCustomSource(beforeOpen: () async {
-          if (!mounted || _leavingWorkspacePage ||
-              !identical(router.routerDelegate.currentConfiguration, origin)) return false;
-          _leavingWorkspacePage = true;
-          try {
-            for (final check in List.of(_leaveChecks.values).reversed) {
-              if (!await check() || !mounted ||
-                  !identical(router.routerDelegate.currentConfiguration, origin)) return false;
+        await _httpCustomSource(
+          beforeOpen: () async {
+            if (!mounted ||
+                _leavingWorkspacePage ||
+                !identical(
+                  router.routerDelegate.currentConfiguration,
+                  origin,
+                )) {
+              return false;
             }
-            return mounted;
-          } finally {
-            _leavingWorkspacePage = false;
-          }
-        });
+            _leavingWorkspacePage = true;
+            try {
+              for (final check in List.of(_leaveChecks.values).reversed) {
+                if (!await check() ||
+                    !mounted ||
+                    !identical(
+                      router.routerDelegate.currentConfiguration,
+                      origin,
+                    )) {
+                  return false;
+                }
+              }
+              return mounted;
+            } finally {
+              _leavingWorkspacePage = false;
+            }
+          },
+        );
       },
     );
     return updater == null
@@ -2813,7 +2848,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         : IkSourceWorkspaceScope(
             updater: updater,
             child: AnimatedBuilder(
-              animation: Listenable.merge([updater, if (localBridge != null) localBridge]),
+              animation: Listenable.merge([updater, ?localBridge]),
               builder: (_, _) => manager(),
             ),
           );
@@ -2825,23 +2860,34 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       padding: const EdgeInsets.only(bottom: 12),
       child: ExpansionTile(
         tilePadding: EdgeInsets.zero,
-        title: const Text('来自本机 LX 的音源'),
-        subtitle: Text(bridge.message ?? '正在读取…', style: Theme.of(context).textTheme.bodySmall),
+        title: const Text(IkLocalLxStrings.title),
+        subtitle: Text(
+          bridge.message ?? IkLocalLxStrings.loading,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
         children: [
           if (bridge.busy) const LinearProgressIndicator(minHeight: 2),
           for (final item in bridge.results)
             ListTile(
               dense: true,
-              title: Text('${item.name} · ${item.version}${item.selected ? ' · LX 当前选择' : ''}'),
+              title: Text(
+                IkLocalLxStrings.sourceTitle(
+                  item.name,
+                  item.version,
+                  item.selected,
+                ),
+              ),
               subtitle: Text(item.status),
             ),
           if (bridge.results.any((item) => item.retryable))
             Align(
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
-                onPressed: bridge.busy ? null : () => unawaited(bridge.retryFailures()),
+                onPressed: bridge.busy
+                    ? null
+                    : () => unawaited(bridge.retryFailures()),
                 icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: const Text('重试未导入的音源'),
+                label: const Text(IkLocalLxStrings.retryFailed),
               ),
             ),
         ],
@@ -3123,7 +3169,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           ),
         if (widget.workspace)
           IkLibraryWorkspace(
-            playlistArtwork: widget.quickExperienceRefinements && PlatformUtils.isWindows,
+            playlistArtwork:
+                widget.quickExperienceRefinements && PlatformUtils.isWindows,
             compactSyncStatus: widget.quickExperienceRefinements,
             alignToDesign: widget.alignToDesign,
             stableCategoryTabs: _refinePageInteractions,
@@ -3188,8 +3235,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (widget.workspace)
           IkRecentPage(
             alignToDesign: widget.alignToDesign,
-            contextActions: widget.quickExperienceRefinements &&
-                PlatformUtils.isWindows,
+            contextActions:
+                widget.quickExperienceRefinements && PlatformUtils.isWindows,
             onNavigate: (path) => context.push(path),
             onMore: _ikSongMore,
             onMoreWithContext: widget.alignToDesign
@@ -3233,9 +3280,11 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               playbackBar: _workspacePlaybackBar(
                 alignToDesign: widget.alignToDesign,
                 contextualErrors: widget.workspacePageRefinements,
-                inlineLyrics: widget.quickExperienceRefinements &&
+                inlineLyrics:
+                    widget.quickExperienceRefinements &&
                     PlatformUtils.isWindows,
-                balancedLayout: widget.quickExperienceRefinements &&
+                balancedLayout:
+                    widget.quickExperienceRefinements &&
                     PlatformUtils.isWindows,
                 onOpen: _openPlayer,
                 onAudio: widget.workspacePageRefinements

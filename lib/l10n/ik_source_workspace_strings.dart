@@ -8,6 +8,7 @@ abstract final class IkSourceWorkspaceStrings {
   static const scriptLink = '粘贴音源脚本链接';
   static const draftUpdated = '更新结果已保留在草稿，保存后生效';
   static const cancelledDraft = '已取消，已完成的更新保留在草稿';
+  static const pendingDraft = '草稿已保留，将在保存后生效';
   static const busyLeave = '操作进行中，可先取消，完成后再离开';
   static const builtInDetails = '内置目录与版本资料';
   static const preferred = '优先使用';

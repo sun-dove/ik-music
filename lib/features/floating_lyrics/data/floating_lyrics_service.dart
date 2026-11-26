@@ -20,10 +20,8 @@ class FloatingLyricsService {
 
   /// 新入口仅扩展请求内容，原生事件仍由原 singleton 唯一接收。
   factory FloatingLyricsService.withPayloadAdapter(
-    Map<String, Object?> Function(
-      FloatingLyricsPayload,
-      FloatingLyricsSettings,
-    ) adapt,
+    Map<String, Object?> Function(FloatingLyricsPayload, FloatingLyricsSettings)
+    adapt,
   ) => _AdaptedFloatingLyricsService(instance, adapt);
 
   FloatingLyricsService._delegated(this._channel);
@@ -60,7 +58,8 @@ class FloatingLyricsService {
   Stream<double> get positionChangedStream => _positionChangedController.stream;
 
   /// 只在新版桌面歌词设置按钮被点击时发送，不占用播放控制 action。
-  Stream<void> get settingsRequestedStream => _settingsRequestedController.stream;
+  Stream<void> get settingsRequestedStream =>
+      _settingsRequestedController.stream;
 
   Future<void> _handleNativeCall(MethodCall call) async {
     switch (call.method) {
@@ -169,7 +168,8 @@ class _AdaptedFloatingLyricsService extends FloatingLyricsService {
   final Map<String, Object?> Function(
     FloatingLyricsPayload,
     FloatingLyricsSettings,
-  ) _adapt;
+  )
+  _adapt;
 
   @override
   Stream<void> get closedByUserStream => _delegate.closedByUserStream;

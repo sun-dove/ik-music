@@ -148,12 +148,18 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
       );
     }
     final group = widget.search.groups[platform];
-    final loading = widget.search.query.isNotEmpty &&
-        group != null && group.loading && group.page == 0;
-    if (queryChanged || _scrollViewKey != key ||
+    final loading =
+        widget.search.query.isNotEmpty &&
+        group != null &&
+        group.loading &&
+        group.page == 0;
+    if (queryChanged ||
+        _scrollViewKey != key ||
         (loading && !_initialResultsLoading)) {
-      if (!queryChanged && _scrollViewKey != null &&
-          _pendingScrollOffset == null && _scroll.hasClients) {
+      if (!queryChanged &&
+          _scrollViewKey != null &&
+          _pendingScrollOffset == null &&
+          _scroll.hasClients) {
         _scrollOffsets[_scrollViewKey!] = _scroll.position.pixels;
       }
       _pendingScrollOffset = _scrollOffsets[key] ?? 0;
@@ -163,8 +169,11 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
     final offset = _pendingScrollOffset;
     if (loading || offset == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_scroll.hasClients || _scrollViewKey != key ||
-          _initialResultsLoading || _pendingScrollOffset != offset) {
+      if (!mounted ||
+          !_scroll.hasClients ||
+          _scrollViewKey != key ||
+          _initialResultsLoading ||
+          _pendingScrollOffset != offset) {
         return;
       }
       _pendingScrollOffset = null;
@@ -189,12 +198,14 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                   onPressed: () => setState(() => _resultPlatform = platform),
                   style: TextButton.styleFrom(
                     foregroundColor: platform == _selectedResultPlatform
-                        ? colors.primary : colors.onSurfaceVariant,
+                        ? colors.primary
+                        : colors.onSurfaceVariant,
                     backgroundColor: platform == _selectedResultPlatform
                         ? colors.primary.withValues(alpha: .08)
                         : Colors.transparent,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 12,
+                      horizontal: 14,
+                      vertical: 12,
                     ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -204,7 +215,10 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       ExcludeSemantics(
-                        child: WindowsPlatformIcon(platform: platform, size: 18),
+                        child: WindowsPlatformIcon(
+                          platform: platform,
+                          size: 18,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Text(IkQuickWorkspaceStrings.platformTab(platform)),
@@ -359,7 +373,8 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
 
   Widget _aligned(BuildContext context) {
     final preserveScroll =
-        widget.fullRecommendations || widget.recommendationsInDiscovery ||
+        widget.fullRecommendations ||
+        widget.recommendationsInDiscovery ||
         widget.platformResultTabs;
     final selectedPlatform = _selectedResultPlatform;
     final key = widget.search.query.isEmpty
@@ -410,7 +425,8 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                     ),
                   ),
                 ],
-                if (!widget.platformResultTabs && !widget.compactDiscovery &&
+                if (!widget.platformResultTabs &&
+                    !widget.compactDiscovery &&
                     ((!widget.fullRecommendations &&
                             !widget.recommendationsInDiscovery) ||
                         widget.search.query.isNotEmpty)) ...[
@@ -431,13 +447,15 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                     ),
                   ),
                 ],
-                if (widget.platformResultTabs && widget.search.query.isNotEmpty) ...[
+                if (widget.platformResultTabs &&
+                    widget.search.query.isNotEmpty) ...[
                   const SizedBox(height: 18),
                   _platformTabs(context),
                 ],
                 if (widget.search.query.isEmpty &&
                     widget.onRetryHot == null &&
-                    (widget.recommendations == null || widget.platformResultTabs))
+                    (widget.recommendations == null ||
+                        widget.platformResultTabs))
                   const Padding(
                     padding: EdgeInsets.only(top: 28),
                     child: Text(IkStrings.searchIntro),
@@ -465,22 +483,26 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         )
-                      else Row(
-                        children: [
-                          WindowsPlatformIcon(platform: platform),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              videoPlatformLabel(platform),
-                              style: Theme.of(context).textTheme.titleMedium,
+                      else
+                        Row(
+                          children: [
+                            WindowsPlatformIcon(platform: platform),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                videoPlatformLabel(platform),
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                             ),
-                          ),
-                          Text(
-                            IkStrings.results(group.songs.length, group.total),
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
+                            Text(
+                              IkStrings.results(
+                                group.songs.length,
+                                group.total,
+                              ),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
                       if (group.songs.isNotEmpty) const IkSongTableHeader(),
                     ],
                   ),
@@ -583,9 +605,10 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
         ),
-        if (!widget.platformResultTabs && ((!widget.fullRecommendations &&
-                !widget.recommendationsInDiscovery) ||
-            widget.search.query.isNotEmpty)) ...[
+        if (!widget.platformResultTabs &&
+            ((!widget.fullRecommendations &&
+                    !widget.recommendationsInDiscovery) ||
+                widget.search.query.isNotEmpty)) ...[
           const SizedBox(width: 12),
           SizedBox(
             width: constraints.maxWidth < 460 ? 140 : 180,
@@ -612,7 +635,8 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
   );
 
   List<Widget> _discoverySlivers(BuildContext context) {
-    final recommendations = widget.recommendationsInDiscovery || widget.platformResultTabs
+    final recommendations =
+        widget.recommendationsInDiscovery || widget.platformResultTabs
         ? null
         : widget.recommendations;
     final colors = Theme.of(context).colorScheme;

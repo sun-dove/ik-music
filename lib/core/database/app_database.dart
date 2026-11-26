@@ -515,12 +515,13 @@ class HistoryDao extends DatabaseAccessor<AppDatabase> with _$HistoryDaoMixin {
       final removed = await transaction(() async {
         var count = 0;
         for (final song in identities) {
-          count += await (delete(listeningHistory)..where(
-                (row) =>
-                    row.songId.equals(song.id) &
-                    row.platform.equals(song.platform),
-              ))
-              .go();
+          count +=
+              await (delete(listeningHistory)..where(
+                    (row) =>
+                        row.songId.equals(song.id) &
+                        row.platform.equals(song.platform),
+                  ))
+                  .go();
         }
         return count;
       });

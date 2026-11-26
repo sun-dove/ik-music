@@ -380,8 +380,12 @@ class IkSourceCatalogCoordinator extends ChangeNotifier {
         await settings.saveMetadata((state) {
           final latest =
               state.records[entry.sourceKey] ?? const IkManagedRecord();
-          if (latest.removed || latest.disabled || latest.followsUpstream ||
-              latest.rollbackHold) return state;
+          if (latest.removed ||
+              latest.disabled ||
+              latest.followsUpstream ||
+              latest.rollbackHold) {
+            return state;
+          }
           if (!_current(generation) || token.isCancelled) return state;
           return state.copyWith(
             catalogVersion: catalog.catalogVersion,
@@ -397,7 +401,8 @@ class IkSourceCatalogCoordinator extends ChangeNotifier {
           );
         });
         if (!_current(generation)) break;
-        if (settings.managed.records[entry.sourceKey]?.followsUpstream == true) {
+        if (settings.managed.records[entry.sourceKey]?.followsUpstream ==
+            true) {
           _refresh();
           if (!_disposed) notifyListeners();
           continue;
@@ -413,7 +418,8 @@ class IkSourceCatalogCoordinator extends ChangeNotifier {
             failure.code == 'cancelled') {
           break;
         }
-        if (settings.managed.records[entry.sourceKey]?.followsUpstream == true) {
+        if (settings.managed.records[entry.sourceKey]?.followsUpstream ==
+            true) {
           _refresh();
           if (!_disposed) notifyListeners();
           continue;

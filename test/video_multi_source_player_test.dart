@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'package:mconnect/core/platform/platform_utils.dart';
 import 'package:mconnect/features/player/data/playback_keep_alive_service.dart';
 import 'package:mconnect/features/player/data/playback_notification_service.dart';
 import 'package:mconnect/features/player/presentation/providers/player_provider.dart';
@@ -74,6 +75,176 @@ void main() {
     expect(audio.url, 'https://example.com/B');
     expect(audio.loads.where((url) => url.endsWith('/A')), hasLength(1));
     expect(calls, ['QQ音乐:hires', 'A:lossless', 'B:lossless']);
+  });
+  for (final failure in ['timeout', 'network', 'serverError']) {
+    test('快速播放中A高音质$failure后仍按原顺序播放A标准音质', () async {
+      final settings = _quickSourceSettings();
+      final audio = _Audio();
+      final calls = <String>[];
+      final player = MultiSourceVideoPlayerNotifier(
+        settings: settings,
+        router: PreparedSourceRouter(
+          platformResolver: (_) => QqPlatform(),
+          fixedQuality: (_) => AudioLevel.low,
+        ),
+        quickSourceRecovery: true,
+        quickResolveTimeout: const Duration(milliseconds: 100),
+        quickLoadTimeout: const Duration(milliseconds: 100),
+        quickBudget: const Duration(seconds: 2),
+        resolve: (_, candidate, _) async {
+          calls.add('${candidate.name}:${candidate.quality.name}');
+          if (candidate.official) {
+            throw const SourceFailure('unavailable', '官方不可用');
+          }
+          if (candidate.quality != AudioLevel.low) {
+            if (failure == 'timeout') throw TimeoutException('高音质暂时超时');
+            throw SourceFailure(failure, '高音质暂时不可用');
+          }
+          return ResolvedSource(
+            candidate,
+            Uri.parse('https://example.com/A-low'),
+          );
+        },
+        audioController: audio,
+        audioControllerFactory: () => audio,
+        notificationController: const NoopPlaybackNotificationController(),
+        keepAliveController: const NoopPlaybackKeepAliveController(),
+      );
+      addTearDown(player.dispose);
+      await player.playSong(song);
+      expect(player.state.isPlaying, isTrue);
+      expect(player.state.error, isNull);
+      expect(player.state.currentQuality, AudioLevel.low);
+      expect(audio.url, 'https://example.com/A-low');
+      expect(audio.loads, ['https://example.com/A-low']);
+      expect(calls, [
+        'QQ音乐:hires',
+        'A:lossless',
+        'QQ音乐:lossless',
+        'A:high',
+        'QQ音乐:high',
+        'A:low',
+      ]);
+    });
+  }
+  for (final failure in ['dns', 'script']) {
+    test('快速播放中明确$failure源级失败仍跳过同源其余音质', () async {
+      final settings = _quickSourceSettings();
+      final audio = _Audio();
+      final calls = <String>[];
+      final player = MultiSourceVideoPlayerNotifier(
+        settings: settings,
+        router: PreparedSourceRouter(
+          platformResolver: (_) => QqPlatform(),
+          fixedQuality: (_) => AudioLevel.low,
+        ),
+        quickSourceRecovery: true,
+        quickResolveTimeout: const Duration(milliseconds: 100),
+        quickLoadTimeout: const Duration(milliseconds: 100),
+        quickBudget: const Duration(seconds: 2),
+        resolve: (_, candidate, _) async {
+          calls.add('${candidate.name}:${candidate.quality.name}');
+          if (!candidate.official) {
+            throw SourceFailure(failure, '整源不可用', sourceWide: true);
+          }
+          if (candidate.quality != AudioLevel.low) {
+            throw const SourceFailure('unavailable', '官方高音质不可用');
+          }
+          return ResolvedSource(
+            candidate,
+            Uri.parse('https://example.com/official-low'),
+          );
+        },
+        audioController: audio,
+        audioControllerFactory: () => audio,
+        notificationController: const NoopPlaybackNotificationController(),
+        keepAliveController: const NoopPlaybackKeepAliveController(),
+      );
+      addTearDown(player.dispose);
+      await player.playSong(song);
+      expect(player.state.isPlaying, isTrue);
+      expect(player.state.error, isNull);
+      expect(audio.url, 'https://example.com/official-low');
+      expect(calls, [
+        'QQ音乐:hires',
+        'A:lossless',
+        'QQ音乐:lossless',
+        'QQ音乐:high',
+        'QQ音乐:low',
+      ]);
+    });
+  }
+  test('快速播放加载时暂停后旧结果不能出声', () async {
+    final settings = SourceSettings(VideoPreferences(_Box()));
+    final audio = _Audio()..pending = Completer<void>();
+    final player = MultiSourceVideoPlayerNotifier(
+      settings: settings,
+      router: PreparedSourceRouter(
+        platformResolver: (_) => QqPlatform(),
+        fixedQuality: (_) => AudioLevel.low,
+      ),
+      quickSourceRecovery: true,
+      quickResolveTimeout: const Duration(milliseconds: 100),
+      quickLoadTimeout: const Duration(milliseconds: 100),
+      quickBudget: const Duration(seconds: 2),
+      resolve: (_, candidate, _) async =>
+          ResolvedSource(candidate, Uri.parse('https://example.com/pending')),
+      audioController: audio,
+      audioControllerFactory: () => audio,
+      notificationController: const NoopPlaybackNotificationController(),
+      keepAliveController: const NoopPlaybackKeepAliveController(),
+    );
+    addTearDown(player.dispose);
+    final loading = player.playSong(song);
+    while (audio.loads.isEmpty) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    await player.pause();
+    audio.pending!.complete();
+    await loading;
+    expect(audio.playCalls, 0);
+    expect(player.state.isPlaying, isFalse);
+    expect(player.state.isTransitioning, isFalse);
+    expect(player.state.error, isNull);
+  });
+  test('Android快速播放的长play Future超过一秒仍继续且可暂停', () async {
+    PlatformUtils.setDebugOverride(AppPlatform.android);
+    addTearDown(() => PlatformUtils.setDebugOverride(null));
+    final settings = SourceSettings(VideoPreferences(_Box()));
+    final audio = _LongPlayAudio();
+    var resolutions = 0;
+    final player = MultiSourceVideoPlayerNotifier(
+      settings: settings,
+      router: PreparedSourceRouter(
+        platformResolver: (_) => QqPlatform(),
+        fixedQuality: (_) => AudioLevel.low,
+      ),
+      quickSourceRecovery: true,
+      quickResolveTimeout: const Duration(milliseconds: 100),
+      quickLoadTimeout: const Duration(milliseconds: 100),
+      quickBudget: const Duration(seconds: 2),
+      resolve: (_, candidate, _) async {
+        resolutions++;
+        return ResolvedSource(candidate, Uri.parse('https://example.com/long'));
+      },
+      audioController: audio,
+      audioControllerFactory: () => audio,
+      notificationController: const NoopPlaybackNotificationController(),
+      keepAliveController: const NoopPlaybackKeepAliveController(),
+    );
+    addTearDown(player.dispose);
+    await player.playSong(song);
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    expect(audio.playPending, isTrue);
+    expect(audio.playing, isTrue);
+    expect(player.state.isPlaying, isTrue);
+    expect(player.state.error, isNull);
+    expect(resolutions, 1);
+    await player.pause();
+    expect(audio.playPending, isFalse);
+    expect(audio.playing, isFalse);
+    expect(player.state.isPlaying, isFalse);
+    expect(player.state.error, isNull);
   });
   test('切歌后旧解析结果不能覆盖新歌曲', () async {
     final settings = SourceSettings(VideoPreferences(_Box()));
@@ -240,6 +411,27 @@ void main() {
   });
 }
 
+SourceSettings _quickSourceSettings() =>
+    SourceSettings(VideoPreferences(_Box()))
+      ..value =
+          const SourceCollection(
+            autoSwitch: true,
+            sourceFirst: true,
+            highestQuality: true,
+          ).upsert(
+            LxSourceConfig(
+              name: 'A',
+              version: '1',
+              origin: Uri.parse('https://example.com/A.js'),
+              script: 'fixture',
+              sha256: 'A',
+              sources: const {
+                'tx': ['flac', '320k', '128k'],
+              },
+              enabled: true,
+            ),
+          );
+
 class _Box extends Fake implements Box {
   @override
   dynamic get(dynamic key, {dynamic defaultValue}) => defaultValue;
@@ -303,4 +495,38 @@ class _Audio implements PlayerAudioController {
   }) async {}
   @override
   Future<void> dispose() async {}
+}
+
+class _LongPlayAudio extends _Audio {
+  Completer<void>? _playCompletion;
+  bool get playPending => _playCompletion?.isCompleted == false;
+  @override
+  Future<void> play() async {
+    await super.play();
+    final completion = Completer<void>();
+    _playCompletion = completion;
+    await completion.future;
+  }
+
+  void _finishPlay() {
+    if (playPending) _playCompletion!.complete();
+  }
+
+  @override
+  Future<void> pause() async {
+    await super.pause();
+    _finishPlay();
+  }
+
+  @override
+  Future<void> stop() async {
+    await super.stop();
+    _finishPlay();
+  }
+
+  @override
+  Future<void> dispose() async {
+    _finishPlay();
+    await super.dispose();
+  }
 }

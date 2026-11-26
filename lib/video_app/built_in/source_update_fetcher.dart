@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 import '../lx_source/lx_http.dart';
 import '../lx_source/lx_source.dart';
 import 'catalog.dart';
+import '../../l10n/ik_source_update_strings.dart';
 
 class IkFetchedSourceUpdate {
   const IkFetchedSourceUpdate({
@@ -37,7 +38,9 @@ class IkSourceUpdateFetcher {
   static const _deadline = Duration(seconds: 30);
   static final _gitSha = RegExp(r'^[0-9a-f]{40}$');
   static final _sourceKey = RegExp(r'^pdone:([a-z0-9]+)$');
-  static final _linkTarget = RegExp(r'^(?:\./)?([a-zA-Z0-9_-][a-zA-Z0-9._-]*\.js)$');
+  static final _linkTarget = RegExp(
+    r'^(?:\./)?([a-zA-Z0-9_-][a-zA-Z0-9._-]*\.js)$',
+  );
   final Dio _dio;
   final _active = <CancelToken>{};
   _RepositorySnapshot? _snapshot;
@@ -46,12 +49,13 @@ class IkSourceUpdateFetcher {
   bool _disposed = false;
 
   /// 显式开始新一轮；失败不保留上一轮快照。
-  Future<void> refresh(CancelToken token) => _bounded(token, (requestToken) async {
-    _generation++;
-    _snapshot = null;
-    _loading = null;
-    await _getSnapshot(requestToken);
-  });
+  Future<void> refresh(CancelToken token) =>
+      _bounded(token, (requestToken) async {
+        _generation++;
+        _snapshot = null;
+        _loading = null;
+        await _getSnapshot(requestToken);
+      });
 
   Future<IkFetchedSourceUpdate> fetch(
     IkCatalogEntry entry,
@@ -59,27 +63,44 @@ class IkSourceUpdateFetcher {
   ) => _bounded(token, (requestToken) async {
     final directory = _sourceKey.firstMatch(entry.sourceKey)?.group(1);
     if (directory == null) {
-      throw const LxSourceException('metadata', '音源目录标识无效');
+      throw const LxSourceException(
+        'metadata',
+        IkSourceUpdateStrings.invalidDirectory,
+      );
     }
     final snapshot = await _getSnapshot(requestToken);
     var path = '$directory/latest.js';
     var blob = snapshot.entries[path];
     if (blob == null) {
-      throw const LxSourceException('sourceMissing', '上游没有该音源的 latest.js');
+      throw const LxSourceException(
+        'sourceMissing',
+        IkSourceUpdateStrings.upstreamSourceMissing,
+      );
     }
     if (blob.mode == '120000' && blob.type == 'blob') {
-      final linkBytes = await _verifiedBlob(snapshot.commit, blob, requestToken);
+      final linkBytes = await _verifiedBlob(
+        snapshot.commit,
+        blob,
+        requestToken,
+      );
       String target;
       try {
         target = utf8.decode(linkBytes, allowMalformed: false);
       } on FormatException {
-        throw const LxSourceException('metadata', '上游音源链接不是有效UTF-8路径');
+        throw const LxSourceException(
+          'metadata',
+          IkSourceUpdateStrings.invalidUpstreamPathEncoding,
+        );
       }
       final linkMatch = _linkTarget.firstMatch(target);
       final filename = linkMatch?.group(1);
-      if (filename == null || linkMatch!.end != target.length ||
+      if (filename == null ||
+          linkMatch!.end != target.length ||
           linkBytes.length != target.length) {
-        throw const LxSourceException('metadata', '上游音源链接必须指向同目录的单个JS文件');
+        throw const LxSourceException(
+          'metadata',
+          IkSourceUpdateStrings.invalidUpstreamLink,
+        );
       }
       path = '$directory/$filename';
       blob = snapshot.entries[path];
@@ -87,7 +108,10 @@ class IkSourceUpdateFetcher {
     if (blob == null ||
         blob.type != 'blob' ||
         (blob.mode != '100644' && blob.mode != '100755')) {
-      throw const LxSourceException('metadata', '上游音源不是普通文件，或链接目标无效');
+      throw const LxSourceException(
+        'metadata',
+        IkSourceUpdateStrings.invalidUpstreamFile,
+      );
     }
     final bytes = await _verifiedBlob(snapshot.commit, blob, requestToken);
     return _result(
@@ -100,45 +124,50 @@ class IkSourceUpdateFetcher {
   });
 
   /// 自定义源始终跟随原导入地址；不猜latest或执行update_url。
-  Future<IkFetchedSourceUpdate> fetchCustom(
-    Uri origin,
-    CancelToken token,
-  ) => _bounded(token, (requestToken) async {
-    var normalized = lxImportUri(origin.toString());
-    if (origin.hasQuery && !normalized.hasQuery) {
-      normalized = normalized.replace(query: origin.query);
-    }
-    LxSourceException failure = const LxSourceException('download', '音源下载失败，请稍后重试');
-    // 带query的自定义URL可能有独立语义，镜像不可丢弃它。
-    final candidates = normalized.hasQuery ? [normalized] : lxDownloadUris(normalized);
-    for (final uri in candidates) {
-      _checkCancelled(requestToken);
-      try {
-        final bytes = await _download(uri, requestToken);
-        return _result(bytes, normalized);
-      } on LxSourceException catch (error) {
-        if (_terminal(error, requestToken)) rethrow;
-        failure = error;
-      } on DioException {
-        _checkCancelled(requestToken);
-      }
-    }
-    throw failure;
-  });
+  Future<IkFetchedSourceUpdate> fetchCustom(Uri origin, CancelToken token) =>
+      _bounded(token, (requestToken) async {
+        var normalized = lxImportUri(origin.toString());
+        if (origin.hasQuery && !normalized.hasQuery) {
+          normalized = normalized.replace(query: origin.query);
+        }
+        LxSourceException failure = const LxSourceException(
+          'download',
+          IkSourceUpdateStrings.downloadFailed,
+        );
+        // 带query的自定义URL可能有独立语义，镜像不可丢弃它。
+        final candidates = normalized.hasQuery
+            ? [normalized]
+            : lxDownloadUris(normalized);
+        for (final uri in candidates) {
+          _checkCancelled(requestToken);
+          try {
+            final bytes = await _download(uri, requestToken);
+            return _result(bytes, normalized);
+          } on LxSourceException catch (error) {
+            if (_terminal(error, requestToken)) rethrow;
+            failure = error;
+          } on DioException {
+            _checkCancelled(requestToken);
+          }
+        }
+        throw failure;
+      });
 
   Future<_RepositorySnapshot> _getSnapshot(CancelToken token) async {
     _checkCancelled(token);
     if (_snapshot != null) return _snapshot!;
     final generation = _generation;
     late final Future<_RepositorySnapshot> pending;
-    pending = _loading ??= _readSnapshot(token).then((snapshot) {
-      if (!_disposed && !token.isCancelled && generation == _generation) {
-        _snapshot = snapshot;
-      }
-      return snapshot;
-    }).whenComplete(() {
-      if (identical(_loading, pending)) _loading = null;
-    });
+    pending = _loading ??= _readSnapshot(token)
+        .then((snapshot) {
+          if (!_disposed && !token.isCancelled && generation == _generation) {
+            _snapshot = snapshot;
+          }
+          return snapshot;
+        })
+        .whenComplete(() {
+          if (identical(_loading, pending)) _loading = null;
+        });
     return Future.any([
       pending,
       token.whenCancel.then<_RepositorySnapshot>((_) => throw _cancelled),
@@ -152,9 +181,15 @@ class IkSourceUpdateFetcher {
     );
     final object = reference['object'];
     final commit = object is Map ? object['sha'] : null;
-    if (reference['ref'] != 'refs/heads/main' || object is! Map ||
-        object['type'] != 'commit' || commit is! String || !_gitSha.hasMatch(commit)) {
-      throw const LxSourceException('metadata', 'GitHub未返回可信主分支提交');
+    if (reference['ref'] != 'refs/heads/main' ||
+        object is! Map ||
+        object['type'] != 'commit' ||
+        commit is! String ||
+        !_gitSha.hasMatch(commit)) {
+      throw const LxSourceException(
+        'metadata',
+        IkSourceUpdateStrings.invalidCommit,
+      );
     }
     final commitBody = await _json(
       Uri.https('api.github.com', '/repos/$_repository/git/commits/$commit'),
@@ -163,29 +198,53 @@ class IkSourceUpdateFetcher {
     final tree = commitBody['tree'];
     final treeSha = tree is Map ? tree['sha'] : null;
     if (commitBody['sha'] != commit ||
-        treeSha is! String || !_gitSha.hasMatch(treeSha)) {
-      throw const LxSourceException('metadata', 'GitHub未返回可信提交与目录标识');
+        treeSha is! String ||
+        !_gitSha.hasMatch(treeSha)) {
+      throw const LxSourceException(
+        'metadata',
+        IkSourceUpdateStrings.invalidTreeId,
+      );
     }
     final treeBody = await _json(
-      Uri.https('api.github.com', '/repos/$_repository/git/trees/$treeSha', {'recursive': '1'}),
+      Uri.https('api.github.com', '/repos/$_repository/git/trees/$treeSha', {
+        'recursive': '1',
+      }),
       token,
     );
     final rows = treeBody['tree'];
-    if (treeBody['sha'] != treeSha || treeBody['truncated'] != false || rows is! List) {
-      throw const LxSourceException('metadata', 'GitHub目录不完整或与提交不一致');
+    if (treeBody['sha'] != treeSha ||
+        treeBody['truncated'] != false ||
+        rows is! List) {
+      throw const LxSourceException(
+        'metadata',
+        IkSourceUpdateStrings.mismatchedTree,
+      );
     }
     final entries = <String, _TreeEntry>{};
     for (final row in rows) {
-      if (row is! Map) throw const LxSourceException('metadata', 'GitHub目录结构无效');
+      if (row is! Map) {
+        throw const LxSourceException(
+          'metadata',
+          IkSourceUpdateStrings.invalidTree,
+        );
+      }
       final path = row['path'];
       final sha = row['sha'];
       final mode = row['mode'];
       final type = row['type'];
       final size = row['size'];
-      if (path is! String || path.isEmpty || entries.containsKey(path) ||
-          sha is! String || !_gitSha.hasMatch(sha) || mode is! String || type is! String ||
+      if (path is! String ||
+          path.isEmpty ||
+          entries.containsKey(path) ||
+          sha is! String ||
+          !_gitSha.hasMatch(sha) ||
+          mode is! String ||
+          type is! String ||
           (type == 'blob' && (size is! int || size < 0))) {
-        throw const LxSourceException('metadata', 'GitHub目录文件信息无效');
+        throw const LxSourceException(
+          'metadata',
+          IkSourceUpdateStrings.invalidBlobInfo,
+        );
       }
       entries[path] = _TreeEntry(path, sha, mode, type, size is int ? size : 0);
     }
@@ -198,9 +257,15 @@ class IkSourceUpdateFetcher {
       final value = jsonDecode(utf8.decode(bytes, allowMalformed: false));
       if (value is Map<String, dynamic>) return value;
     } on FormatException {
-      throw const LxSourceException('metadata', 'GitHub元数据无法解析');
+      throw const LxSourceException(
+        'metadata',
+        IkSourceUpdateStrings.unreadableMetadata,
+      );
     }
-    throw const LxSourceException('metadata', 'GitHub元数据结构无效');
+    throw const LxSourceException(
+      'metadata',
+      IkSourceUpdateStrings.invalidMetadata,
+    );
   }
 
   Future<List<int>> _verifiedBlob(
@@ -209,9 +274,15 @@ class IkSourceUpdateFetcher {
     CancelToken token,
   ) async {
     if (blob.size <= 0 || blob.size > _maxBytes) {
-      throw const LxSourceException('size', '音源文件为空或超过1MiB限制');
+      throw const LxSourceException(
+        'size',
+        IkSourceUpdateStrings.invalidFileSize,
+      );
     }
-    LxSourceException failure = const LxSourceException('download', '音源下载失败，请稍后重试');
+    LxSourceException failure = const LxSourceException(
+      'download',
+      IkSourceUpdateStrings.downloadFailed,
+    );
     for (final uri in lxDownloadUris(_origin(commit, blob.path))) {
       _checkCancelled(token);
       try {
@@ -221,7 +292,10 @@ class IkSourceUpdateFetcher {
           ...bytes,
         ]).toString();
         if (bytes.length != blob.size || sha != blob.sha) {
-          failure = const LxSourceException('integrity', '音源长度或Git blob哈希与上游目录不一致');
+          failure = const LxSourceException(
+            'integrity',
+            IkSourceUpdateStrings.integrityMismatch,
+          );
           continue;
         }
         return bytes;
@@ -235,10 +309,19 @@ class IkSourceUpdateFetcher {
     throw failure;
   }
 
-  Future<List<int>> _download(Uri uri, CancelToken token, {bool metadata = false}) async {
-    if (uri.scheme != 'https' || uri.host.isEmpty ||
-        uri.userInfo.isNotEmpty || uri.hasFragment) {
-      throw const LxSourceException('link', '音源更新只接受有效的HTTPS地址');
+  Future<List<int>> _download(
+    Uri uri,
+    CancelToken token, {
+    bool metadata = false,
+  }) async {
+    if (uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty ||
+        uri.hasFragment) {
+      throw const LxSourceException(
+        'link',
+        IkSourceUpdateStrings.invalidUpdateUrl,
+      );
     }
     _checkCancelled(token);
     final response = await _dio.getUri<ResponseBody>(
@@ -260,31 +343,50 @@ class IkSourceUpdateFetcher {
     );
     if (response.statusCode != 200 || response.data == null) {
       await response.data?.stream.listen(null).cancel();
-      final limited = response.statusCode == 429 ||
-          (metadata && response.statusCode == 403 &&
+      final limited =
+          response.statusCode == 429 ||
+          (metadata &&
+              response.statusCode == 403 &&
               (response.headers.value('x-ratelimit-remaining') == '0' ||
                   response.headers.value('retry-after') != null));
       if (limited) {
-        final seconds = int.tryParse(response.headers.value('x-ratelimit-reset') ?? '');
-        final reset = seconds != null && seconds > 0 && seconds < 10000000000
-            ? '，可在${DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal().toIso8601String()}后重试'
-            : '，请稍后重试';
-        throw LxSourceException('rateLimited', metadata
-            ? 'GitHub匿名更新请求已达限额$reset'
-            : '音源下载请求受到限流$reset');
+        final seconds = int.tryParse(
+          response.headers.value('x-ratelimit-reset') ?? '',
+        );
+        final retryAt = seconds != null && seconds > 0 && seconds < 10000000000
+            ? DateTime.fromMillisecondsSinceEpoch(
+                seconds * 1000,
+                isUtc: true,
+              ).toLocal().toIso8601String()
+            : null;
+        throw LxSourceException(
+          'rateLimited',
+          IkSourceUpdateStrings.rateLimited(metadata, retryAt),
+        );
       }
-      throw LxSourceException('download', '音源更新请求失败（HTTP ${response.statusCode ?? '未知'}）');
+      throw LxSourceException(
+        'download',
+        IkSourceUpdateStrings.httpFailure(response.statusCode),
+      );
     }
-    final declared = int.tryParse(response.headers.value('content-length') ?? '');
+    final declared = int.tryParse(
+      response.headers.value('content-length') ?? '',
+    );
     if (declared != null && declared > _maxBytes) {
       await response.data!.stream.listen(null).cancel();
-      throw const LxSourceException('size', '音源文件或元数据超过1MiB限制');
+      throw const LxSourceException(
+        'size',
+        IkSourceUpdateStrings.oversizedResponse,
+      );
     }
     final bytes = <int>[];
     await for (final chunk in response.data!.stream) {
       _checkCancelled(token);
       if (bytes.length + chunk.length > _maxBytes) {
-        throw const LxSourceException('size', '音源文件或元数据超过1MiB限制');
+        throw const LxSourceException(
+          'size',
+          IkSourceUpdateStrings.oversizedResponse,
+        );
       }
       bytes.addAll(chunk);
     }
@@ -304,14 +406,26 @@ class IkSourceUpdateFetcher {
       // UTF-8解码器自身剥离一个开头BOM，保留随后真实脚本字节的语义。
       script = utf8.decode(bytes, allowMalformed: false);
     } on FormatException {
-      throw const LxSourceException('invalidEncoding', '音源文件不是有效UTF-8');
+      throw const LxSourceException(
+        'invalidEncoding',
+        IkSourceUpdateStrings.invalidEncoding,
+      );
     }
     String? field(String key) =>
         RegExp('^\\s*(?:\\*|//)?\\s*@$key\\s+([^\\r\\n]+)', multiLine: true)
-            .firstMatch(script)?.group(1)?.replaceFirst(RegExp(r'\s*\*/\s*$'), '').trim();
+            .firstMatch(script)
+            ?.group(1)
+            ?.replaceFirst(RegExp(r'\s*\*/\s*$'), '')
+            .trim();
     final name = field('name');
-    if (script.trimLeft().startsWith('<') || name == null || name.isEmpty || name.length > 160) {
-      throw const LxSourceException('script', '下载内容不是有效音源脚本头部');
+    if (script.trimLeft().startsWith('<') ||
+        name == null ||
+        name.isEmpty ||
+        name.length > 160) {
+      throw const LxSourceException(
+        'script',
+        IkSourceUpdateStrings.invalidScript,
+      );
     }
     return IkFetchedSourceUpdate(
       script: script,
@@ -348,12 +462,25 @@ class IkSourceUpdateFetcher {
       _checkCancelled(token);
       return result;
     } on LxSourceException {
-      if (timedOut) throw const LxSourceException('timeout', '音源更新获取超过30秒，请稍后重试');
+      if (timedOut) {
+        throw const LxSourceException(
+          'timeout',
+          IkSourceUpdateStrings.downloadTimeout,
+        );
+      }
       rethrow;
     } on DioException {
-      if (timedOut) throw const LxSourceException('timeout', '音源更新获取超过30秒，请稍后重试');
+      if (timedOut) {
+        throw const LxSourceException(
+          'timeout',
+          IkSourceUpdateStrings.downloadTimeout,
+        );
+      }
       if (token.isCancelled) throw _cancelled;
-      throw const LxSourceException('download', '音源更新网络不可用，请稍后重试');
+      throw const LxSourceException(
+        'download',
+        IkSourceUpdateStrings.networkUnavailable,
+      );
     } finally {
       timer.cancel();
       token.cancel();
@@ -363,17 +490,24 @@ class IkSourceUpdateFetcher {
 
   static Uri _origin(String commit, String path) =>
       Uri.https('raw.githubusercontent.com', '/$_repository/$commit/$path');
-  static const _cancelled = LxSourceException('cancelled', '音源更新已取消');
+  static const _cancelled = LxSourceException(
+    'cancelled',
+    IkSourceUpdateStrings.downloadCancelled,
+  );
   static void _checkCancelled(CancelToken token) {
     if (token.isCancelled) throw _cancelled;
   }
+
   static bool _terminal(LxSourceException error, CancelToken token) =>
-      token.isCancelled || const ['cancelled', 'rateLimited', 'size'].contains(error.code);
+      token.isCancelled ||
+      const ['cancelled', 'rateLimited', 'size'].contains(error.code);
 
   void dispose() {
     _disposed = true;
     _generation++;
-    for (final token in _active) { token.cancel(); }
+    for (final token in _active) {
+      token.cancel();
+    }
     _snapshot = null;
     _loading = null;
     _dio.close(force: true);

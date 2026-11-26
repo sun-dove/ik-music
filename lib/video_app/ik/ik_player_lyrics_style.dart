@@ -38,7 +38,8 @@ class IkPlayerLyricsStyle {
     if (fontFamily != null) 'fontFamily': fontFamily,
     if (fontSize != null) 'fontSize': fontSize,
     if (backgroundColor != null) 'backgroundColor': backgroundColor!.toARGB32(),
-    if (currentLineColor != null) 'currentLineColor': currentLineColor!.toARGB32(),
+    if (currentLineColor != null)
+      'currentLineColor': currentLineColor!.toARGB32(),
     if (otherLineColor != null) 'otherLineColor': otherLineColor!.toARGB32(),
     'shadowOpacity': shadowOpacity,
   };

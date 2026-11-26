@@ -11,8 +11,9 @@ import '../../features/floating_lyrics/presentation/providers/floating_lyrics_pr
 
 /// 只由 IK Windows 入口开启；偏好本身不改变旧入口的呈现。
 final ikCompactLyricsEnabledProvider = Provider<bool>((ref) => false);
-final ikDesktopLyricsStyleDeliveryFailedProvider =
-    StateProvider<bool>((ref) => false);
+final ikDesktopLyricsStyleDeliveryFailedProvider = StateProvider<bool>(
+  (ref) => false,
+);
 
 final ikDesktopLyricsStyleProvider =
     StateNotifierProvider<IkDesktopLyricsStyleNotifier, IkDesktopLyricsStyle>(
@@ -45,8 +46,7 @@ class IkDesktopLyricsStyle {
       fontSize: fontSize ?? settings.fontSize,
       backgroundColor: backgroundColor ?? settings.backgroundColor,
       backgroundOpacity:
-          backgroundOpacity ??
-          (backgroundColor ?? settings.backgroundColor).a,
+          backgroundOpacity ?? (backgroundColor ?? settings.backgroundColor).a,
       currentLineColor: currentLineColor ?? settings.highlightColor,
       otherLineColor: otherLineColor ?? settings.textColor,
       shadowOpacity: shadowOpacity ?? settings.shadowOpacity,

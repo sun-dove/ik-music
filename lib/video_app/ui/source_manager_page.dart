@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/source_strings.dart';
+import '../../l10n/ik_local_lx_strings.dart';
 import '../../l10n/ik_source_workspace_strings.dart';
 import '../ik/ik_workspace_navigation.dart';
 import '../lx_source/lx_source.dart';
@@ -57,12 +58,14 @@ class SourceManagerPage extends StatefulWidget {
   final Widget? catalogPanel;
   final Future<void> Function(SourceCollection, CancelToken)? onCheckUpdates;
   final Future<SourceCollection> Function(SourceCollection, CancelToken)?
-      onUpdateAll;
-  final Future<LxSourceConfig> Function(SourceEntry, CancelToken)? onUpdateEntry;
+  onUpdateAll;
+  final Future<LxSourceConfig> Function(SourceEntry, CancelToken)?
+  onUpdateEntry;
   final String? Function(SourceEntry)? updateStatus;
   final bool keepBackgroundDraft, backgroundBusy, backgroundDirty;
   final ValueChanged<SourceCollection>? onDraftChanged;
-  final Future<void> Function(SourceCollection)? onBackgroundCheck, onBackgroundUpdateAll;
+  final Future<void> Function(SourceCollection)? onBackgroundCheck,
+      onBackgroundUpdateAll;
   final Future<void> Function(SourceEntry)? onBackgroundUpdateEntry;
   final VoidCallback? onCancelBackground;
   @override
@@ -99,6 +102,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       widget.onDraftChanged?.call(_value);
     }
   }
+
   bool get _filtered =>
       _search.text.trim().isNotEmpty || _platform != 'all' || _enabledOnly;
   List<SourceEntry> get _visible => _value.entries
@@ -1056,93 +1060,94 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
                 ),
               ),
             ),
-        Expanded(
-          child: CustomScrollView(
-            key: const ValueKey('manager-scroll'),
-            slivers: [
-              SliverToBoxAdapter(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (widget.catalogPanel != null) ...[
-                      widget.catalogPanel!,
-                      const SizedBox(height: 16),
-                    ],
-                    if (widget.warning != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Text(
-                          widget.warning!,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+          Expanded(
+            child: CustomScrollView(
+              key: const ValueKey('manager-scroll'),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (widget.catalogPanel != null) ...[
+                        widget.catalogPanel!,
+                        const SizedBox(height: 16),
+                      ],
+                      if (widget.warning != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Text(
+                            widget.warning!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                           ),
                         ),
+                      _refinedCard(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              IkSourceWorkspaceStrings.playbackPolicy,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            _modernPolicy(),
+                          ],
+                        ),
                       ),
-                    _refinedCard(
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                      const SizedBox(height: 16),
+                      _refinedFilters(entries),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+                if (entries.isEmpty)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Text(
-                            IkSourceWorkspaceStrings.playbackPolicy,
-                            style: Theme.of(context).textTheme.titleSmall,
+                            _value.entries.isEmpty
+                                ? IkSourceWorkspaceStrings.noSources
+                                : ExpandedStrings.noMatches,
                           ),
-                          _modernPolicy(),
+                          if (_value.entries.isEmpty) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              IkSourceWorkspaceStrings.noSourcesHint,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    _refinedFilters(entries),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-              if (entries.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 32),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          _value.entries.isEmpty
-                              ? IkSourceWorkspaceStrings.noSources
-                              : ExpandedStrings.noMatches,
-                        ),
-                        if (_value.entries.isEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            IkSourceWorkspaceStrings.noSourcesHint,
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ],
-                    ),
+                  )
+                else
+                  SliverReorderableList(
+                    itemCount: entries.length,
+                    onReorderItem: (from, to) {
+                      if (_busy || _filtered) return;
+                      setState(
+                        () => _value = _value.move(entries[from].id, to - from),
+                      );
+                    },
+                    itemBuilder: (context, index) =>
+                        _refinedRow(entries[index], index),
                   ),
-                )
-              else
-                SliverReorderableList(
-                  itemCount: entries.length,
-                  onReorderItem: (from, to) {
-                    if (_busy || _filtered) return;
-                    setState(
-                      () => _value = _value.move(entries[from].id, to - from),
-                    );
-                  },
-                  itemBuilder: (context, index) =>
-                      _refinedRow(entries[index], index),
-                ),
-              const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            ],
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+              ],
+            ),
           ),
-        ),
         ],
       ),
     );
     return PopScope(
-      canPop: !_policyMenu.isOpen &&
+      canPop:
+          !_policyMenu.isOpen &&
           (_leaving || (!(_dirty && !widget.keepBackgroundDraft) && !_busy)),
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _return();
@@ -1205,19 +1210,27 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            if (widget.onCheckUpdates != null || widget.onBackgroundCheck != null)
+            if (widget.onCheckUpdates != null ||
+                widget.onBackgroundCheck != null)
               OutlinedButton.icon(
                 key: const ValueKey('manager-check-updates'),
-                onPressed: _operationBusy ? null : widget.onBackgroundCheck == null
-                    ? _checkUpdates : () => unawaited(widget.onBackgroundCheck!(_value)),
+                onPressed: _operationBusy
+                    ? null
+                    : widget.onBackgroundCheck == null
+                    ? _checkUpdates
+                    : () => unawaited(widget.onBackgroundCheck!(_value)),
                 icon: const Icon(Icons.refresh_rounded, size: 17),
                 label: const Text(IkSourceWorkspaceStrings.checkUpdates),
               ),
-            if (widget.onUpdateAll != null || widget.onBackgroundUpdateAll != null)
+            if (widget.onUpdateAll != null ||
+                widget.onBackgroundUpdateAll != null)
               OutlinedButton.icon(
                 key: const ValueKey('manager-update-all'),
-                onPressed: _operationBusy ? null : widget.onBackgroundUpdateAll == null
-                    ? _updateAll : () => unawaited(widget.onBackgroundUpdateAll!(_value)),
+                onPressed: _operationBusy
+                    ? null
+                    : widget.onBackgroundUpdateAll == null
+                    ? _updateAll
+                    : () => unawaited(widget.onBackgroundUpdateAll!(_value)),
                 icon: const Icon(Icons.system_update_alt_rounded, size: 17),
                 label: const Text(IkSourceWorkspaceStrings.updateAll),
               ),
@@ -1237,8 +1250,12 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
               ),
             Text(
               widget.keepBackgroundDraft
-                  ? widget.backgroundDirty ? '草稿已保留，保存后生效' : ExpandedStrings.settingsSaved
-                  : _dirty ? ExpandedStrings.dirty : ExpandedStrings.settingsSaved,
+                  ? widget.backgroundDirty
+                        ? IkSourceWorkspaceStrings.pendingDraft
+                        : ExpandedStrings.settingsSaved
+                  : _dirty
+                  ? ExpandedStrings.dirty
+                  : ExpandedStrings.settingsSaved,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: _dirty
                     ? theme.colorScheme.primary
@@ -1396,7 +1413,10 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
                     runSpacing: 4,
                     crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(entry.config.name, style: theme.textTheme.titleSmall),
+                      Text(
+                        entry.config.name,
+                        style: theme.textTheme.titleSmall,
+                      ),
                       if (preferred)
                         Text(
                           IkSourceWorkspaceStrings.preferred,
@@ -1420,7 +1440,9 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    entry.config.origin.scheme == 'file' ? '本机 LX 导入' : entry.config.origin.host,
+                    entry.config.origin.scheme == 'file'
+                        ? IkLocalLxStrings.imported
+                        : entry.config.origin.host,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -1491,7 +1513,8 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
         ExpandedStrings.inspect,
         Icons.fact_check_outlined,
       ),
-      if (widget.onUpdateEntry != null || widget.onBackgroundUpdateEntry != null)
+      if (widget.onUpdateEntry != null ||
+          widget.onBackgroundUpdateEntry != null)
         _sourceMenuAction(
           entry,
           _SourceAction.update,
@@ -1545,10 +1568,14 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     bool enabled = true,
     bool selected = false,
   }) => MenuItemButton(
-    onPressed: _busy || !enabled ||
+    onPressed:
+        _busy ||
+            !enabled ||
             (widget.backgroundBusy &&
-                (action == _SourceAction.update || action == _SourceAction.inspect))
-        ? null : () => _action(entry, action),
+                (action == _SourceAction.update ||
+                    action == _SourceAction.inspect))
+        ? null
+        : () => _action(entry, action),
     leadingIcon: Icon(icon, size: 18),
     trailingIcon: selected ? const Icon(Icons.check_rounded, size: 17) : null,
     child: Text(label),

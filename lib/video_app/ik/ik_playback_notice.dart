@@ -130,7 +130,8 @@ class _IkPlaybackNoticeState extends State<IkPlaybackNotice> {
                             ),
                           ),
                           if (widget.details.trim().isNotEmpty &&
-                              widget.details.trim() != widget.reason.trim()) ...[
+                              widget.details.trim() !=
+                                  widget.reason.trim()) ...[
                             const SizedBox(height: 12),
                             const Text(
                               IkPlaybackNoticeStrings.attempts,
@@ -170,9 +171,8 @@ class _IkPlaybackNoticeState extends State<IkPlaybackNotice> {
           ],
           builder: (context, controller, _) => TextButton(
             focusNode: _focus,
-            onPressed: () => controller.isOpen
-                ? controller.close()
-                : controller.open(),
+            onPressed: () =>
+                controller.isOpen ? controller.close() : controller.open(),
             style: actionStyle,
             child: const Text(IkPlaybackNoticeStrings.details),
           ),

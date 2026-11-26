@@ -30,23 +30,20 @@ class PlatformPlaylistsPage extends ConsumerStatefulWidget {
     super.key,
     this.jsonFormatLabel,
     this.playlistArtwork = false,
-  })
-    : _embedded = false,
-      _compactSources = false;
+  }) : _embedded = false,
+       _compactSources = false;
   const PlatformPlaylistsPage.embedded({
     super.key,
     this.jsonFormatLabel,
     this.playlistArtwork = false,
-  })
-    : _embedded = true,
-      _compactSources = false;
+  }) : _embedded = true,
+       _compactSources = false;
   const PlatformPlaylistsPage.compactEmbedded({
     super.key,
     this.jsonFormatLabel,
     this.playlistArtwork = false,
-  })
-    : _embedded = true,
-      _compactSources = true;
+  }) : _embedded = true,
+       _compactSources = true;
   final String? jsonFormatLabel;
   final bool playlistArtwork;
   final bool _embedded;
@@ -658,7 +655,9 @@ class _PlatformPlaylistsPageState extends ConsumerState<PlatformPlaylistsPage>
                     return ListTile(
                       leading: widget.playlistArtwork
                           ? PlaylistArtwork(
-                              key: ValueKey('playlist-artwork-${playlist.platform.name}-${playlist.id}'),
+                              key: ValueKey(
+                                'playlist-artwork-${playlist.platform.name}-${playlist.id}',
+                              ),
                               playlist: playlist,
                               size: 48,
                               allowFirstSongRequest: true,
@@ -882,7 +881,9 @@ class _MyPlaylistsTab extends StatelessWidget {
                 return ListTile(
                   leading: playlistArtwork
                       ? PlaylistArtwork(
-                          key: ValueKey('playlist-artwork-local-${playlist.id}'),
+                          key: ValueKey(
+                            'playlist-artwork-local-${playlist.id}',
+                          ),
                           playlist: playlist,
                           size: 48,
                           allowFirstSongRequest: true,

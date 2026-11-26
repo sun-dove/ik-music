@@ -16,7 +16,9 @@ import '../../platform/qq/qq_api.dart';
 import '../../platform/qq/qq_platform.dart';
 import '../../platform/qq/qq_toplist_ids.dart';
 
-final ikPublicRecommendationsProvider = Provider<IkPublicRecommendations>((ref) {
+final ikPublicRecommendationsProvider = Provider<IkPublicRecommendations>((
+  ref,
+) {
   final client = IkPublicRecommendations();
   ref.onDispose(client.dispose);
   return client;
@@ -96,7 +98,9 @@ class IkPublicRecommendations {
       }
       if (lastError != null) throw lastError;
     } else if (platform == PlatformType.kugou) {
-      final tracks = await _kugou.fetchHomepageRecommendations().timeout(_timeout);
+      final tracks = await _kugou.fetchHomepageRecommendations().timeout(
+        _timeout,
+      );
       if (tracks.isNotEmpty) {
         return RecommendationResult(
           songs: List.unmodifiable(tracks),
@@ -125,20 +129,23 @@ class IkPublicRecommendations {
   };
 
   Future<IkPlaylistCatalogBatch> _qqPlaylists(int offset) async {
-    final response = await _qqDio.get<Object>(
-      'https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg',
-      queryParameters: {
-        'format': 'json',
-        'inCharset': 'utf8',
-        'outCharset': 'utf-8',
-        'sortId': 5,
-        'categoryId': 10000000,
-        'sin': offset,
-        'ein': offset + pageSize - 1,
-      },
-    ).timeout(_timeout);
+    final response = await _qqDio
+        .get<Object>(
+          'https://c.y.qq.com/splcloud/fcgi-bin/fcg_get_diss_by_tag.fcg',
+          queryParameters: {
+            'format': 'json',
+            'inCharset': 'utf8',
+            'outCharset': 'utf-8',
+            'sortId': 5,
+            'categoryId': 10000000,
+            'sin': offset,
+            'ein': offset + pageSize - 1,
+          },
+        )
+        .timeout(_timeout);
     final body = _map(response.data);
-    if (_integer(body['code']) != 0) throw const FormatException('QQ catalog rejected');
+    if (_integer(body['code']) != 0)
+      throw const FormatException('QQ catalog rejected');
     final data = _map(body['data']);
     final rows = _rows(data['list']);
     final total = _integer(data['sum']);
@@ -156,7 +163,9 @@ class IkPublicRecommendations {
         name: _text(row['dissname'] ?? row['diss_name']),
         platform: PlatformType.qq,
         coverUrl: _optional(row['imgurl'] ?? row['diss_cover']),
-        songCount: _integer(row['song_count'] ?? row['songcnt'] ?? row['song_cnt']) ?? 0,
+        songCount:
+            _integer(row['song_count'] ?? row['songcnt'] ?? row['song_cnt']) ??
+            0,
         creatorName: row['creator'] is Map
             ? _optional((row['creator'] as Map)['name'])
             : null,
@@ -165,26 +174,30 @@ class IkPublicRecommendations {
   }
 
   Future<IkPlaylistCatalogBatch> _neteasePlaylists(int offset) async {
-    final response = await _neteaseDio.post<Object>(
-      'https://music.163.com/weapi/playlist/list',
-      data: NeteaseCrypto.encryptPublicRequest({
-        'cat': '全部', // i18n-exempt: 网易云公开目录分类协议值
-        'order': 'hot',
-        'limit': pageSize,
-        'offset': offset,
-        'total': true,
-        'csrf_token': '',
-      }),
-      options: Options(contentType: Headers.formUrlEncodedContentType),
-    ).timeout(_timeout);
+    final response = await _neteaseDio
+        .post<Object>(
+          'https://music.163.com/weapi/playlist/list',
+          data: NeteaseCrypto.encryptPublicRequest({
+            'cat': '全部', // i18n-exempt: 网易云公开目录分类协议值
+            'order': 'hot',
+            'limit': pageSize,
+            'offset': offset,
+            'total': true,
+            'csrf_token': '',
+          }),
+          options: Options(contentType: Headers.formUrlEncodedContentType),
+        )
+        .timeout(_timeout);
     final body = _map(response.data);
-    if (_integer(body['code']) != 200) throw const FormatException('Netease catalog rejected');
+    if (_integer(body['code']) != 200)
+      throw const FormatException('Netease catalog rejected');
     final rows = _rows(body['playlists']);
     final total = _integer(body['total']);
     final more = body['more'] is bool ? body['more'] as bool : null;
     final next = offset + rows.length;
     final hasMore = more ?? (total == null ? false : next < total);
-    if (hasMore && rows.isEmpty) throw const FormatException('Incomplete Netease catalog page');
+    if (hasMore && rows.isEmpty)
+      throw const FormatException('Incomplete Netease catalog page');
     return _batch(
       PlatformType.netease,
       rows,
@@ -211,7 +224,11 @@ class IkPublicRecommendations {
       rows,
       endKnown: true,
       parse: (row) => Playlist(
-        id: _id(row['specialid'] ?? row['global_specialid'] ?? row['global_collection_id']),
+        id: _id(
+          row['specialid'] ??
+              row['global_specialid'] ??
+              row['global_collection_id'],
+        ),
         name: _text(row['specialname'] ?? row['name']),
         platform: PlatformType.kugou,
         coverUrl: _optional(row['imgurl'])?.replaceAll('{size}', '400'),

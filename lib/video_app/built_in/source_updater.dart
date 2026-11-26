@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/ik_source_update_strings.dart';
 import '../lx_source/lx_source.dart';
 import '../multi_source/source_collection.dart';
 import 'catalog.dart';
@@ -50,7 +51,8 @@ class IkSourceUpdater extends ChangeNotifier {
   String? message;
 
   SourceCollection get workspaceDraft => _workspaceDraft ?? settings.value;
-  bool get workspaceDirty => _workspaceDraft != null &&
+  bool get workspaceDirty =>
+      _workspaceDraft != null &&
       jsonEncode(_workspaceDraft!.toJson()) != _workspaceBaseline;
 
   void openWorkspace() {
@@ -83,8 +85,13 @@ class IkSourceUpdater extends ChangeNotifier {
     if (draft.autoSwitch != before.autoSwitch ||
         draft.highestQuality != before.highestQuality ||
         draft.sourceFirst != before.sourceFirst ||
-        draft.entries.any((entry) => entry.config.enabled &&
-            !before.entries.any((old) => old.id == entry.id && old.config.enabled))) {
+        draft.entries.any(
+          (entry) =>
+              entry.config.enabled &&
+              !before.entries.any(
+                (old) => old.id == entry.id && old.config.enabled,
+              ),
+        )) {
       _workspaceKeepsHttp = false;
     }
     _workspaceBaseline ??= jsonEncode(settings.value.toJson());
@@ -104,13 +111,18 @@ class IkSourceUpdater extends ChangeNotifier {
       autoSwitch: false,
       highestQuality: false,
       sourceFirst: false,
-      entries: [for (final e in draft.entries) SourceEntry(e.id, e.config.copyWith(enabled: false))],
+      entries: [
+        for (final e in draft.entries)
+          SourceEntry(e.id, e.config.copyWith(enabled: false)),
+      ],
     );
     _syncWorkspaceLease();
     _notify();
   }
 
-  Future<void> _workspaceOperation(Future<void> Function(CancelToken) work) async {
+  Future<void> _workspaceOperation(
+    Future<void> Function(CancelToken) work,
+  ) async {
     if (busy) return;
     _workspaceTask = true;
     _syncWorkspaceLease();
@@ -132,26 +144,35 @@ class IkSourceUpdater extends ChangeNotifier {
 
   Future<void> updateWorkspaceSources(SourceCollection draft) {
     editWorkspace(draft);
-    return _workspaceOperation((token) => _run(token, () async {
-      await _updateAll(draft, token, onPrepared: _mergeWorkspaceUpdate);
-    }));
+    return _workspaceOperation(
+      (token) => _run(token, () async {
+        await _updateAll(draft, token, onPrepared: _mergeWorkspaceUpdate);
+      }),
+    );
   }
 
   Future<void> updateWorkspaceEntry(SourceEntry entry) =>
       _workspaceOperation((token) async {
         final config = await updateEntry(entry, token);
-        if (!token.isCancelled) _mergeWorkspaceUpdate(entry, config);
+        if (!token.isCancelled) {
+          _mergeWorkspaceUpdate(entry, config);
+        }
       });
 
   void _mergeWorkspaceUpdate(SourceEntry original, LxSourceConfig config) {
     final draft = workspaceDraft;
     final current = draft.entries.where((e) => e.id == original.id).firstOrNull;
-    if (current == null || current.config.sha256 != original.config.sha256) return;
+    if (current == null || current.config.sha256 != original.config.sha256) {
+      return;
+    }
     final restricted = _catalogEntry(current)?.downloadRestricted == true;
-    _workspaceDraft = draft.replace(current.id, config.copyWith(
-      enabled: current.config.enabled,
-      allowForDownloads: !restricted && current.config.allowForDownloads,
-    ));
+    _workspaceDraft = draft.replace(
+      current.id,
+      config.copyWith(
+        enabled: current.config.enabled,
+        allowForDownloads: !restricted && current.config.allowForDownloads,
+      ),
+    );
     _syncWorkspaceLease();
     _notify();
   }
@@ -170,8 +191,10 @@ class IkSourceUpdater extends ChangeNotifier {
   );
   String? statusFor(SourceEntry entry) {
     final status = _statuses[entry.id];
-    if (status == '新版已准备，保存后生效' &&
-        _verified[entry.id]?.scriptHash != entry.config.sha256) return '有更新';
+    if (status == IkSourceUpdateStrings.draftReady &&
+        _verified[entry.id]?.scriptHash != entry.config.sha256) {
+      return IkSourceUpdateStrings.updateAvailable;
+    }
     return status;
   }
 
@@ -182,7 +205,7 @@ class IkSourceUpdater extends ChangeNotifier {
   Future<T> _run<T>(CancelToken token, Future<T> Function() work) async {
     if (_disposed || token.isCancelled) throw _cancelled;
     if (busy || coordinator.busy || isLocalImportBusy?.call() == true) {
-      throw const LxSourceException('busy', '正在处理音源，请稍后再试');
+      throw const LxSourceException('busy', IkSourceUpdateStrings.busy);
     }
     busy = true;
     _activeToken = token;
@@ -190,7 +213,9 @@ class IkSourceUpdater extends ChangeNotifier {
     try {
       return await work();
     } catch (error) {
-      message = token.isCancelled ? '已取消，原音源继续可用' : _error(error);
+      message = token.isCancelled
+          ? IkSourceUpdateStrings.cancelledKeepCurrent
+          : _error(error);
       rethrow;
     } finally {
       busy = false;
@@ -202,10 +227,15 @@ class IkSourceUpdater extends ChangeNotifier {
   IkCatalogEntry? _catalogEntry(SourceEntry source) {
     final origin = source.config.origin;
     final parts = origin.pathSegments;
-    final knownOrigin = origin.scheme == 'https' && origin.userInfo.isEmpty &&
-        !origin.hasQuery && !origin.hasFragment &&
-        origin.host == 'raw.githubusercontent.com' && parts.length == 5 &&
-        parts[0] == 'pdone' && parts[1] == 'lx-music-source' &&
+    final knownOrigin =
+        origin.scheme == 'https' &&
+        origin.userInfo.isEmpty &&
+        !origin.hasQuery &&
+        !origin.hasFragment &&
+        origin.host == 'raw.githubusercontent.com' &&
+        parts.length == 5 &&
+        parts[0] == 'pdone' &&
+        parts[1] == 'lx-music-source' &&
         (parts[2] == 'main' || RegExp(r'^[0-9a-f]{40}$').hasMatch(parts[2])) &&
         parts[4].endsWith('.js');
     for (final entry in coordinator.catalog.entries) {
@@ -220,12 +250,14 @@ class IkSourceUpdater extends ChangeNotifier {
 
   String? _blocked(SourceEntry source, {bool automatic = false}) {
     if (source.config.origin.scheme == 'file') {
-      return '本地导入音源没有更新地址，可重新导入新版';
+      return IkSourceUpdateStrings.noLocalUpdateUrl;
     }
     final entry = _catalogEntry(source);
     if (entry == null) return null;
     final record = settings.managed.records[entry.sourceKey];
-    if (automatic && record?.rollbackHold == true) return '已回退，自动更新暂停';
+    if (automatic && record?.rollbackHold == true) {
+      return IkSourceUpdateStrings.rollbackHold;
+    }
     return entry.blockReason(coordinator.runtimeId);
   }
 
@@ -241,7 +273,10 @@ class IkSourceUpdater extends ChangeNotifier {
     }
   }
 
-  Future<IkFetchedSourceUpdate> _fetch(SourceEntry source, CancelToken token) async {
+  Future<IkFetchedSourceUpdate> _fetch(
+    SourceEntry source,
+    CancelToken token,
+  ) async {
     if (token.isCancelled || _disposed) throw _cancelled;
     final blocked = _blocked(source);
     if (blocked != null) throw LxSourceException('unsupported', blocked);
@@ -263,62 +298,76 @@ class IkSourceUpdater extends ChangeNotifier {
     return result;
   }
 
-  Future<void> checkUpdates(CancelToken token) => checkDraftUpdates(settings.value, token);
+  Future<void> checkUpdates(CancelToken token) =>
+      checkDraftUpdates(settings.value, token);
 
-  Future<void> checkDraftUpdates(SourceCollection draft, CancelToken token) => _run(token, () async {
-    message = '正在检查更新…';
-    await _refresh(token);
-    var changed = 0, failed = 0, checked = 0, skipped = 0;
-    for (final entry in draft.entries) {
-      if (token.isCancelled || _disposed) break;
-      final blocked = _blocked(entry);
-      if (blocked != null) {
-        _statuses[entry.id] = blocked;
-        skipped++;
-        continue;
-      }
-      _statuses[entry.id] = '正在检查…';
-      _notify();
-      try {
-        final next = await _fetch(entry, token);
-        final hasUpdate = next.sha256 != entry.config.sha256;
-        if (hasUpdate) changed++;
-        checked++;
-        _statuses[entry.id] = hasUpdate
-            ? '有更新${next.version.isEmpty ? '' : ' · ${next.version}'}'
-            : '已是最新';
-      } catch (error) {
-        if (token.isCancelled) {
-          _statuses[entry.id] = '已取消检查';
-          break;
+  Future<void> checkDraftUpdates(SourceCollection draft, CancelToken token) =>
+      _run(token, () async {
+        message = IkSourceUpdateStrings.checkingUpdates;
+        await _refresh(token);
+        var changed = 0, failed = 0, checked = 0, skipped = 0;
+        for (final entry in draft.entries) {
+          if (token.isCancelled || _disposed) break;
+          final blocked = _blocked(entry);
+          if (blocked != null) {
+            _statuses[entry.id] = blocked;
+            skipped++;
+            continue;
+          }
+          _statuses[entry.id] = IkSourceUpdateStrings.checking;
+          _notify();
+          try {
+            final next = await _fetch(entry, token);
+            final hasUpdate = next.sha256 != entry.config.sha256;
+            if (hasUpdate) changed++;
+            checked++;
+            _statuses[entry.id] = hasUpdate
+                ? IkSourceUpdateStrings.availableVersion(next.version)
+                : IkSourceUpdateStrings.current;
+          } catch (error) {
+            if (token.isCancelled) {
+              _statuses[entry.id] = IkSourceUpdateStrings.checkCancelled;
+              break;
+            }
+            failed++;
+            _statuses[entry.id] = _error(error);
+          }
+          _notify();
         }
-        failed++;
-        _statuses[entry.id] = _error(error);
-      }
-      _notify();
-    }
-    if (!token.isCancelled && !_disposed && failed == 0 && checked > 0) {
-      await settings.preferences.box.put(_checkedKey, DateTime.now().toUtc().toIso8601String());
-    }
-    message = '${token.isCancelled ? '已取消' : '检查完成'} · $checked 项已检查'
-        ' · $changed 项有更新${failed > 0 ? ' · $failed 项失败' : ''}'
-        '${skipped > 0 ? ' · $skipped 项不支持更新' : ''}';
-  });
+        if (!token.isCancelled && !_disposed && failed == 0 && checked > 0) {
+          await settings.preferences.box.put(
+            _checkedKey,
+            DateTime.now().toUtc().toIso8601String(),
+          );
+        }
+        message = IkSourceUpdateStrings.checkSummary(
+          token.isCancelled,
+          checked,
+          changed,
+          failed,
+          skipped,
+        );
+      });
 
   Future<LxSourceConfig> _update(SourceEntry entry, CancelToken token) async {
-    _statuses[entry.id] = '正在获取更新…';
+    _statuses[entry.id] = IkSourceUpdateStrings.downloading;
     _notify();
     final next = await _fetch(entry, token);
     if (next.sha256 == entry.config.sha256) {
-      _statuses[entry.id] = '已是最新';
+      _statuses[entry.id] = IkSourceUpdateStrings.current;
       return entry.config;
     }
-    _statuses[entry.id] = '正在检查新版音源…';
+    _statuses[entry.id] = IkSourceUpdateStrings.inspecting;
     _notify();
     final sources = await engine.inspect(next.script, cancelToken: token);
     if (token.isCancelled || _disposed) throw _cancelled;
-    if (!sources.entries.any((e) => ['tx', 'wy', 'kg'].contains(e.key) && e.value.isNotEmpty)) {
-      throw const LxSourceException('platform', '新版音源不支持当前音乐平台，已保留原版');
+    if (!sources.entries.any(
+      (e) => ['tx', 'wy', 'kg'].contains(e.key) && e.value.isNotEmpty,
+    )) {
+      throw const LxSourceException(
+        'platform',
+        IkSourceUpdateStrings.noSupportedPlatform,
+      );
     }
     final catalogEntry = _catalogEntry(entry);
     final config = LxSourceConfig(
@@ -330,10 +379,14 @@ class IkSourceUpdater extends ChangeNotifier {
       sources: sources,
       enabled: entry.config.enabled,
       allowForDownloads: catalogEntry?.downloadRestricted == true
-          ? false : entry.config.allowForDownloads,
+          ? false
+          : entry.config.allowForDownloads,
     );
-    _verified[entry.id] = (scriptHash: next.sha256, contentHash: next.contentSha256);
-    _statuses[entry.id] = '新版已准备，保存后生效';
+    _verified[entry.id] = (
+      scriptHash: next.sha256,
+      contentHash: next.contentSha256,
+    );
+    _statuses[entry.id] = IkSourceUpdateStrings.draftReady;
     _notify();
     return config;
   }
@@ -346,13 +399,17 @@ class IkSourceUpdater extends ChangeNotifier {
           message = _statuses[entry.id];
           return result;
         } catch (error) {
-          _statuses[entry.id] = token.isCancelled ? '已取消，保留原版' : _error(error);
+          _statuses[entry.id] = token.isCancelled
+              ? IkSourceUpdateStrings.cancelledKeepVersion
+              : _error(error);
           rethrow;
         }
       });
 
-  Future<SourceCollection> updateAll(SourceCollection draft, CancelToken token) =>
-      _run(token, () => _updateAll(draft, token));
+  Future<SourceCollection> updateAll(
+    SourceCollection draft,
+    CancelToken token,
+  ) => _run(token, () => _updateAll(draft, token));
 
   Future<SourceCollection> _updateAll(
     SourceCollection draft,
@@ -364,7 +421,9 @@ class IkSourceUpdater extends ChangeNotifier {
     await _refresh(token);
     var result = draft;
     var updated = 0, unchanged = 0, failed = 0, skipped = 0;
-    final entries = automatic ? draft.entries.where((e) => e.config.enabled).toList() : draft.entries;
+    final entries = automatic
+        ? draft.entries.where((e) => e.config.enabled).toList()
+        : draft.entries;
     for (final entry in entries) {
       if (token.isCancelled || _disposed) break;
       final blocked = _blocked(entry, automatic: automatic);
@@ -373,7 +432,11 @@ class IkSourceUpdater extends ChangeNotifier {
         skipped++;
         continue;
       }
-      message = '正在更新 ${entry.config.name} · ${updated + unchanged + failed + skipped + 1}/${entries.length}';
+      message = IkSourceUpdateStrings.updating(
+        entry.config.name,
+        updated + unchanged + failed + skipped + 1,
+        entries.length,
+      );
       _notify();
       try {
         final config = await _update(entry, token);
@@ -385,23 +448,32 @@ class IkSourceUpdater extends ChangeNotifier {
           onPrepared?.call(entry, config);
         }
       } catch (error) {
-        _statuses[entry.id] = token.isCancelled ? '已取消，保留原版' : _error(error);
+        _statuses[entry.id] = token.isCancelled
+            ? IkSourceUpdateStrings.cancelledKeepVersion
+            : _error(error);
         if (token.isCancelled) break;
         failed++;
       }
     }
-    message = '${token.isCancelled ? '已取消' : '更新完成'} · $updated 项已准备'
-        ' · $unchanged 项无需更新${failed > 0 ? ' · $failed 项失败，保留原版' : ''}'
-        '${skipped > 0 ? ' · $skipped 项已跳过' : ''}'
-        '${updated > 0 ? '；保存后生效' : ''}';
+    message = IkSourceUpdateStrings.updateSummary(
+      token.isCancelled,
+      updated,
+      unchanged,
+      failed,
+      skipped,
+    );
     _lastBatchSucceeded = !token.isCancelled && !_disposed && failed == 0;
     if (_lastBatchSucceeded && updated + unchanged > 0) {
-      await settings.preferences.box.put(_checkedKey, DateTime.now().toUtc().toIso8601String());
+      await settings.preferences.box.put(
+        _checkedKey,
+        DateTime.now().toUtc().toIso8601String(),
+      );
     }
     return result;
   }
 
-  Future<void> saveDraft(SourceCollection draft, {
+  Future<void> saveDraft(
+    SourceCollection draft, {
     SourceCollection? expectedBase,
     bool preserveHttpPolicy = false,
   }) async {
@@ -414,10 +486,10 @@ class IkSourceUpdater extends ChangeNotifier {
     );
     for (final entry in draft.entries) {
       if (_verified[entry.id]?.scriptHash == entry.config.sha256) {
-        _statuses[entry.id] = '已更新';
+        _statuses[entry.id] = IkSourceUpdateStrings.updated;
       }
     }
-    message = '已保存；正在播放的歌曲继续播放';
+    message = IkSourceUpdateStrings.saved;
     _notify();
   }
 
@@ -425,7 +497,7 @@ class IkSourceUpdater extends ChangeNotifier {
     try {
       await settings.preferences.box.put(_autoKey, value);
     } catch (_) {
-      message = '自动更新设置未保存，请重试';
+      message = IkSourceUpdateStrings.autoUpdateSaveFailed;
       _notify();
       rethrow;
     }
@@ -435,22 +507,37 @@ class IkSourceUpdater extends ChangeNotifier {
   }
 
   void start() {
-    _timer ??= Timer.periodic(const Duration(minutes: 5), (_) => unawaited(_automaticTick()));
+    _timer ??= Timer.periodic(
+      const Duration(minutes: 5),
+      (_) => unawaited(_automaticTick()),
+    );
     unawaited(_automaticTick());
   }
 
   bool _automaticRunning = false;
   Future<void> _automaticTick() async {
-    if (_disposed || !autoUpdate || busy || coordinator.busy ||
+    if (_disposed ||
+        !autoUpdate ||
+        busy ||
+        coordinator.busy ||
         isLocalImportBusy?.call() == true ||
-        settings.writesBlocked || settings.editing || isResolving() ||
-        settings.value.entries.isEmpty) return;
+        settings.writesBlocked ||
+        settings.editing ||
+        isResolving() ||
+        settings.value.entries.isEmpty) {
+      return;
+    }
     final now = DateTime.now();
-    if (DateTime.tryParse(settings.preferences.box.get(_automaticSuccessKey) as String? ?? '')
+    if (DateTime.tryParse(
+          settings.preferences.box.get(_automaticSuccessKey) as String? ?? '',
+        )
         case final DateTime checked) {
       if (now.difference(checked) < const Duration(days: 1)) return;
     }
-    if (_automaticAttempt != null && now.difference(_automaticAttempt!) < const Duration(hours: 1)) return;
+    if (_automaticAttempt != null &&
+        now.difference(_automaticAttempt!) < const Duration(hours: 1)) {
+      return;
+    }
     _automaticAttempt = now;
     _automaticRunning = true;
     final token = CancelToken();
@@ -459,13 +546,20 @@ class IkSourceUpdater extends ChangeNotifier {
       await _run(token, () async {
         final draft = await _updateAll(before, token, automatic: true);
         if (token.isCancelled || _disposed) return;
-        if (settings.editing || !identical(settings.value, before) || isResolving()) {
-          message = '更新已暂缓，将在空闲时重新检查';
+        if (settings.editing ||
+            !identical(settings.value, before) ||
+            isResolving()) {
+          message = IkSourceUpdateStrings.autoUpdateDeferred;
           return;
         }
-        if (!identical(draft, before)) await saveDraft(draft, expectedBase: before);
+        if (!identical(draft, before)) {
+          await saveDraft(draft, expectedBase: before);
+        }
         if (_lastBatchSucceeded && !token.isCancelled && !_disposed) {
-          await settings.preferences.box.put(_automaticSuccessKey, DateTime.now().toUtc().toIso8601String());
+          await settings.preferences.box.put(
+            _automaticSuccessKey,
+            DateTime.now().toUtc().toIso8601String(),
+          );
         }
       });
     } catch (_) {
@@ -476,8 +570,12 @@ class IkSourceUpdater extends ChangeNotifier {
   }
 
   static String _error(Object error) => error is LxSourceException
-      ? error.message : '更新失败，请稍后重试；原音源继续可用';
-  static const _cancelled = LxSourceException('cancelled', '已取消更新');
+      ? error.message
+      : IkSourceUpdateStrings.updateFailed;
+  static const _cancelled = LxSourceException(
+    'cancelled',
+    IkSourceUpdateStrings.updateCancelled,
+  );
 
   @override
   void dispose() {

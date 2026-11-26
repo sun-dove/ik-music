@@ -81,7 +81,8 @@ class QqEndpoints {
   static const String moduleOwnedPlaylist = 'music.srfDissInfo.DissInfo';
   static const String methodGetOwnedPlaylist = 'CgiGetDiss';
 
-  static const String moduleRecommendationFeed = 'music.recommend.RecommendFeed';
+  static const String moduleRecommendationFeed =
+      'music.recommend.RecommendFeed';
   static const String methodGetRecommendationFeed = 'get_recommend_feed';
 
   static const String moduleFavWrite = 'music.musicasset.SongFavWrite';
