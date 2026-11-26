@@ -443,7 +443,13 @@ class _PlaylistCard extends StatelessWidget {
           children: [
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: VideoCover(url: playlist.coverUrl, size: width, radius: 0),
+              child: VideoCover(
+                url: playlist.coverUrl,
+                size: width,
+                radius: 0,
+                neteaseImageCompatibility:
+                    playlist.platform == PlatformType.netease,
+              ),
             ),
             const SizedBox(height: 10),
             Text(

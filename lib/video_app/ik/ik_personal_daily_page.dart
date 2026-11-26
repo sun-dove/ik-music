@@ -498,24 +498,12 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                               ),
                               if (songs.isNotEmpty)
                                 Text(IkPersonalDailyStrings.count(songs.length)),
-                              if (personalSuccess)
-                                Text(
-                                  IkPersonalDailyStrings.acquired(result!.fetchedAt),
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
                             ],
                           ),
                           if (personalSuccess && result!.validCount > songs.length) ...[
                             const SizedBox(height: 8),
                             Text(
                               IkPersonalDailyStrings.fullCount(result.validCount, songs.length),
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                          if (personalSuccess && result!.sourceDate != null) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              IkPersonalDailyStrings.sourceDate(result.sourceDate!),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                           ],

@@ -12,6 +12,7 @@ import 'package:go_router/go_router.dart';
 import '../l10n/app_localizations.dart';
 import '../l10n/ik_strings.dart';
 import '../l10n/ik_alignment_strings.dart';
+import '../core/platform/platform_utils.dart';
 import '../core/widgets/song_actions_sheet.dart';
 import '../features/discovery/presentation/providers/recommendations_provider.dart';
 import '../features/library/presentation/providers/likes_provider.dart';
@@ -90,11 +91,13 @@ IkPlaybackBar _workspacePlaybackBar({
   required VoidCallback? onOpen,
   required VoidCallback onAudio,
   bool contextualErrors = false,
+  bool inlineLyrics = false,
 }) => alignToDesign
     ? IkPlaybackBar.aligned(
         onOpen: onOpen,
         onAudio: onAudio,
         contextualErrors: contextualErrors,
+        inlineLyrics: inlineLyrics,
       )
     : IkPlaybackBar(onOpen: onOpen, onAudio: onAudio);
 
@@ -201,6 +204,8 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
                           return _workspacePlaybackBar(
                             alignToDesign: widget.alignToDesign,
                             contextualErrors: _newPages,
+                            inlineLyrics: widget.quickExperienceRefinements &&
+                                PlatformUtils.isWindows,
                             onOpen: () => context.push('/player'),
                             onAudio: () => context.push('/settings/audio'),
                           );
@@ -1072,6 +1077,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               ? _workspacePlaybackBar(
                   alignToDesign: widget.alignToDesign,
                   contextualErrors: widget.workspacePageRefinements,
+                  inlineLyrics: widget.quickExperienceRefinements &&
+                      PlatformUtils.isWindows,
                   onOpen: null,
                   onAudio: () => context.push('/settings/audio'),
                 )
@@ -3056,6 +3063,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
               playbackBar: _workspacePlaybackBar(
                 alignToDesign: widget.alignToDesign,
                 contextualErrors: widget.workspacePageRefinements,
+                inlineLyrics: widget.quickExperienceRefinements &&
+                    PlatformUtils.isWindows,
                 onOpen: _openPlayer,
                 onAudio: widget.workspacePageRefinements
                     ? () => unawaited(_selectWorkspace(4, section: 'audio'))

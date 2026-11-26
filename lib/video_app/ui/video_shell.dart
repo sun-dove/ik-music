@@ -332,12 +332,47 @@ class VideoMiniPlayer extends StatelessWidget {
 }
 
 class VideoCover extends StatelessWidget {
-  const VideoCover({super.key, this.url, required this.size, this.radius = 18});
+  const VideoCover({
+    super.key,
+    this.url,
+    required this.size,
+    this.radius = 18,
+    this.neteaseImageCompatibility = false,
+  });
   final String? url;
   final double size;
   final double radius;
+  final bool neteaseImageCompatibility;
+
+  static const _neteaseImageHosts = {
+    'p1.music.126.net',
+    'p2.music.126.net',
+    'p3.music.126.net',
+    'p4.music.126.net',
+  };
+
+  static const _neteaseImageHeaders = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/131.0.0.0 Safari/537.36',
+    'Referer': 'https://music.163.com/',
+  };
+
   @override
   Widget build(BuildContext context) {
+    var imageUrl = url;
+    Map<String, String>? imageHeaders;
+    if (neteaseImageCompatibility && imageUrl != null) {
+      final uri = Uri.tryParse(imageUrl.trim());
+      if (uri != null &&
+          _neteaseImageHosts.contains(uri.host.toLowerCase()) &&
+          (uri.scheme.isEmpty || uri.scheme == 'http' || uri.scheme == 'https') &&
+          uri.userInfo.isEmpty &&
+          (!uri.hasPort || uri.port == 80 || uri.port == 443)) {
+        imageUrl = uri.replace(scheme: 'https', port: 443).toString();
+        imageHeaders = _neteaseImageHeaders;
+      }
+    }
     final fallback = Container(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
@@ -359,10 +394,11 @@ class VideoCover extends StatelessWidget {
       child: SizedBox(
         width: size,
         height: size,
-        child: url == null || url!.isEmpty
+        child: imageUrl == null || imageUrl.isEmpty
             ? fallback
             : Image.network(
-                url!,
+                imageUrl,
+                headers: imageHeaders,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => fallback,
               ),

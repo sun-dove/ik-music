@@ -13,6 +13,7 @@ import '../ui/video_shell.dart';
 import 'ik_floating_lyrics.dart';
 import 'ik_lyrics_action.dart';
 import 'ik_like_action.dart';
+import 'ik_playback_lyrics.dart';
 import 'ik_user_gain.dart';
 import 'ik_runtime.dart';
 
@@ -52,7 +53,12 @@ Future<void> showIkQueue(BuildContext context) => showGeneralDialog<void>(
 );
 
 class IkPlaybackBar extends ConsumerWidget {
-  const IkPlaybackBar({super.key, required this.onOpen, required this.onAudio})
+  const IkPlaybackBar({
+    super.key,
+    required this.onOpen,
+    required this.onAudio,
+    this.inlineLyrics = false,
+  })
     : _stableSeekSemantics = false,
       contextualErrors = false;
   const IkPlaybackBar.aligned({
@@ -60,11 +66,13 @@ class IkPlaybackBar extends ConsumerWidget {
     required this.onOpen,
     required this.onAudio,
     this.contextualErrors = false,
+    this.inlineLyrics = false,
   }) : _stableSeekSemantics = true;
   final VoidCallback? onOpen;
   final VoidCallback onAudio;
   final bool _stableSeekSemantics;
   final bool contextualErrors;
+  final bool inlineLyrics;
   Widget _seekSemantics(Slider slider) =>
       _stableSeekSemantics ? Semantics(container: true, child: slider) : slider;
   String _time(Duration value) =>
@@ -88,10 +96,7 @@ class IkPlaybackBar extends ConsumerWidget {
           (entry) => entry.id == song.id && entry.platform == song.platform,
         );
     final scheme = Theme.of(context).colorScheme;
-    final title = Row(
-      children: [
-        Expanded(
-          child: InkWell(
+    final songInformation = InkWell(
             onTap: song == null ? null : onOpen,
             borderRadius: BorderRadius.circular(8),
             child: Padding(
@@ -130,10 +135,10 @@ class IkPlaybackBar extends ConsumerWidget {
                 ],
               ),
             ),
-          ),
-        ),
-        if (song != null)
-          IconButton(
+          );
+    final likeButton = song == null
+        ? null
+        : IconButton(
             tooltip: liked ? VideoStrings.unlike : VideoStrings.like,
             onPressed: likeAction.busy
                 ? null
@@ -143,9 +148,43 @@ class IkPlaybackBar extends ConsumerWidget {
               size: 19,
               color: liked ? scheme.primary : null,
             ),
-          ),
+          );
+    final title = Row(
+      children: [
+        Expanded(child: songInformation),
+        if (likeButton != null) likeButton,
       ],
     );
+    Widget wideTitle() => !inlineLyrics || song == null
+        ? title
+        : LayoutBuilder(
+            builder: (context, constraints) {
+              final scale = MediaQuery.textScalerOf(context).scale(13) / 13;
+              // 大字或紧凑宽度时保留原歌曲信息，不挤占播放控制。
+              if (constraints.maxWidth < 400 * scale) return title;
+              return Row(
+                children: [
+                  SizedBox(
+                    width: (constraints.maxWidth * .3)
+                        .clamp(180.0, 208.0).toDouble(),
+                    child: songInformation,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: IkPlaybackLyrics(
+                      key: ValueKey('ik-bar-lyrics-${song.platform.name}-${song.id}'),
+                      position: player.position,
+                      isPlaying: player.isPlaying,
+                      isTransitioning: player.isTransitioning,
+                      onOpen: onOpen,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  if (likeButton != null) likeButton,
+                ],
+              );
+            },
+          );
     final controls = Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -367,7 +406,7 @@ class IkPlaybackBar extends ConsumerWidget {
               builder: (context, size) => size.maxWidth >= 850
                   ? Row(
                       children: [
-                        Expanded(flex: 10, child: title),
+                        Expanded(flex: 10, child: wideTitle()),
                         const SizedBox(width: 24),
                         Expanded(flex: 12, child: controls),
                         const SizedBox(width: 24),
