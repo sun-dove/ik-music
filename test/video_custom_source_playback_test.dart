@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mconnect/core/network/api_exception.dart';
 import 'package:mconnect/features/player/data/playback_keep_alive_service.dart';
 import 'package:mconnect/features/player/data/playback_notification_service.dart';
@@ -15,11 +16,40 @@ import 'package:mconnect/platform/qq/qq_platform.dart';
 import 'package:mconnect/video_app/custom_source/custom_source_models.dart';
 import 'package:mconnect/video_app/custom_source/custom_source_playback.dart';
 import 'package:mconnect/video_app/playback/video_player_notifier.dart';
+import 'package:mconnect/video_app/multi_source/balanced_source_planner.dart';
+import 'package:mconnect/video_app/multi_source/multi_source_player.dart';
+import 'package:mconnect/video_app/multi_source/source_collection.dart';
+import 'package:mconnect/video_app/video_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('自定义音源播放触发矩阵', () {
+    test('智能均衡保留用户已启用的 HTTP 备用路径', () async {
+      final resolver = _Resolver();
+      final audio = _Audio();
+      final player = MultiSourceVideoPlayerNotifier(
+        settings: SourceSettings(VideoPreferences(_UnusedBox())),
+        router: PreparedSourceRouter(
+          platformResolver: (_) => _Platform(),
+          fixedQuality: (_) => AudioLevel.low,
+        ),
+        smartBalancedEnabled: () => true,
+        balancedPlanner: BalancedSourcePlanner(),
+        quickSourceRecovery: true,
+        resolve: (_, _, _) async => throw SongNotAvailableException(),
+        legacyFallback: _fallback(resolver),
+        audioController: audio,
+        audioControllerFactory: () => audio,
+        notificationController: const NoopPlaybackNotificationController(),
+        keepAliveController: const NoopPlaybackKeepAliveController(),
+      );
+      addTearDown(player.dispose);
+      await player.playSong(_song('http-balanced'));
+      expect(resolver.requests.single.quality, AudioLevel.lossless);
+      expect(audio.playedUrls, hasLength(1));
+      expect(player.state.isPlaying, isTrue);
+    });
     test('官方取流成功时完全不请求自定义音源', () async {
       final resolver = _Resolver();
       final player = _player(_Platform(), fallback: _fallback(resolver));
@@ -266,6 +296,8 @@ void main() {
 
 CustomSourcePlaybackFallback _fallback(CustomSourceResolver resolver) =>
     CustomSourcePlaybackFallback(resolver: resolver, config: _config);
+
+class _UnusedBox extends Fake implements Box {}
 
 CustomSourceConfig _config({
   bool enabled = true,

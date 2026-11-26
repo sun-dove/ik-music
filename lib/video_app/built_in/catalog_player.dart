@@ -20,6 +20,8 @@ class IkCatalogPlayerNotifier extends ExpandedSourcePlayerNotifier {
     super.quickResolveTimeout,
     super.quickLoadTimeout,
     super.quickBudget,
+    super.balancedPlanner,
+    super.smartBalancedEnabled,
   });
   final IkSourceCatalogCoordinator catalogCoordinator;
   int _catalogRequest = 0;

@@ -175,6 +175,13 @@ class WindowsMusicPreferences extends ChangeNotifier {
     return qualityName(levels.single);
   }
 
+  @protected
+  Map<dynamic, dynamic> qualityPolicyWrites(bool sourceQualityChanged) =>
+      const {};
+
+  @protected
+  void qualityPolicyWriteCommitted(bool sourceQualityChanged) {}
+
   static String qualityName(AudioLevel level) =>
       WindowsMusicStrings.qualityName(level);
   Future<void> setQuality(
@@ -203,11 +210,13 @@ class WindowsMusicPreferences extends ChangeNotifier {
         key: jsonEncode(next.toJson()),
         if (nextSources != null)
           SourceSettings.key: jsonEncode(nextSources.toJson()),
+        ...qualityPolicyWrites(nextSources != null),
       });
     } catch (_) {
       throw const DesktopConfigurationException(DesktopFailure.saveFailed);
     }
     _value = next;
+    qualityPolicyWriteCommitted(nextSources != null);
     if (nextSources != null) sources!.publishSavedQuality(nextSources);
     loadError = null;
     notifyListeners();

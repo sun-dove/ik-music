@@ -3,6 +3,8 @@ import '../../l10n/ik_source_catalog_strings.dart';
 import 'dart:async';
 import 'dart:convert';
 
+import '../../l10n/windows_music_strings.dart';
+
 import '../../l10n/ik_source_update_strings.dart';
 import '../../models/audio_quality.dart';
 import '../custom_source/custom_source_storage.dart';
@@ -191,9 +193,15 @@ class IkManagedState {
 
 /// 只在 IK 装配。手动保存、质量和自动发布共享计算+持久化边界。
 class IkManagedSourceSettings extends WindowsSourceSettings {
-  IkManagedSourceSettings(super.preferences);
+  IkManagedSourceSettings(
+    super.preferences, {
+    this.enableSmartBalanced = false,
+  });
   static const managedKey = 'ik.sources.managed.v1';
+  static const smartBalancedKey = 'ik.playback.balanced.v1';
+  final bool enableSmartBalanced;
   IkManagedState managed = const IkManagedState();
+  bool smartBalanced = false;
   String? managedError;
   bool writesBlocked = false;
   bool userPolicyTouched = false;
@@ -210,6 +218,9 @@ class IkManagedSourceSettings extends WindowsSourceSettings {
   @override
   void load() {
     super.load();
+    smartBalanced =
+        enableSmartBalanced && preferences.box.get(smartBalancedKey) == true;
+    if (smartBalanced) userPolicyTouched = true;
     final raw = preferences.box.get(managedKey);
     if (raw == null) return;
     try {
@@ -225,6 +236,17 @@ class IkManagedSourceSettings extends WindowsSourceSettings {
       managedError = IkSourceCatalogStrings.damagedState;
     }
   }
+
+  Future<void> setSmartBalanced(bool value) => serialize(() async {
+    if (!enableSmartBalanced) return;
+    try {
+      await preferences.box.putAll({smartBalancedKey: value});
+    } catch (_) {
+      throw const DesktopConfigurationException(DesktopFailure.saveFailed);
+    }
+    smartBalanced = value;
+    userPolicyTouched = true;
+  });
 
   Future<T> serialize<T>(Future<T> Function() work) {
     final operation = _tail.then((_) => work());
@@ -395,9 +417,15 @@ class IkManagedSourceSettings extends WindowsSourceSettings {
         checkedAt: DateTime.parse(record.checkedAt!),
       );
     }
+    final clearSmartBalanced =
+        manual &&
+        enableSmartBalanced &&
+        smartBalanced &&
+        next.highestQuality != value.highestQuality;
     await preferences.box.putAll({
       SourceSettings.key: jsonEncode(next.toJson()),
       if (!writesBlocked) managedKey: jsonEncode(state.toJson()),
+      if (clearSmartBalanced) smartBalancedKey: false,
       SourceCheckStore.key: jsonEncode(
         checks.map((key, record) => MapEntry(key, record.toJson())),
       ),
@@ -409,6 +437,7 @@ class IkManagedSourceSettings extends WindowsSourceSettings {
     preferences.customSource = http;
     value = next;
     if (!writesBlocked) managed = state;
+    if (clearSmartBalanced) smartBalanced = false;
     loadError = null;
     if (notifyPlayback) notifyListeners();
   }
@@ -447,6 +476,30 @@ class IkManagedMusicPreferences extends WindowsMusicPreferences {
   }) : managedSources = sources,
        super(sources: sources);
   final IkManagedSourceSettings managedSources;
+  bool get supportsSmartBalanced => managedSources.enableSmartBalanced;
+  bool get smartBalanced => managedSources.smartBalanced;
+
+  @override
+  String qualityLabel({bool download = false}) => !download && smartBalanced
+      ? WindowsMusicStrings.balanced
+      : super.qualityLabel(download: download);
+
+  Future<void> setSmartBalanced(bool value) =>
+      managedSources.setSmartBalanced(value).then((_) => notifyListeners());
+
+  @override
+  Map<dynamic, dynamic> qualityPolicyWrites(bool sourceQualityChanged) =>
+      sourceQualityChanged && smartBalanced
+      ? {IkManagedSourceSettings.smartBalancedKey: false}
+      : const {};
+
+  @override
+  void qualityPolicyWriteCommitted(bool sourceQualityChanged) {
+    if (sourceQualityChanged && smartBalanced) {
+      managedSources.smartBalanced = false;
+    }
+  }
+
   @override
   Future<void> setQuality(
     AudioLevel? level, {

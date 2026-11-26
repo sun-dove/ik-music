@@ -195,12 +195,13 @@ class IkSourceCatalogPanel extends ConsumerWidget {
     animation: coordinator,
     builder: (context, _) {
       final theme = Theme.of(context);
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surface,
+      return Material(
+        color: theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: theme.colorScheme.outlineVariant),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
+        clipBehavior: Clip.antiAlias,
         child: Theme(
           data: theme.copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(

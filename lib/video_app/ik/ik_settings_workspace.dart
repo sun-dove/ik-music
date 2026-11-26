@@ -24,6 +24,7 @@ import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
 import '../../l10n/windows_music_strings.dart';
+import '../built_in/managed_settings.dart';
 import '../../models/audio_quality.dart';
 import '../../models/platform_type.dart';
 import '../built_in/catalog_panel.dart';
@@ -63,6 +64,7 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
     this.fixedNavigation = false,
     this.active = true,
     this.sourceBuilder,
+    this.sourceWithQualityBuilder,
   });
   final VideoPreferences preferences;
   final WindowsAppearance? appearance;
@@ -79,6 +81,8 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
   final bool refinedLyrics;
   final bool fixedNavigation, active;
   final WidgetBuilder? sourceBuilder;
+  final Widget Function(BuildContext context, Widget qualityControl)?
+  sourceWithQualityBuilder;
   @override
   ConsumerState<IkSettingsWorkspace> createState() =>
       _IkSettingsWorkspaceState();
@@ -356,7 +360,17 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
               child: Text(item.value, style: const TextStyle(fontSize: 13)),
             ),
         ];
-        final content = _section == 'sources' && widget.sourceBuilder != null
+        final content =
+            _section == 'sources' && widget.sourceWithQualityBuilder != null
+            ? widget.active
+                  ? Builder(
+                      builder: (context) => widget.sourceWithQualityBuilder!(
+                        context,
+                        _quality(false),
+                      ),
+                    )
+                  : const SizedBox.shrink()
+            : _section == 'sources' && widget.sourceBuilder != null
             ? widget.active
                   ? Builder(builder: widget.sourceBuilder!)
                   : const SizedBox.shrink()
@@ -468,6 +482,10 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
     final values = <String, String>{
       current: current,
       if (!download) WindowsMusicStrings.highest: WindowsMusicStrings.highest,
+      if (!download &&
+          unified is IkManagedMusicPreferences &&
+          unified.supportsSmartBalanced)
+        WindowsMusicStrings.balanced: WindowsMusicStrings.balanced,
       for (final level in [
         AudioLevel.low,
         AudioLevel.high,
@@ -493,6 +511,13 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
         enabled: !_busy.contains(key),
         onChanged: (value) => _run(key, () async {
           if (value == current) return;
+          if (!download &&
+              value == WindowsMusicStrings.balanced &&
+              unified is IkManagedMusicPreferences &&
+              unified.supportsSmartBalanced) {
+            await unified.setSmartBalanced(true);
+            return;
+          }
           final highest = value == WindowsMusicStrings.highest;
           final level = highest
               ? AudioLevel.lossless
@@ -530,6 +555,8 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
       key: key,
       description: download
           ? IkWorkspaceStrings.downloadQualityHint
+          : current == WindowsMusicStrings.balanced
+          ? WindowsMusicStrings.balancedHint
           : IkWorkspaceStrings.playQualityHint,
     );
   }

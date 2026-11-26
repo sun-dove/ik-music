@@ -30,6 +30,12 @@ class SourceManagerPage extends StatefulWidget {
     this.modernPolicyMenu = false,
     this.embedded = false,
     this.refinedLayout = false,
+    this.organizedLayout = false,
+    this.playbackQualityControl,
+    this.updatePanel,
+    this.localImportPanel,
+    this.maintenanceNotice,
+    this.maintenanceNoticeIsImport = false,
     this.catalogPanel,
     this.onCheckUpdates,
     this.onUpdateAll,
@@ -55,6 +61,10 @@ class SourceManagerPage extends StatefulWidget {
   final String runtimeId;
   final bool modernPolicyMenu;
   final bool embedded, refinedLayout;
+  final bool organizedLayout;
+  final Widget? playbackQualityControl, updatePanel, localImportPanel;
+  final String? maintenanceNotice;
+  final bool maintenanceNoticeIsImport;
   final Widget? catalogPanel;
   final Future<void> Function(SourceCollection, CancelToken)? onCheckUpdates;
   final Future<SourceCollection> Function(SourceCollection, CancelToken)?
@@ -89,6 +99,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   Future<bool>? _pendingLeave;
   CancelToken? _token;
   String _platform = 'all';
+  String _organizedView = 'list';
   bool _enabledOnly = false, _busy = false, _leaving = false;
   String? _message, _runningId;
   bool get _dirty => jsonEncode(_value.toJson()) != _saved;
@@ -357,6 +368,10 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     setState(() {
       _value = _value.upsert(config);
       _message = SourceStrings.imported;
+      if (widget.organizedLayout) {
+        _organizedView = 'list';
+        _link.clear();
+      }
     });
     final entry = _value.entries.firstWhere(
       (entry) => entry.config.origin == config.origin,
@@ -732,8 +747,507 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     );
   }
 
+  Widget _organizedPage() {
+    final entries = _visible;
+    final theme = Theme.of(context);
+    final notice =
+        widget.maintenanceNotice ??
+        (_operationBusy
+            ? widget.onBackgroundCheck != null
+                  ? IkSourceWorkspaceStrings.checking
+                  : IkSourceWorkspaceStrings.working
+            : null);
+    final body = LayoutBuilder(
+      builder: (context, size) =>
+          _organizedBody(entries, theme, size.maxWidth < 480, notice),
+    );
+    return PopScope(
+      canPop:
+          !_policyMenu.isOpen &&
+          (_leaving || (!(_dirty && !widget.keepBackgroundDraft) && !_busy)),
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _return();
+      },
+      child: widget.embedded
+          ? body
+          : Scaffold(
+              appBar: AppBar(
+                title: const Text(ExpandedStrings.managerTitle),
+                leading: BackButton(onPressed: _return),
+              ),
+              body: SafeArea(
+                child: Padding(padding: const EdgeInsets.all(16), child: body),
+              ),
+            ),
+    );
+  }
+
+  Widget _organizedBody(
+    List<SourceEntry> entries,
+    ThemeData theme,
+    bool narrow,
+    String? notice,
+  ) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: narrow
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _organizedTitle(theme),
+                  const SizedBox(height: 8),
+                  _organizedSaveButton(),
+                ],
+              )
+            : Row(
+                children: [
+                  Expanded(child: _organizedTitle(theme)),
+                  const SizedBox(width: 12),
+                  _organizedSaveButton(),
+                ],
+              ),
+      ),
+      if (_operationBusy) const LinearProgressIndicator(minHeight: 2),
+      if (notice != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          child: _organizedNotice(notice, theme),
+        ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        child: Wrap(
+          spacing: 6,
+          runSpacing: 2,
+          children: [
+            _organizedTab(
+              'list',
+              IkSourceWorkspaceStrings.addedSources,
+              Icons.library_music_outlined,
+            ),
+            _organizedTab(
+              'updates',
+              IkSourceWorkspaceStrings.maintenance,
+              Icons.system_update_alt_rounded,
+            ),
+            _organizedTab(
+              'add',
+              IkSourceWorkspaceStrings.addSources,
+              Icons.add_link_rounded,
+            ),
+          ],
+        ),
+      ),
+      if (widget.warning != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          child: Text(
+            widget.warning!,
+            style: TextStyle(color: theme.colorScheme.error),
+          ),
+        ),
+      if (_message != null)
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+          child: Text(
+            _message!,
+            key: const ValueKey('manager-message'),
+            style: theme.textTheme.bodySmall,
+          ),
+        ),
+      Expanded(
+        child: KeyedSubtree(
+          key: PageStorageKey(_organizedView),
+          child: switch (_organizedView) {
+            'updates' => _organizedUpdatesView(theme),
+            'add' => _organizedAddView(theme),
+            _ => _organizedListView(entries, theme),
+          },
+        ),
+      ),
+    ],
+  );
+
+  Widget _organizedTitle(ThemeData theme) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(IkSourceWorkspaceStrings.title, style: theme.textTheme.titleLarge),
+      Text(
+        SourceStrings.sourceCount(_value.entries.length, _value.enabled.length),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ],
+  );
+
+  Widget _organizedSaveButton() => FilledButton.icon(
+    key: const ValueKey('manager-save'),
+    onPressed: _operationBusy || (!_dirty && !widget.backgroundDirty)
+        ? null
+        : _save,
+    icon: const Icon(Icons.check_rounded, size: 18),
+    label: const Text(ExpandedStrings.saveSettings),
+  );
+
+  Widget _organizedTab(String id, String label, IconData icon) => ChoiceChip(
+    key: ValueKey('manager-tab-$id'),
+    avatar: Icon(icon, size: 16),
+    label: Text(label, maxLines: 2),
+    selected: _organizedView == id,
+    showCheckmark: false,
+    onSelected: (_) => setState(() => _organizedView = id),
+    visualDensity: VisualDensity.compact,
+  );
+
+  Widget _organizedNotice(String notice, ThemeData theme) => Material(
+    color: theme.colorScheme.secondaryContainer,
+    borderRadius: BorderRadius.circular(10),
+    child: InkWell(
+      key: const ValueKey('manager-notice-details'),
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => setState(
+        () => _organizedView = widget.maintenanceNoticeIsImport
+            ? 'add'
+            : 'updates',
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(notice, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
+            const SizedBox(width: 8),
+            const Text(SourceStrings.details),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _organizedCard(Widget child) => Material(
+    color: Theme.of(context).colorScheme.surface,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+    ),
+    clipBehavior: Clip.antiAlias,
+    child: Padding(padding: const EdgeInsets.all(16), child: child),
+  );
+
+  Widget _organizedListView(
+    List<SourceEntry> entries,
+    ThemeData theme,
+  ) => CustomScrollView(
+    key: const ValueKey('manager-scroll'),
+    slivers: [
+      SliverToBoxAdapter(child: _organizedPolicy(theme)),
+      SliverToBoxAdapter(child: _organizedFilters(entries, theme)),
+      if (entries.isEmpty)
+        SliverToBoxAdapter(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _value.entries.isEmpty
+                        ? IkSourceWorkspaceStrings.noSources
+                        : ExpandedStrings.noMatches,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 10),
+                  if (_value.entries.isEmpty)
+                    OutlinedButton.icon(
+                      key: const ValueKey('manager-empty-add'),
+                      onPressed: () => setState(() => _organizedView = 'add'),
+                      icon: const Icon(Icons.add_link_rounded),
+                      label: const Text(IkSourceWorkspaceStrings.addSources),
+                    )
+                  else
+                    TextButton(
+                      key: const ValueKey('manager-empty-reset'),
+                      onPressed: () => setState(() {
+                        _search.clear();
+                        _platform = 'all';
+                        _enabledOnly = false;
+                      }),
+                      child: const Text(ExpandedStrings.clearSearch),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        )
+      else
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          sliver: SliverReorderableList(
+            itemCount: entries.length,
+            onReorderItem: (from, to) {
+              if (_busy || _filtered) return;
+              setState(() => _value = _value.move(entries[from].id, to - from));
+            },
+            itemBuilder: (context, index) => _refinedRow(entries[index], index),
+          ),
+        ),
+      const SliverToBoxAdapter(child: SizedBox(height: 12)),
+    ],
+  );
+
+  Widget _organizedPolicy(ThemeData theme) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+    child: Material(
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (widget.playbackQualityControl != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: widget.playbackQualityControl!,
+              ),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 232),
+                  child: _policySelect(),
+                ),
+                Row(
+                  key: const ValueKey('manager-auto-switch'),
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(SourceStrings.autoSwitch),
+                    Switch.adaptive(
+                      value: _value.autoSwitch,
+                      onChanged: _busy
+                          ? null
+                          : (value) => setState(
+                              () => _value = _value.copyWith(autoSwitch: value),
+                            ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _organizedFilters(List<SourceEntry> entries, ThemeData theme) =>
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('manager-search'),
+                    controller: _search,
+                    enabled: !_busy,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: ExpandedStrings.searchName,
+                      isDense: true,
+                      prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                      suffixIcon: _search.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: ExpandedStrings.clearSearch,
+                              onPressed: _busy
+                                  ? null
+                                  : () => setState(() => _search.clear()),
+                              icon: const Icon(Icons.close_rounded, size: 18),
+                            ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  key: const ValueKey('manager-inspect-all'),
+                  tooltip: ExpandedStrings.inspectList,
+                  onPressed: _operationBusy || entries.isEmpty
+                      ? null
+                      : () => _inspect(entries),
+                  icon: const Icon(Icons.fact_check_outlined),
+                ),
+              ],
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final entry in _platformNames.entries)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: ChoiceChip(
+                        key: ValueKey('manager-platform-${entry.key}'),
+                        label: Text(entry.value),
+                        selected: _platform == entry.key,
+                        onSelected: _busy
+                            ? null
+                            : (_) => setState(() => _platform = entry.key),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  FilterChip(
+                    label: const Text(ExpandedStrings.enabled),
+                    selected: _enabledOnly,
+                    onSelected: _busy
+                        ? null
+                        : (value) => setState(() => _enabledOnly = value),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ),
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                _filtered
+                    ? ExpandedStrings.filterCount(entries.length)
+                    : ExpandedStrings.orderHint,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _organizedUpdatesView(ThemeData theme) => CustomScrollView(
+    key: const ValueKey('manager-scroll'),
+    slivers: [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+        sliver: SliverList.list(
+          children: [
+            if (widget.updatePanel != null) ...[
+              _organizedCard(widget.updatePanel!),
+              const SizedBox(height: 12),
+            ],
+            if (widget.onCheckUpdates != null ||
+                widget.onBackgroundCheck != null)
+              OutlinedButton.icon(
+                key: const ValueKey('manager-check-updates'),
+                onPressed: _operationBusy
+                    ? null
+                    : widget.onBackgroundCheck == null
+                    ? _checkUpdates
+                    : () => unawaited(widget.onBackgroundCheck!(_value)),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text(IkSourceWorkspaceStrings.checkUpdates),
+              ),
+            if (widget.onUpdateAll != null ||
+                widget.onBackgroundUpdateAll != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: OutlinedButton.icon(
+                  key: const ValueKey('manager-update-all'),
+                  onPressed: _operationBusy
+                      ? null
+                      : widget.onBackgroundUpdateAll == null
+                      ? _updateAll
+                      : () => unawaited(widget.onBackgroundUpdateAll!(_value)),
+                  icon: const Icon(Icons.system_update_alt_rounded, size: 18),
+                  label: const Text(IkSourceWorkspaceStrings.updateAll),
+                ),
+              ),
+            if (_operationBusy)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: TextButton.icon(
+                  onPressed: () {
+                    _token?.cancel();
+                    widget.onCancelBackground?.call();
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                  label: const Text(ExpandedStrings.cancelOperation),
+                ),
+              ),
+            if (widget.updatePanel == null &&
+                widget.onCheckUpdates == null &&
+                widget.onBackgroundCheck == null &&
+                widget.onUpdateAll == null &&
+                widget.onBackgroundUpdateAll == null)
+              const Text(IkSourceWorkspaceStrings.noUpdateTasks),
+          ],
+        ),
+      ),
+    ],
+  );
+
+  Widget _organizedAddView(ThemeData theme) => CustomScrollView(
+    key: const ValueKey('manager-scroll'),
+    slivers: [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+        sliver: SliverList.list(
+          children: [
+            TextField(
+              key: const ValueKey('manager-import-link'),
+              controller: _link,
+              enabled: !_operationBusy,
+              keyboardType: TextInputType.url,
+              onSubmitted: _operationBusy ? null : (_) => _import(),
+              decoration: InputDecoration(
+                hintText: IkSourceWorkspaceStrings.scriptLink,
+                prefixIcon: const Icon(Icons.link_rounded, size: 19),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: OutlinedButton(
+                key: const ValueKey('manager-import'),
+                onPressed: _operationBusy ? null : () => _import(),
+                child: const Text(IkSourceWorkspaceStrings.importLink),
+              ),
+            ),
+            if (widget.localImportPanel != null) ...[
+              const SizedBox(height: 12),
+              widget.localImportPanel!,
+            ],
+            if (widget.catalogPanel != null) ...[
+              const SizedBox(height: 12),
+              widget.catalogPanel!,
+            ],
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : widget.onHttp,
+              icon: const Icon(Icons.settings_ethernet_rounded, size: 18),
+              label: const Text(ExpandedStrings.httpSettings),
+            ),
+          ],
+        ),
+      ),
+    ],
+  );
+
   @override
   Widget build(BuildContext context) {
+    if (widget.organizedLayout) return _organizedPage();
     if (widget.refinedLayout || widget.embedded) return _refinedPage();
     final entries = _visible;
     return PopScope(
@@ -1400,7 +1914,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     return Padding(
       key: ValueKey(entry.id),
       padding: const EdgeInsets.only(bottom: 8),
-      child: _refinedCard(
+      child: (widget.organizedLayout ? _organizedCard : _refinedCard)(
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -41,6 +41,7 @@ import 'ik/ik_player_lyrics_style.dart';
 import '../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import 'built_in/catalog_panel.dart';
 import 'built_in/source_updater.dart';
+import 'built_in/managed_settings.dart';
 import 'built_in/source_update_panel.dart';
 import 'built_in/local_lx_source_bridge.dart';
 
@@ -105,6 +106,7 @@ IkPlaybackBar _workspacePlaybackBar({
         inlineLyrics: inlineLyrics,
         balancedLayout: balancedLayout,
         contentAdaptive: balancedLayout,
+        windowEdges: balancedLayout,
       )
     : IkPlaybackBar(onOpen: onOpen, onAudio: onAudio);
 
@@ -1489,7 +1491,14 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   Future<bool> _alignedWindowsQuality(bool download) async {
     final preferences = _unifiedPreferences!;
-    final highest = preferences.sources?.value.highestQuality == true;
+    final managed =
+        preferences is IkManagedMusicPreferences &&
+            preferences.supportsSmartBalanced
+        ? preferences
+        : null;
+    final highest =
+        preferences.sources?.value.highestQuality == true &&
+        managed?.smartBalanced != true;
     final selected = await showContextualDialog<(AudioLevel?, bool)>(
       context,
       builder: (dialogContext) => SingleChildScrollView(
@@ -1511,6 +1520,15 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                   icon: const Icon(Icons.close_rounded),
                 ),
               ),
+              if (!download && managed != null)
+                ListTile(
+                  title: const Text(WindowsMusicStrings.balanced),
+                  subtitle: const Text(WindowsMusicStrings.balancedHint),
+                  trailing: managed.smartBalanced
+                      ? const Icon(Icons.check)
+                      : null,
+                  onTap: () => Navigator.of(dialogContext).pop((null, false)),
+                ),
               if (!download && preferences.sources != null)
                 ListTile(
                   title: const Text(WindowsMusicStrings.highest),
@@ -1542,6 +1560,11 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     );
     if (selected == null) return false;
     try {
+      if (!download && selected == (null, false) && managed != null) {
+        if (!managed.smartBalanced) await managed.setSmartBalanced(true);
+        if (mounted) setState(() {});
+        return true;
+      }
       await preferences.setQuality(
         selected.$1,
         download: download,
@@ -1715,6 +1738,16 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
             widget.sourceSettings != null &&
             widget.sourceEngine != null
         ? (_) => _embeddedSourceManager()
+        : null,
+    sourceWithQualityBuilder:
+        widget.quickExperienceRefinements &&
+            PlatformUtils.isWindows &&
+            widget.sourceSettings != null &&
+            widget.sourceEngine != null &&
+            widget.sourceSettings is IkManagedSourceSettings &&
+            (widget.sourceSettings! as IkManagedSourceSettings)
+                .enableSmartBalanced
+        ? (_, quality) => _embeddedSourceManager(qualityControl: quality)
         : null,
     refinedLyrics: widget.quickExperienceRefinements,
     preferences: widget.preferences,
@@ -2746,15 +2779,31 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     }
   }
 
-  Widget _embeddedSourceManager() {
+  Widget _embeddedSourceManager({Widget? qualityControl}) {
     final updater = ref.read(ikSourceUpdaterProvider);
     final localBridge = ref.read(ikLocalLxSourceBridgeProvider);
     final settings = widget.sourceSettings!;
     final engine = widget.sourceEngine!;
+    bool showImportNotice() =>
+        localBridge != null &&
+        (localBridge.busy ||
+            localBridge.results.any((entry) => entry.retryable));
     Widget manager() => SourceManagerPage(
       key: const ValueKey('ik-embedded-source-manager'),
       embedded: true,
       refinedLayout: true,
+      organizedLayout: qualityControl != null,
+      playbackQualityControl: qualityControl,
+      updatePanel: updater == null
+          ? null
+          : IkSourceUpdatePanel(updater: updater),
+      localImportPanel: localBridge == null
+          ? null
+          : _localSourceMigrationPanel(localBridge),
+      maintenanceNoticeIsImport: showImportNotice(),
+      maintenanceNotice: showImportNotice()
+          ? (localBridge!.message ?? IkLocalLxStrings.loading)
+          : updater?.workspaceNotice,
       modernPolicyMenu: true,
       initial: updater?.workspaceDraft ?? settings.value,
       keepBackgroundDraft: updater != null,
@@ -2772,8 +2821,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       catalogPanel: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (updater != null) IkSourceUpdatePanel(updater: updater),
-          if (localBridge != null) _localSourceMigrationPanel(localBridge),
+          if (qualityControl == null && updater != null)
+            IkSourceUpdatePanel(updater: updater),
+          if (qualityControl == null && localBridge != null)
+            _localSourceMigrationPanel(localBridge),
           IgnorePointer(
             ignoring: updater?.busy == true || localBridge?.busy == true,
             child: const IkSourceCatalogPanel(
@@ -2802,10 +2853,13 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         await engine.inspect(config.script, cancelToken: token);
       },
       onSave: (value) async {
+        final draft = qualityControl == null
+            ? value
+            : value.copyWith(highestQuality: settings.value.highestQuality);
         if (updater != null) {
-          await updater.saveWorkspaceDraft(value);
+          await updater.saveWorkspaceDraft(draft);
         } else {
-          await settings.save(value);
+          await settings.save(draft);
         }
         widget.onCustomSourceChanged?.call();
         if (mounted) setState(() {});

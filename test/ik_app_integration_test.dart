@@ -189,6 +189,7 @@ void main() {
     bool alignToDesign = false,
     bool pageInteractionRefinements = false,
     bool workspacePageRefinements = false,
+    bool organizedPreview = false,
     bool withSourceManager = false,
     Future<void>? sourceSaveGate,
     DownloadState? downloads,
@@ -211,19 +212,26 @@ void main() {
     final preferences = _IoVideoPreferences(settings, ioZone);
     final sourceSettings = withSourceManager
         ? ((sourceSaveGate == null
-                ? IkManagedSourceSettings(preferences)
+                ? IkManagedSourceSettings(
+                    preferences,
+                    enableSmartBalanced: organizedPreview,
+                  )
                 : _DeferredSourceSettings(preferences, ioZone, sourceSaveGate))
             ..load())
         : null;
-    final unified = WindowsMusicPreferences(
-      preferences,
-      write: (values) => ioZone.run(() async {
-        // Hive 的写锁 Future 不能跨已结束的 FakeAsync zone 传给下一条门。
-        // 使用既有写入边界进入真实 IO，仍验证真实 Hive 持久化与发布顺序。
-        await settings.putAll(values);
-        await settings.flush();
-      }),
-    )..load();
+    final unified =
+        (organizedPreview && sourceSettings != null
+              ? IkManagedMusicPreferences(preferences, sources: sourceSettings)
+              : WindowsMusicPreferences(
+                  preferences,
+                  write: (values) => ioZone.run(() async {
+                    // Hive 的写锁 Future 不能跨已结束的 FakeAsync zone 传给下一条门。
+                    // 使用既有写入边界进入真实 IO，仍验证真实 Hive 持久化与发布顺序。
+                    await settings.putAll(values);
+                    await settings.flush();
+                  }),
+                ))
+          ..load();
     final window = desktopAppearance ? _Window() : null;
     final appearance = window == null
         ? null
@@ -319,6 +327,7 @@ void main() {
             alignToDesign: alignToDesign,
             pageInteractionRefinements: pageInteractionRefinements,
             workspacePageRefinements: workspacePageRefinements,
+            quickExperienceRefinements: organizedPreview,
             sourceSettings: sourceSettings,
             sourceEngine: withSourceManager ? _UnusedSourceEngine() : null,
             customSourceCredentials: MemoryCustomSourceCredentialStore(),
@@ -694,6 +703,79 @@ void main() {
       await drain(tester);
       expect(find.byType(IkHomePage).hitTestable(), findsOneWidget);
     }
+  });
+
+  testWidgets('Windows 正式入口：底栏靠边，音源分区与播放设置共用当前音质', (tester) async {
+    PlatformUtils.setDebugOverride(AppPlatform.windows);
+    var collection = const SourceCollection(
+      autoSwitch: true,
+      sourceFirst: true,
+    );
+    for (final name in ['本机音源', '在线音源', '备用音源']) {
+      collection = collection.upsert(
+        LxSourceConfig(
+          name: name,
+          version: '1.0',
+          origin: Uri.https('example.org', '/$name.js'),
+          sha256: name,
+          script: 'fixture',
+          enabled: true,
+          sources: const {
+            'tx': ['320k'],
+            'kg': ['128k'],
+          },
+        ),
+      );
+    }
+    await tester.runAsync(
+      () => settings.putAll({
+        IkManagedSourceSettings.smartBalancedKey: true,
+        SourceSettings.key: jsonEncode(collection.toJson()),
+      }),
+    );
+    final app = await mount(
+      tester,
+      width: 1920,
+      workspace: true,
+      alignToDesign: true,
+      workspacePageRefinements: true,
+      withSourceManager: true,
+      organizedPreview: true,
+    );
+    await app.container
+        .read(playerProvider.notifier)
+        .playSong(_song(PlatformType.qq, name: '起风了'));
+    await drain(tester);
+    expect(
+      tester.widget<IkPlaybackBar>(find.byType(IkPlaybackBar)).windowEdges,
+      isTrue,
+    );
+    expect(tester.takeException(), isNull, reason: '根工作区');
+    await tester.tap(find.byKey(const ValueKey('ik-workspace-nav-4')));
+    await drain(tester);
+    await tester.tap(find.byKey(const ValueKey('ik-settings-sources')));
+    await drain(tester);
+    final manager = find.byType(SourceManagerPage);
+    expect(tester.widget<SourceManagerPage>(manager).organizedLayout, isTrue);
+    expect(tester.takeException(), isNull, reason: '已添加音源');
+    expect(
+      find.descendant(of: manager, matching: find.text('智能均衡')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('manager-import-link')), findsNothing);
+    expect(find.text('本机音源').hitTestable(), findsOneWidget);
+    await captureIkUi(tester, '智能均衡-全屏音源页');
+    await tester.tap(find.byKey(const ValueKey('manager-tab-add')));
+    await drain(tester);
+    expect(
+      find.byKey(const ValueKey('manager-import-link')).hitTestable(),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull, reason: '添加音源和内置目录');
+    await tester.tap(find.byKey(const ValueKey('ik-settings-audio')));
+    await drain(tester);
+    expect(find.text('智能均衡').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('E14 真实音源正文、策略草稿、主导航与HTTP往返', (tester) async {

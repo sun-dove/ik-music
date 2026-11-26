@@ -1,5 +1,11 @@
 abstract final class IkSourceWorkspaceStrings {
   static const title = '音源管理';
+  static const addedSources = '已添加音源';
+  static const maintenance = '更新维护';
+  static const addSources = '添加音源';
+  static const checking = '正在检查更新';
+  static const working = '正在处理音源任务';
+  static const noUpdateTasks = '当前没有可用的更新任务。';
   static const subtitle = '调整播放策略，管理已添加的音源';
   static const checkUpdates = '检查更新';
   static const updateAll = '全部更新';

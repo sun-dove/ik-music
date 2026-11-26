@@ -98,12 +98,13 @@ void main() {
     bool contentAdaptive = false,
     bool inlineLyrics = false,
     bool contextualErrors = false,
+    bool workspaceRoot = false,
     LyricsDocument? document,
     IkPlaybackBar? playbackBar,
     VoidCallback? onOpen,
     VoidCallback? onAudio,
   }) async {
-    tester.view.physicalSize = Size(width, 400);
+    tester.view.physicalSize = Size(width, workspaceRoot ? 1032 : 400);
     tester.view.devicePixelRatio = 1;
     final player = _BarPlayer();
     final likes = _Likes(database);
@@ -127,23 +128,38 @@ void main() {
                 .copyWith(textScaler: TextScaler.linear(scale)),
             child: child!,
           ),
-          home: Scaffold(
-            body: Align(
-              alignment: Alignment.bottomCenter,
-              child:
-                  playbackBar ??
-                  (balancedLayout
-                      ? IkPlaybackBar.aligned(
-                          onOpen: onOpen,
-                          onAudio: onAudio ?? () {},
-                          balancedLayout: true,
-                          contentAdaptive: contentAdaptive,
-                          inlineLyrics: inlineLyrics,
-                          contextualErrors: contextualErrors,
-                        )
-                      : IkPlaybackBar(onOpen: () {}, onAudio: () {})),
-            ),
-          ),
+          home: workspaceRoot
+              ? IkDesktopWorkspace(
+                  index: 0,
+                  alignToDesign: true,
+                  onSelect: (_) {},
+                  onAccount: () {},
+                  pages: const [
+                    SizedBox(),
+                    SizedBox(),
+                    SizedBox(),
+                    SizedBox(),
+                    SizedBox(),
+                  ],
+                  playbackBar: playbackBar!,
+                )
+              : Scaffold(
+                  body: Align(
+                    alignment: Alignment.bottomCenter,
+                    child:
+                        playbackBar ??
+                        (balancedLayout
+                            ? IkPlaybackBar.aligned(
+                                onOpen: onOpen,
+                                onAudio: onAudio ?? () {},
+                                balancedLayout: true,
+                                contentAdaptive: contentAdaptive,
+                                inlineLyrics: inlineLyrics,
+                                contextualErrors: contextualErrors,
+                              )
+                            : IkPlaybackBar(onOpen: () {}, onAudio: () {})),
+                  ),
+                ),
         ),
       ),
     );
@@ -171,6 +187,47 @@ void main() {
   final heartTarget = find.byTooltip(VideoStrings.like);
   final volumeSlider = find.byKey(const ValueKey('ik-bar-volume'));
   final queueTarget = find.byKey(const ValueKey('ik-bar-queue'));
+
+  testWidgets('1920 全屏工作区：封面和队列靠近窗口边缘，播放键仍在屏幕正中', (tester) async {
+    await mount(
+      tester,
+      width: 1920,
+      workspaceRoot: true,
+      playbackBar: IkPlaybackBar.aligned(
+        onOpen: () {},
+        onAudio: () {},
+        balancedLayout: true,
+        contentAdaptive: true,
+        windowEdges: true,
+        inlineLyrics: true,
+      ),
+    );
+    final root = tester.getRect(find.byType(Scaffold).first);
+    final song = find.ancestor(
+      of: find.text(_track.name),
+      matching: find.byType(InkWell),
+    );
+    expect(tester.getRect(song).left - root.left, inInclusiveRange(0, 16));
+    expect(
+      root.right - tester.getRect(queueTarget).right,
+      inInclusiveRange(0, 16),
+    );
+    expect(
+      tester.getCenter(find.byTooltip(VideoStrings.play)).dx,
+      closeTo(root.center.dx, 1),
+    );
+    expect(tester.getSize(centerControls).width, 680);
+    for (final target in [
+      song,
+      heartTarget,
+      currentLyrics,
+      volumeSlider,
+      queueTarget,
+    ]) {
+      expect(target.hitTestable(), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('内容变更：旧调用缺省仍保留宽屏布局且详情不重复歌词', (tester) async {
     final legacy = IkPlaybackBar.aligned(

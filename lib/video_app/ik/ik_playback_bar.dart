@@ -65,6 +65,7 @@ class IkPlaybackBar extends ConsumerWidget {
     this.balancedLayout = false,
   }) : _stableSeekSemantics = false,
        contentAdaptive = false,
+       windowEdges = false,
        contextualErrors = false;
   const IkPlaybackBar.aligned({
     super.key,
@@ -74,6 +75,7 @@ class IkPlaybackBar extends ConsumerWidget {
     this.inlineLyrics = false,
     this.balancedLayout = false,
     this.contentAdaptive = false,
+    this.windowEdges = false,
   }) : _stableSeekSemantics = true;
   final VoidCallback? onOpen;
   final VoidCallback onAudio;
@@ -82,6 +84,7 @@ class IkPlaybackBar extends ConsumerWidget {
   final bool inlineLyrics;
   final bool balancedLayout;
   final bool contentAdaptive;
+  final bool windowEdges;
   Widget _seekSemantics(Slider slider) =>
       _stableSeekSemantics ? Semantics(container: true, child: slider) : slider;
   String _time(Duration value) =>
@@ -558,7 +561,11 @@ class IkPlaybackBar extends ConsumerWidget {
           ),
         ),
         padding: EdgeInsets.symmetric(
-          horizontal: constraints.maxWidth < 360 ? 12 : 20,
+          horizontal: constraints.maxWidth < 360
+              ? 12
+              : windowEdges
+              ? 20 - 8 * ((constraints.maxWidth - 1440) / 360).clamp(0.0, 1.0)
+              : 20,
           vertical: 10,
         ),
         child: Column(
@@ -601,6 +608,9 @@ class IkPlaybackBar extends ConsumerWidget {
                           .clamp(0.0, 680.0)
                           .toDouble();
                   if (centerWidth >= 240 + 40 * scale) {
+                    final outward = windowEdges
+                        ? ((constraints.maxWidth - 1440) / 360).clamp(0.0, 1.0)
+                        : 0.0;
                     final sideSlack =
                         (contentWidth - centerWidth) / 2 -
                         roomyToolsWidth -
@@ -623,7 +633,7 @@ class IkPlaybackBar extends ConsumerWidget {
                             Expanded(
                               child: contentAdaptive
                                   ? Align(
-                                      alignment: Alignment.centerRight,
+                                      alignment: Alignment(1 - 2 * outward, 0),
                                       child: left,
                                     )
                                   : left,
@@ -638,7 +648,7 @@ class IkPlaybackBar extends ConsumerWidget {
                             Expanded(
                               child: contentAdaptive
                                   ? Align(
-                                      alignment: Alignment.centerLeft,
+                                      alignment: Alignment(2 * outward - 1, 0),
                                       child: roomyTools(),
                                     )
                                   : roomyTools(),

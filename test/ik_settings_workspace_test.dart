@@ -85,40 +85,53 @@ void main() {
     bool qualityPlayback = false,
     bool localPlayback = false,
     bool failQualityWrites = false,
+    bool managedQuality = false,
     Future<void>? qualityWriteGate,
     bool alignToDesign = false,
     Brightness brightness = Brightness.light,
   }) async {
     tester.view.physicalSize = Size(width, 900);
     tester.view.devicePixelRatio = 1;
-    final prefs = VideoPreferences(box);
-    final sources = qualityPlayback
+    Completer<void>? qualityWriteFinished;
+    Future<void> writeQuality(Map<dynamic, dynamic> values) {
+      final finished = ioZone.run(Completer<void>.new);
+      qualityWriteFinished = finished;
+      if (failQualityWrites) {
+        finished.complete();
+        return Future.error(StateError('save'));
+      }
+      return ioZone.run(() async {
+        try {
+          await qualityWriteGate;
+          await box.putAll(values);
+          await box.flush();
+        } finally {
+          // 只报告实际写入已结束；异常仍传回真实产品行内错误路径。
+          finished.complete();
+        }
+      });
+    }
+
+    final prefs = VideoPreferences(
+      managedQuality ? _QualityBox(box, writeQuality) : box,
+    );
+    final sources = managedQuality
+        ? (IkManagedSourceSettings(prefs, enableSmartBalanced: true)
+            ..load()
+            ..value = const SourceCollection(autoSwitch: true))
+        : qualityPlayback
         ? (WindowsSourceSettings(prefs)
             ..value = const SourceCollection(autoSwitch: true))
         : null;
-    Completer<void>? qualityWriteFinished;
-    final unified = WindowsMusicPreferences(
-      prefs,
-      sources: sources,
-      write: (values) {
-        final finished = ioZone.run(Completer<void>.new);
-        qualityWriteFinished = finished;
-        if (failQualityWrites) {
-          finished.complete();
-          return Future.error(StateError('save'));
-        }
-        return ioZone.run(() async {
-          try {
-            await qualityWriteGate;
-            await box.putAll(values);
-            await box.flush();
-          } finally {
-            // 只报告实际写入已结束；异常仍传回真实产品行内错误路径。
-            finished.complete();
-          }
-        });
-      },
-    )..load();
+    final unified =
+        (sources is IkManagedSourceSettings
+              ? IkManagedMusicPreferences(prefs, sources: sources)
+              : WindowsMusicPreferences(
+                  prefs,
+                  sources: sources,
+                  write: writeQuality,
+                ))
+          ..load();
     final appearance = WindowsAppearance(
       preferences: unified,
       directory: Directory('${scratch.path}/appearance'),
@@ -130,6 +143,7 @@ void main() {
     final player = qualityPlayback
         ? MultiSourceVideoPlayerNotifier(
             settings: sources!,
+            preservePlaybackOnSettingsChange: managedQuality,
             router: PreparedSourceRouter(
               platformResolver: (_) =>
                   FakeContentPlatform(type: PlatformType.qq),
@@ -295,6 +309,30 @@ void main() {
     expect(h.unified.quality(PlatformType.qq), AudioLevel.lossless);
     expect(h.unified.quality(PlatformType.netease), AudioLevel.low);
     await unmount(tester, h);
+  });
+
+  testWidgets('B01 智能均衡只切换下次播放，正在听的歌曲保持42秒', (tester) async {
+    final h = await mount(tester, managedQuality: true, qualityPlayback: true);
+    final menu = find.byWidgetPredicate(
+      (w) =>
+          w is IkSelect<String> && w.label == WindowsMusicStrings.playQuality,
+    );
+    try {
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(find.text('智能均衡'), findsOneWidget);
+      await tester.tap(find.text('智能均衡'));
+      await tester.pumpAndSettle();
+      await tester.runAsync(() => h.qualityWriteFinished());
+      await tester.pumpAndSettle();
+      expect(tester.widget<IkSelect<String>>(menu).value, '智能均衡');
+      expect(h.qualityRequests, [AudioLevel.low]);
+      expect(h.audio.loads, hasLength(1));
+      expect(h.player.state.isPlaying, isTrue);
+      expect(h.audio.position, const Duration(seconds: 42));
+    } finally {
+      await unmount(tester, h);
+    }
   });
 
   testWidgets('U03 外部质量和外观通知刷新当前缓存表单', (tester) async {
@@ -601,6 +639,19 @@ class _QualityAudio extends IdleAudioController {
   Future<void> stop() async => _playing = false;
   @override
   Future<void> seek(Duration value) async => _position = value;
+}
+
+class _QualityBox extends Fake implements Box {
+  _QualityBox(this.box, this.write);
+  final Box box;
+  final Future<void> Function(Map<dynamic, dynamic>) write;
+  @override
+  dynamic get(dynamic key, {dynamic defaultValue}) =>
+      box.get(key, defaultValue: defaultValue);
+  @override
+  bool containsKey(dynamic key) => box.containsKey(key);
+  @override
+  Future<void> putAll(Map<dynamic, dynamic> entries) => write(entries);
 }
 
 class _Window extends WindowsWindowController {

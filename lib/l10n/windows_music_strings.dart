@@ -9,6 +9,8 @@ abstract final class WindowsMusicStrings {
   static const downloadQuality = '下载音质';
   static const keepLegacyQuality = '沿用原设置';
   static const highest = '优先最高可用';
+  static const balanced = '智能均衡';
+  static const balancedHint = '按歌曲和音源动态选择起播音质，只影响下一首';
   static const qualityHint = '实际可用档位取决于歌曲、平台与音源';
   static const appearance = '个性化设置';
   static const background = '更换背景';

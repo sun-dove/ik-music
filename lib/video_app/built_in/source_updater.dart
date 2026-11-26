@@ -49,6 +49,8 @@ class IkSourceUpdater extends ChangeNotifier {
   bool _workspaceTask = false, _workspaceLease = false;
   bool _workspaceKeepsHttp = false;
   String? message;
+  String? _maintenanceIssue;
+  String? get workspaceNotice => busy ? message : _maintenanceIssue;
 
   SourceCollection get workspaceDraft => _workspaceDraft ?? settings.value;
   bool get workspaceDirty =>
@@ -208,6 +210,8 @@ class IkSourceUpdater extends ChangeNotifier {
       throw const LxSourceException('busy', IkSourceUpdateStrings.busy);
     }
     busy = true;
+    _maintenanceIssue = null;
+    message = null;
     _activeToken = token;
     _notify();
     try {
@@ -216,6 +220,7 @@ class IkSourceUpdater extends ChangeNotifier {
       message = token.isCancelled
           ? IkSourceUpdateStrings.cancelledKeepCurrent
           : _error(error);
+      if (!token.isCancelled) _maintenanceIssue = message;
       rethrow;
     } finally {
       busy = false;
@@ -347,6 +352,7 @@ class IkSourceUpdater extends ChangeNotifier {
           failed,
           skipped,
         );
+        if (!token.isCancelled && failed > 0) _maintenanceIssue = message;
       });
 
   Future<LxSourceConfig> _update(SourceEntry entry, CancelToken token) async {
@@ -463,6 +469,7 @@ class IkSourceUpdater extends ChangeNotifier {
       skipped,
     );
     _lastBatchSucceeded = !token.isCancelled && !_disposed && failed == 0;
+    if (!token.isCancelled && failed > 0) _maintenanceIssue = message;
     if (_lastBatchSucceeded && updated + unchanged > 0) {
       await settings.preferences.box.put(
         _checkedKey,
@@ -498,8 +505,12 @@ class IkSourceUpdater extends ChangeNotifier {
       await settings.preferences.box.put(_autoKey, value);
     } catch (_) {
       message = IkSourceUpdateStrings.autoUpdateSaveFailed;
+      _maintenanceIssue = message;
       _notify();
       rethrow;
+    }
+    if (_maintenanceIssue == IkSourceUpdateStrings.autoUpdateSaveFailed) {
+      _maintenanceIssue = null;
     }
     if (!value && _automaticRunning) _activeToken?.cancel();
     _notify();

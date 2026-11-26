@@ -15,6 +15,7 @@ import 'package:mconnect/video_app/built_in/catalog_coordinator.dart';
 import 'package:mconnect/video_app/built_in/catalog_panel.dart';
 import 'package:mconnect/video_app/built_in/fixed_importer.dart';
 import 'package:mconnect/video_app/built_in/managed_settings.dart';
+import 'package:mconnect/video_app/windows/windows_music_preferences.dart';
 import 'package:mconnect/video_app/custom_source/custom_source_models.dart';
 import 'package:mconnect/video_app/lx_source/lx_source.dart';
 import 'package:mconnect/video_app/multi_source/source_collection.dart';
@@ -494,6 +495,45 @@ void main() {
     expect(settings.value.autoSwitch, isFalse);
     expect(settings.value.highestQuality, isTrue);
     coordinator.resumePublishing();
+  });
+
+  test('B02 重新打开恢复智能均衡、保留各平台旧固定档与独立下载音质', () async {
+    final box = _Box();
+    final legacy = VideoPreferences(box);
+    await legacy.setQuality(PlatformType.qq, AudioLevel.high);
+    final sources = IkManagedSourceSettings(legacy, enableSmartBalanced: true)
+      ..load();
+    final quality = IkManagedMusicPreferences(legacy, sources: sources)..load();
+    await quality.setQuality(AudioLevel.hires, download: true);
+    expect(quality.qualityLabel(), '沿用原设置');
+    await quality.setSmartBalanced(true);
+    final reopenedSources = IkManagedSourceSettings(
+      legacy,
+      enableSmartBalanced: true,
+    )..load();
+    final reopened = IkManagedMusicPreferences(legacy, sources: reopenedSources)
+      ..load();
+    expect(reopened.qualityLabel(), '智能均衡');
+    expect(reopened.quality(PlatformType.qq), AudioLevel.high);
+    expect(reopened.quality(PlatformType.netease), AudioLevel.low);
+    expect(reopened.quality(PlatformType.qq, download: true), AudioLevel.hires);
+    expect(reopened.qualityLabel(download: true), AudioLevel.hires.displayName);
+    expect(reopenedSources.userPolicyTouched, isTrue);
+    await reopenedSources.persist(
+      reopenedSources.value.copyWith(highestQuality: true),
+      reopenedSources.managed,
+    );
+    expect(reopened.smartBalanced, isTrue);
+    box.fail = true;
+    await expectLater(
+      reopened.setQuality(AudioLevel.high),
+      throwsA(isA<DesktopConfigurationException>()),
+    );
+    expect(reopened.smartBalanced, isTrue);
+    box.fail = false;
+    await reopened.setQuality(AudioLevel.high);
+    expect(reopened.smartBalanced, isFalse);
+    expect(reopened.quality(PlatformType.qq, download: true), AudioLevel.hires);
   });
 
   testWidgets('S16 完整20项真实状态可展开且离线重试入口可达', (tester) async {

@@ -118,7 +118,7 @@ const _track = Song(
 void main() {
   final binding = _SemanticsBinding();
   late Directory scratch;
-  late AppDatabase suiteDb;
+  late _SemanticsDatabase suiteDb;
   late Box<dynamic> settings;
   late Zone ioZone;
   final lyricsCalls = <MethodCall>[];
@@ -132,7 +132,7 @@ void main() {
     for (final name in ['local_music', 'listening_stats', 'smart_playlists']) {
       await Hive.openBox<dynamic>(name);
     }
-    suiteDb = AppDatabase.forTesting(NativeDatabase.memory());
+    suiteDb = _SemanticsDatabase();
     initializeApplicationDatabase(suiteDb);
     await suiteDb.customSelect('SELECT 1').get();
     final messenger = binding.defaultBinaryMessenger;
@@ -161,6 +161,8 @@ void main() {
       await Hive.box<dynamic>(name).clear();
     }
     // 数据库单例仅初始化一次；每个场景清空本门真实内存SQLite的全部表。
+    // 历史 DAO 的写队列会记住注册回调的测试时钟，不能跨场景复用。
+    suiteDb.scenarioHistory = HistoryDao(suiteDb);
     await suiteDb.transaction(() async {
       for (final table in suiteDb.allTables.toList().reversed) {
         await suiteDb.delete(table).go();
@@ -837,7 +839,8 @@ void main() {
               await tester.runAsync(
                 () => app.container
                     .read(historyProvider.notifier)
-                    .recordListen(_track),
+                    .recordListen(_track)
+                    .timeout(const Duration(seconds: 8)),
               );
               await _rootDrain(tester, binding.trace);
             }
@@ -4185,6 +4188,14 @@ void _dumpMarkers(WidgetTester tester, _TreeTrace trace) {
   debugPrint(
     'IK_SEMANTICS_MARKERS ${jsonEncode({'step': trace.step, 'batch': trace.batches.length, 'markers': markers})}',
   );
+}
+
+class _SemanticsDatabase extends AppDatabase {
+  _SemanticsDatabase() : super.forTesting(NativeDatabase.memory());
+
+  late HistoryDao scenarioHistory;
+  @override
+  HistoryDao get historyDao => scenarioHistory;
 }
 
 class _RootHarness {

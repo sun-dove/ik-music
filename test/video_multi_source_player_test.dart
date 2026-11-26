@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mconnect/video_app/multi_source/balanced_source_planner.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:mconnect/core/platform/platform_utils.dart';
 import 'package:mconnect/features/player/data/playback_keep_alive_service.dart';
@@ -25,6 +26,97 @@ const song = Song(
 );
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  for (final playable in [
+    AudioLevel.lossless,
+    AudioLevel.high,
+    AudioLevel.low,
+  ]) {
+    test('智能均衡首听：尽早试到${playable.name}，真实起播后不再追高', () async {
+      final audio = _ProgressAudio();
+      final calls = <String>[];
+      final player = MultiSourceVideoPlayerNotifier(
+        settings: _quickSourceSettings(),
+        smartBalancedEnabled: () => true,
+        balancedPlanner: BalancedSourcePlanner(),
+        router: PreparedSourceRouter(
+          platformResolver: (_) => QqPlatform(),
+          fixedQuality: (_) => AudioLevel.low,
+        ),
+        quickSourceRecovery: true,
+        resolve: (_, candidate, _) async {
+          calls.add('${candidate.name}:${candidate.quality.name}');
+          if (candidate.official || candidate.quality != playable) {
+            throw const SourceFailure('unavailable', '此档不可用');
+          }
+          return ResolvedSource(candidate, Uri.parse('https://example.com/ok'));
+        },
+        audioController: audio,
+        audioControllerFactory: () => audio,
+        notificationController: const NoopPlaybackNotificationController(),
+        keepAliveController: const NoopPlaybackKeepAliveController(),
+      );
+      addTearDown(player.dispose);
+      await player.playSong(song);
+      audio.tick(const Duration(milliseconds: 240));
+      await Future<void>.delayed(Duration.zero);
+      expect(player.state.position, const Duration(milliseconds: 240));
+      expect(calls, [
+        'A:lossless',
+        if (playable != AudioLevel.lossless) 'A:high',
+        if (playable == AudioLevel.low) 'A:low',
+      ]);
+      expect(audio.playCalls, 1);
+      calls.clear();
+      await player.playSong(song);
+      expect(calls, ['A:${playable.name}']);
+    });
+  }
+  test('智能均衡不将仅加载、拖动、暂停后的进度或取消的旧媒体记为命中', () async {
+    final audio = _ProgressAudio();
+    final requests = <AudioLevel>[];
+    final player = MultiSourceVideoPlayerNotifier(
+      settings: _quickSourceSettings(),
+      balancedPlanner: BalancedSourcePlanner(),
+      smartBalancedEnabled: () => true,
+      preservePlaybackOnSettingsChange: true,
+      quickSourceRecovery: true,
+      router: PreparedSourceRouter(
+        platformResolver: (_) => QqPlatform(),
+        fixedQuality: (_) => AudioLevel.low,
+      ),
+      resolve: (_, candidate, _) async {
+        requests.add(candidate.quality);
+        if (candidate.quality != AudioLevel.low) {
+          throw const SourceFailure('unavailable', '不可用');
+        }
+        return ResolvedSource(candidate, Uri.parse('https://example.com/ok'));
+      },
+      audioController: audio,
+      audioControllerFactory: () => audio,
+      notificationController: const NoopPlaybackNotificationController(),
+      keepAliveController: const NoopPlaybackKeepAliveController(),
+    );
+    addTearDown(player.dispose);
+    for (final action in ['load', 'seek', 'pause', 'cancel']) {
+      requests.clear();
+      await player.playSong(song);
+      expect(requests.first, AudioLevel.lossless, reason: action);
+      switch (action) {
+        case 'seek':
+          await player.seek(const Duration(seconds: 37));
+        case 'pause':
+          await player.pause();
+          audio.tick(const Duration(seconds: 40));
+        case 'cancel':
+          player.cancelSourceAttempts();
+          audio.tick(const Duration(seconds: 45));
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    requests.clear();
+    await player.playSong(song);
+    expect(requests.first, AudioLevel.lossless);
+  });
   test('实际播放器在A地址加载失败后播放B，不重新请求标准档', () async {
     final settings = SourceSettings(VideoPreferences(_Box()));
     var collection = const SourceCollection(
@@ -529,4 +621,17 @@ class _LongPlayAudio extends _Audio {
     _finishPlay();
     await super.dispose();
   }
+}
+
+class _ProgressAudio extends _Audio {
+  final positions = StreamController<Duration>.broadcast();
+  @override
+  Stream<Duration> get positionStream => positions.stream;
+  void tick(Duration value) {
+    seekPosition = value;
+    positions.add(value);
+  }
+
+  @override
+  Future<void> seek(Duration position) async => tick(position);
 }

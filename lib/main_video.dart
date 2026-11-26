@@ -69,6 +69,7 @@ import 'video_app/built_in/managed_settings.dart';
 import 'video_app/built_in/source_updater.dart';
 import 'video_app/built_in/local_lx_source_bridge.dart';
 import 'video_app/multi_source/source_candidates_v3.dart';
+import 'video_app/multi_source/balanced_source_planner.dart';
 import 'video_app/playback/video_platforms.dart';
 import 'video_app/playback/video_stream_state.dart';
 import 'video_app/video_app.dart';
@@ -105,7 +106,13 @@ Future<void> main() async {
   final preferences = VideoPreferences(settings);
   await preferences.loadCustomSource();
   await preferences.loadLxSource();
-  final sourceSettings = IkManagedSourceSettings(preferences);
+  final useBalancedPlayback =
+      PlatformUtils.isWindows || PlatformUtils.isAndroid;
+  final balancedPlanner = useBalancedPlayback ? BalancedSourcePlanner() : null;
+  final sourceSettings = IkManagedSourceSettings(
+    preferences,
+    enableSmartBalanced: useBalancedPlayback,
+  );
   sourceSettings.load();
   late VideoQqPlaybackApi qqApi;
   final kugouCatalog = VideoKugouCatalog();
@@ -184,6 +191,7 @@ Future<void> main() async {
     fixedQuality: effectiveQuality,
   );
   final streamInfos = <String, VideoStreamInfo>{};
+  final balancedEvidenceKey = Object();
   final sourceService = MultiSourceService(
     platformResolver: PlatformRegistry.get,
     engine: sourceEngine,
@@ -195,7 +203,9 @@ Future<void> main() async {
           ? qqApi.withCancellation(token, request)
           : request();
     },
-    streamInfo: (song) => streamInfos['${song.platform.name}:${song.id}'],
+    streamInfo: (song) =>
+        ((Zone.current[balancedEvidenceKey] as Map<String, VideoStreamInfo>?) ??
+        streamInfos)['${song.platform.name}:${song.id}'],
   );
   const customSourceCredentials = SecureCustomSourceCredentialStore();
   final customSourceDio = Dio();
@@ -314,6 +324,8 @@ Future<void> main() async {
       ),
       playerProvider.overrideWith(
         (ref) => IkCatalogPlayerNotifier(
+          balancedPlanner: balancedPlanner,
+          smartBalancedEnabled: () => sourceSettings.smartBalanced,
           preservePlaybackOnSettingsChange: PlatformUtils.isWindows,
           quickSourceRecovery:
               PlatformUtils.isWindows || PlatformUtils.isAndroid,
@@ -324,7 +336,15 @@ Future<void> main() async {
           catalogCoordinator: catalogCoordinator,
           settings: sourceSettings,
           router: sourceRouter,
-          resolve: sourceService.resolve,
+          resolve: (song, candidate, token) =>
+              sourceSettings.smartBalanced && candidate.official
+              ? runZoned(
+                  () => sourceService.resolve(song, candidate, token),
+                  zoneValues: {
+                    balancedEvidenceKey: <String, VideoStreamInfo>{},
+                  },
+                )
+              : sourceService.resolve(song, candidate, token),
           onProgress: (value) =>
               ref.read(sourcePlaybackViewProvider.notifier).state = value,
           legacyFallback: playbackCustomSourceFallback,
@@ -338,7 +358,11 @@ Future<void> main() async {
     ],
   );
   void onResolved(VideoStreamInfo info) {
-    streamInfos['${info.platform.name}:${info.songId}'] = info;
+    final key = '${info.platform.name}:${info.songId}';
+    final evidence =
+        Zone.current[balancedEvidenceKey] as Map<String, VideoStreamInfo>?;
+    evidence?[key] = info;
+    streamInfos[key] = info;
     container
         .read(videoStreamInfoProvider.notifier)
         .update(
@@ -347,6 +371,17 @@ Future<void> main() async {
   }
 
   final auth = container.read(authProvider.notifier) as VideoAuthNotifier;
+  if (balancedPlanner != null) {
+    auth.personalDailyAuthChanges.addListener(balancedPlanner.clear);
+    container.listen(authProvider, (previous, next) {
+      if (PlatformType.musicServices.any(
+        (platform) =>
+            previous?.userFor(platform)?.id != next.userFor(platform)?.id,
+      )) {
+        balancedPlanner.clear();
+      }
+    });
+  }
   customSourceResolved = (song, result) => container
       .read(videoStreamInfoProvider.notifier)
       .update(
