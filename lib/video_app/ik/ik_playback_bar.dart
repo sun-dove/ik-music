@@ -5,6 +5,7 @@ import '../../features/floating_lyrics/presentation/providers/floating_lyrics_pr
 import '../../features/library/presentation/providers/likes_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../l10n/ik_contextual_error_strings.dart';
+import '../../l10n/ik_playback_notice_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_runtime_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
@@ -15,6 +16,7 @@ import 'ik_floating_lyrics.dart';
 import 'ik_lyrics_action.dart';
 import 'ik_like_action.dart';
 import 'ik_playback_lyrics.dart';
+import 'ik_playback_notice.dart';
 import 'ik_queue_sheet.dart';
 import 'ik_user_gain.dart';
 import 'ik_runtime.dart';
@@ -95,6 +97,43 @@ class IkPlaybackBar extends ConsumerWidget {
     final likes = ref.watch(likesProvider);
     final likeAction = ref.watch(ikLikeActionProvider);
     final gain = ref.watch(ikUserGainProvider);
+    final source = balancedLayout && contextualErrors
+        ? ref.watch(sourcePlaybackViewProvider)
+        : null;
+    final showCompactFailure = source != null &&
+        (player.error?.isNotEmpty ?? false) &&
+        !player.isPlaying &&
+        !player.isTransitioning &&
+        !source.busy;
+    final reset = player.error == IkContextualErrorStrings.playerResetReason;
+    final canContinue = !reset &&
+        source?.canContinue == true &&
+        notifier is MultiSourceVideoPlayerNotifier;
+    final compactNotice = !showCompactFailure
+        ? null
+        : IkPlaybackNotice(
+            key: ValueKey(
+              'ik-notice-${song?.platform.name}-${song?.id}-${player.error}',
+            ),
+            title: reset
+                ? IkContextualErrorStrings.playbackRecoveryIncomplete
+                : canContinue
+                ? IkPlaybackNoticeStrings.pending
+                : IkPlaybackNoticeStrings.failed,
+            reason: player.error!,
+            details: source!.details,
+            actionLabel: canContinue
+                ? IkPlaybackNoticeStrings.continueTrying
+                : reset
+                ? IkContextualErrorStrings.replay
+                : IkRuntimeStrings.retry,
+            onAction: canContinue
+                ? () => (notifier as MultiSourceVideoPlayerNotifier)
+                    .continueSources()
+                : song == null
+                ? null
+                : () => notifier.playSong(song),
+          );
     final liked =
         song != null &&
         likes.songs.any(
@@ -372,10 +411,12 @@ class IkPlaybackBar extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: toolButtons,
     );
+    final toolTextSize = MediaQuery.textScalerOf(context).scale(14);
+    final toolButtonWidth = (toolTextSize + 32).clamp(48.0, 100.0).toDouble();
+    final toolButtonHeight = (toolTextSize * 1.5 + 20).clamp(48.0, 100.0).toDouble();
+    final roomyToolsWidth = 144 + toolButtons.length * toolButtonWidth +
+        toolButtons.length * 12;
     Widget roomyTools() {
-      final textSize = MediaQuery.textScalerOf(context).scale(14);
-      final buttonWidth = (textSize + 32).clamp(48.0, 100.0).toDouble();
-      final buttonHeight = (textSize * 1.5 + 20).clamp(48.0, 100.0).toDouble();
       return Wrap(
         alignment: WrapAlignment.end,
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -384,30 +425,26 @@ class IkPlaybackBar extends ConsumerWidget {
         children: [
           volumeControl(width: 144),
           for (final button in toolButtons)
-            SizedBox(width: buttonWidth, height: buttonHeight, child: button),
+            SizedBox(width: toolButtonWidth, height: toolButtonHeight, child: button),
         ],
       );
     }
-    Widget leftSongAndLyrics() {
-      if (!inlineLyrics || song == null) {
-        return Align(
-          alignment: Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 328),
-            child: title,
-          ),
-        );
-      }
+    Widget leftSongAndLyrics({Widget? playbackNotice}) {
       final currentSong = song;
       return LayoutBuilder(
         builder: (context, size) {
           final textScaler = MediaQuery.textScalerOf(context);
           final scale = textScaler.scale(13) / 13;
           double measure(String text, TextStyle style) {
+            var effectiveStyle = DefaultTextStyle.of(context).style.merge(style);
+            if (MediaQuery.boldTextOf(context)) {
+              effectiveStyle = effectiveStyle.copyWith(fontWeight: FontWeight.bold);
+            }
             final painter = TextPainter(
-              text: TextSpan(text: text, style: style),
+              text: TextSpan(text: text, style: effectiveStyle),
               textDirection: Directionality.of(context),
               textScaler: textScaler,
+              locale: Localizations.maybeLocaleOf(context),
               maxLines: 1,
             )..layout();
             final width = painter.width;
@@ -415,57 +452,71 @@ class IkPlaybackBar extends ConsumerWidget {
             return width;
           }
           final nameWidth = measure(
-            currentSong.name,
+            currentSong?.name ?? IkWorkspaceStrings.noTrack,
             const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
           );
-          final artistWidth = measure(
-            currentSong.artistNames,
-            const TextStyle(fontSize: 12),
-          );
+          final artistWidth = currentSong == null
+              ? 0.0
+              : measure(currentSong.artistNames, const TextStyle(fontSize: 12));
           final textWidth = nameWidth > artistWidth ? nameWidth : artistWidth;
-          final minimumSongWidth = 68 + 72 * scale;
-          final songWidth = (68 + textWidth)
-              .clamp(minimumSongWidth, 68 + 148 * scale).toDouble();
-          final lyric = IkPlaybackLyrics(
-            key: ValueKey('ik-bar-lyrics-${currentSong.platform.name}-${currentSong.id}'),
-            position: player.position,
-            isPlaying: player.isPlaying,
-            isTransitioning: player.isTransitioning,
-            compact: true,
-            onOpen: onOpen,
+          final heartWidth = likeButton == null ? 0.0 : 40.0;
+          final heartGap = likeButton == null ? 0.0 : 6.0;
+          final naturalSongWidth = 64 + textWidth.ceilToDouble();
+          final maximumSongWidth = (size.maxWidth - heartWidth - heartGap)
+              .clamp(64.0, 64 + 148 * scale).toDouble();
+          final songWidth = naturalSongWidth < maximumSongWidth
+              ? naturalSongWidth : maximumSongWidth;
+          final songGroup = Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(width: songWidth, child: songInformation),
+              if (likeButton != null) ...[
+                SizedBox(width: heartGap),
+                SizedBox(width: heartWidth, height: 40, child: likeButton),
+              ],
+            ],
           );
-          final inlineMinimum = minimumSongWidth + 48 + 12 + 120 * scale;
-          if (size.maxWidth >= inlineMinimum) {
-            final availableSongWidth = size.maxWidth - 48 - 12 - 120 * scale;
+          final Widget? supplement = playbackNotice ??
+              (inlineLyrics && currentSong != null
+                  ? IkPlaybackLyrics(
+                      key: ValueKey('ik-bar-lyrics-${currentSong.platform.name}-${currentSong.id}'),
+                      position: player.position,
+                      isPlaying: player.isPlaying,
+                      isTransitioning: player.isTransitioning,
+                      compact: true,
+                      onOpen: onOpen,
+                    )
+                  : null);
+          if (supplement == null) {
+            return Align(alignment: Alignment.centerLeft, child: songGroup);
+          }
+          final supplementLimit = 260 * scale.clamp(1.0, 1.35);
+          final availableSupplement = size.maxWidth - songWidth - heartWidth - heartGap - 12;
+          final supplementMinimum = (playbackNotice == null ? 120 : 160) * scale;
+          if (availableSupplement >= supplementMinimum) {
             return Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                SizedBox(
-                  width: songWidth < availableSongWidth
-                      ? songWidth : availableSongWidth,
-                  child: songInformation,
-                ),
+                songGroup,
                 const SizedBox(width: 12),
-                Expanded(child: lyric),
-                if (likeButton != null)
-                  SizedBox(width: 48, child: likeButton),
+                SizedBox(
+                  width: availableSupplement < supplementLimit
+                      ? availableSupplement : supplementLimit.toDouble(),
+                  child: supplement,
+                ),
               ],
             );
           }
           return Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Align(
-                alignment: Alignment.centerLeft,
-                child: SizedBox(width: songWidth, child: songInformation),
-              ),
+              songGroup,
               const SizedBox(height: 4),
-              Row(
-                children: [
-                  Expanded(child: lyric),
-                  if (likeButton != null)
-                    SizedBox(width: 48, child: likeButton),
-                ],
+              SizedBox(
+                width: size.maxWidth < supplementLimit
+                    ? size.maxWidth : supplementLimit.toDouble(),
+                child: supplement,
               ),
             ],
           );
@@ -499,9 +550,9 @@ class IkPlaybackBar extends ConsumerWidget {
                 likeAction.issue!,
                 style: TextStyle(fontSize: 12, color: scheme.error),
               ),
-            if (contextualErrors && (player.error?.isNotEmpty ?? false))
-              _errorNotice(context, player, notifier,
-                canContinue: balancedLayout && ref.watch(sourcePlaybackViewProvider).canContinue)
+            if (contextualErrors && !balancedLayout &&
+                (player.error?.isNotEmpty ?? false))
+              _errorNotice(context, player, notifier)
             else if (!contextualErrors && player.error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 6),
@@ -516,67 +567,67 @@ class IkPlaybackBar extends ConsumerWidget {
               builder: (context, size) {
                 final scale = MediaQuery.textScalerOf(context).scale(14) / 14;
                 if (balancedLayout) {
-                  final centerWidth = 264.0;
-                  final leftMinimum = 128 + 192 * scale;
-                  final sideMinimum = leftMinimum > 348 ? leftMinimum : 348.0;
-                  final wide = size.maxWidth >=
-                      centerWidth + 48 + sideMinimum * 2;
+                  final sideMinimum = roomyToolsWidth + 24;
+                  final centerWidth = (size.maxWidth - 48 - sideMinimum * 2)
+                      .clamp(0.0, 680.0).toDouble();
+                  if (centerWidth >= 360) {
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(child: leftSongAndLyrics(playbackNotice: compactNotice)),
+                        const SizedBox(width: 24),
+                        SizedBox(
+                          key: const ValueKey('ik-bar-centered-controls'),
+                          width: centerWidth,
+                          child: controls,
+                        ),
+                        const SizedBox(width: 24),
+                        Expanded(child: roomyTools()),
+                      ],
+                    );
+                  }
+                  final sideBySide = size.maxWidth >=
+                      roomyToolsWidth + 20 + 280 * scale;
+                  final responsiveControls = size.maxWidth >= 240
+                      ? controls
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: transportButtons,
+                            ),
+                            progress,
+                          ],
+                        );
                   return Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      if (wide)
+                      if (sideBySide)
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
-                            Expanded(child: leftSongAndLyrics()),
-                            const SizedBox(width: 24),
-                            SizedBox(
-                              key: const ValueKey('ik-bar-centered-controls'),
-                              width: centerWidth,
-                              child: transport,
-                            ),
-                            const SizedBox(width: 24),
-                            Expanded(child: roomyTools()),
+                            Expanded(child: leftSongAndLyrics(playbackNotice: compactNotice)),
+                            const SizedBox(width: 20),
+                            SizedBox(width: roomyToolsWidth, child: roomyTools()),
                           ],
                         )
                       else ...[
-                    if (size.maxWidth >= 760 * scale)
-                          Row(
-                            children: [
-                              Expanded(child: leftSongAndLyrics()),
-                              const SizedBox(width: 20),
-                              SizedBox(width: 348, child: roomyTools()),
-                            ],
-                          )
-                        else ...[
-                          leftSongAndLyrics(),
-                          const SizedBox(height: 6),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: roomyTools(),
-                          ),
-                        ],
-                        const SizedBox(height: 4),
+                        leftSongAndLyrics(playbackNotice: compactNotice),
+                        const SizedBox(height: 6),
                         Align(
-                          alignment: Alignment.center,
-                          child: SizedBox(
-                            key: const ValueKey('ik-bar-centered-controls'),
-                            width: centerWidth,
-                            child: size.maxWidth >= 240
-                                ? transport
-                                : Wrap(
-                                    alignment: WrapAlignment.center,
-                                    crossAxisAlignment: WrapCrossAlignment.center,
-                                    children: transportButtons,
-                                  ),
-                          ),
+                          alignment: Alignment.centerRight,
+                          child: roomyTools(),
                         ),
                       ],
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Align(
                         alignment: Alignment.center,
                         child: ConstrainedBox(
+                          key: const ValueKey('ik-bar-centered-controls'),
                           constraints: const BoxConstraints(maxWidth: 680),
-                          child: SizedBox(width: double.infinity, child: progress),
+                          child: SizedBox(width: double.infinity, child: responsiveControls),
                         ),
                       ),
                     ],
