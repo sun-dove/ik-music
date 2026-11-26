@@ -2,6 +2,32 @@ import 'package:flutter/material.dart';
 
 import 'source_updater.dart';
 
+class IkSourceWorkspaceScope extends StatefulWidget {
+  const IkSourceWorkspaceScope({super.key, required this.updater, required this.child});
+  final IkSourceUpdater updater;
+  final Widget child;
+
+  @override
+  State<IkSourceWorkspaceScope> createState() => _IkSourceWorkspaceScopeState();
+}
+
+class _IkSourceWorkspaceScopeState extends State<IkSourceWorkspaceScope> {
+  @override
+  void initState() {
+    super.initState();
+    widget.updater.openWorkspace();
+  }
+
+  @override
+  void dispose() {
+    widget.updater.closeWorkspace();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
 class IkSourceUpdatePanel extends StatelessWidget {
   const IkSourceUpdatePanel({super.key, required this.updater});
   final IkSourceUpdater updater;

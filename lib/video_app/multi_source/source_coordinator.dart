@@ -195,6 +195,7 @@ class SourceSession {
     this.exclusions = const [],
     this.budget = const Duration(seconds: 45),
     this.resolveTimeout = const Duration(seconds: 15),
+    this.skipUnreachableSources = false,
     DateTime Function()? now,
   }) : _now = now ?? DateTime.now {
     renewBudget();
@@ -205,6 +206,7 @@ class SourceSession {
   final List<String> exclusions;
   final Duration budget;
   final Duration resolveTimeout;
+  final bool skipUnreachableSources;
   final DateTime Function() _now;
   late DateTime _deadline;
   final List<SourceAttempt> attempts = [];
@@ -265,7 +267,18 @@ class SourceSession {
         final failure = sourceFailure(error);
         attempt.stage = _cancelled ? SourceStage.cancelled : SourceStage.failed;
         attempt.message = failure.message;
-        if (failure.sourceWide) _unavailable.add(candidate.id);
+        if (failure.sourceWide ||
+            (skipUnreachableSources &&
+                const {
+                  'network',
+                  'timeout',
+                  'requestTimeout',
+                  'serverError',
+                  'sourceUnavailable',
+                  'rateLimited',
+                }.contains(failure.code))) {
+          _unavailable.add(candidate.id);
+        }
         if (failure.fatal) _fatal = true;
       } finally {
         token.cancel(SourceStrings.resolutionEnded);

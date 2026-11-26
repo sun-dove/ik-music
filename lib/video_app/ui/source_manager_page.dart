@@ -1,6 +1,7 @@
 import '../../l10n/expanded_strings.dart';
 
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -33,6 +34,14 @@ class SourceManagerPage extends StatefulWidget {
     this.onUpdateAll,
     this.onUpdateEntry,
     this.updateStatus,
+    this.keepBackgroundDraft = false,
+    this.backgroundBusy = false,
+    this.backgroundDirty = false,
+    this.onDraftChanged,
+    this.onBackgroundCheck,
+    this.onBackgroundUpdateAll,
+    this.onBackgroundUpdateEntry,
+    this.onCancelBackground,
   });
   final SourceCollection initial;
   final Future<LxSourceConfig> Function(String, CancelToken) onImport;
@@ -51,6 +60,11 @@ class SourceManagerPage extends StatefulWidget {
       onUpdateAll;
   final Future<LxSourceConfig> Function(SourceEntry, CancelToken)? onUpdateEntry;
   final String? Function(SourceEntry)? updateStatus;
+  final bool keepBackgroundDraft, backgroundBusy, backgroundDirty;
+  final ValueChanged<SourceCollection>? onDraftChanged;
+  final Future<void> Function(SourceCollection)? onBackgroundCheck, onBackgroundUpdateAll;
+  final Future<void> Function(SourceEntry)? onBackgroundUpdateEntry;
+  final VoidCallback? onCancelBackground;
   @override
   State<SourceManagerPage> createState() => _SourceManagerPageState();
 }
@@ -75,6 +89,16 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   bool _enabledOnly = false, _busy = false, _leaving = false;
   String? _message, _runningId;
   bool get _dirty => jsonEncode(_value.toJson()) != _saved;
+  bool get _operationBusy => _busy || widget.backgroundBusy;
+
+  @override
+  void setState(VoidCallback fn) {
+    final before = _value;
+    super.setState(fn);
+    if (widget.keepBackgroundDraft && !identical(before, _value)) {
+      widget.onDraftChanged?.call(_value);
+    }
+  }
   bool get _filtered =>
       _search.text.trim().isNotEmpty || _platform != 'all' || _enabledOnly;
   List<SourceEntry> get _visible => _value.entries
@@ -98,6 +122,9 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   @override
   void didUpdateWidget(covariant SourceManagerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.keepBackgroundDraft && !identical(widget.initial, _value)) {
+      _value = widget.initial;
+    }
     if (oldWidget.modernPolicyMenu != widget.modernPolicyMenu ||
         oldWidget.embedded != widget.embedded) {
       _bindWorkspaceNavigation();
@@ -128,7 +155,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   }
 
   Future<void> _run(Future<void> Function(CancelToken) work) async {
-    if (_busy) return;
+    if (_operationBusy) return;
     final token = CancelToken();
     _token = token;
     setState(() {
@@ -152,7 +179,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
   }
 
   Future<bool> _save() async {
-    if (_busy) return false;
+    if (_operationBusy) return false;
     var saved = false;
     await _run((_) async {
       try {
@@ -184,6 +211,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       }
       return false;
     }
+    if (widget.keepBackgroundDraft) return true;
     if (!_dirty) return true;
     final choice = await showDialog<String>(
       context: context,
@@ -424,7 +452,9 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       case _SourceAction.inspect:
         await _inspect([entry]);
       case _SourceAction.update:
-        if (widget.onUpdateEntry != null) {
+        if (widget.onBackgroundUpdateEntry != null) {
+          unawaited(widget.onBackgroundUpdateEntry!(entry));
+        } else if (widget.onUpdateEntry != null) {
           await _updateEntry(entry);
         } else {
           await _import(entry.config.origin.toString());
@@ -1112,7 +1142,8 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
       ),
     );
     return PopScope(
-      canPop: !_policyMenu.isOpen && (_leaving || (!_dirty && !_busy)),
+      canPop: !_policyMenu.isOpen &&
+          (_leaving || (!(_dirty && !widget.keepBackgroundDraft) && !_busy)),
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _return();
       },
@@ -1162,7 +1193,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
             const SizedBox(width: 12),
             FilledButton.icon(
               key: const ValueKey('manager-save'),
-              onPressed: _busy ? null : _save,
+              onPressed: _operationBusy ? null : _save,
               icon: const Icon(Icons.check_rounded, size: 18),
               label: const Text(ExpandedStrings.saveSettings),
             ),
@@ -1174,17 +1205,19 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
           runSpacing: 8,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            if (widget.onCheckUpdates != null)
+            if (widget.onCheckUpdates != null || widget.onBackgroundCheck != null)
               OutlinedButton.icon(
                 key: const ValueKey('manager-check-updates'),
-                onPressed: _busy ? null : _checkUpdates,
+                onPressed: _operationBusy ? null : widget.onBackgroundCheck == null
+                    ? _checkUpdates : () => unawaited(widget.onBackgroundCheck!(_value)),
                 icon: const Icon(Icons.refresh_rounded, size: 17),
                 label: const Text(IkSourceWorkspaceStrings.checkUpdates),
               ),
-            if (widget.onUpdateAll != null)
+            if (widget.onUpdateAll != null || widget.onBackgroundUpdateAll != null)
               OutlinedButton.icon(
                 key: const ValueKey('manager-update-all'),
-                onPressed: _busy ? null : _updateAll,
+                onPressed: _operationBusy ? null : widget.onBackgroundUpdateAll == null
+                    ? _updateAll : () => unawaited(widget.onBackgroundUpdateAll!(_value)),
                 icon: const Icon(Icons.system_update_alt_rounded, size: 17),
                 label: const Text(IkSourceWorkspaceStrings.updateAll),
               ),
@@ -1193,14 +1226,19 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
               icon: const Icon(Icons.settings_ethernet_rounded, size: 17),
               label: const Text(ExpandedStrings.httpSettings),
             ),
-            if (_busy)
+            if (_operationBusy)
               TextButton.icon(
-                onPressed: () => _token?.cancel(),
+                onPressed: () {
+                  _token?.cancel();
+                  widget.onCancelBackground?.call();
+                },
                 icon: const Icon(Icons.close_rounded, size: 17),
                 label: const Text(ExpandedStrings.cancelOperation),
               ),
             Text(
-              _dirty ? ExpandedStrings.dirty : ExpandedStrings.settingsSaved,
+              widget.keepBackgroundDraft
+                  ? widget.backgroundDirty ? '草稿已保留，保存后生效' : ExpandedStrings.settingsSaved
+                  : _dirty ? ExpandedStrings.dirty : ExpandedStrings.settingsSaved,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: _dirty
                     ? theme.colorScheme.primary
@@ -1216,9 +1254,9 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
               child: TextField(
                 key: const ValueKey('manager-import-link'),
                 controller: _link,
-                enabled: !_busy,
+                enabled: !_operationBusy,
                 keyboardType: TextInputType.url,
-                onSubmitted: _busy ? null : (_) => _import(),
+                onSubmitted: _operationBusy ? null : (_) => _import(),
                 decoration: InputDecoration(
                   hintText: IkSourceWorkspaceStrings.scriptLink,
                   prefixIcon: const Icon(Icons.link_rounded, size: 19),
@@ -1235,7 +1273,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
             const SizedBox(width: 10),
             OutlinedButton(
               key: const ValueKey('manager-import'),
-              onPressed: _busy ? null : () => _import(),
+              onPressed: _operationBusy ? null : () => _import(),
               child: const Text(IkSourceWorkspaceStrings.importLink),
             ),
           ],
@@ -1327,7 +1365,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
             const SizedBox(width: 8),
             TextButton(
               key: const ValueKey('manager-inspect-all'),
-              onPressed: _busy || entries.isEmpty
+              onPressed: _operationBusy || entries.isEmpty
                   ? null
                   : () => _inspect(entries),
               child: const Text(ExpandedStrings.inspectList),
@@ -1382,7 +1420,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    entry.config.origin.host,
+                    entry.config.origin.scheme == 'file' ? '本机 LX 导入' : entry.config.origin.host,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -1453,7 +1491,7 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
         ExpandedStrings.inspect,
         Icons.fact_check_outlined,
       ),
-      if (widget.onUpdateEntry != null)
+      if (widget.onUpdateEntry != null || widget.onBackgroundUpdateEntry != null)
         _sourceMenuAction(
           entry,
           _SourceAction.update,
@@ -1507,7 +1545,10 @@ class _SourceManagerPageState extends State<SourceManagerPage> {
     bool enabled = true,
     bool selected = false,
   }) => MenuItemButton(
-    onPressed: _busy || !enabled ? null : () => _action(entry, action),
+    onPressed: _busy || !enabled ||
+            (widget.backgroundBusy &&
+                (action == _SourceAction.update || action == _SourceAction.inspect))
+        ? null : () => _action(entry, action),
     leadingIcon: Icon(icon, size: 18),
     trailingIcon: selected ? const Icon(Icons.check_rounded, size: 17) : null,
     child: Text(label),

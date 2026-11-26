@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -19,6 +20,7 @@ class IkSourceUpdater extends ChangeNotifier {
     required this.coordinator,
     required this.engine,
     required this.isResolving,
+    this.isLocalImportBusy,
     IkSourceUpdateFetcher? fetcher,
   }) : fetcher = fetcher ?? IkSourceUpdateFetcher();
 
@@ -29,6 +31,7 @@ class IkSourceUpdater extends ChangeNotifier {
   final LxSourceEngine engine;
   final IkSourceUpdateFetcher fetcher;
   final bool Function() isResolving;
+  final bool Function()? isLocalImportBusy;
   IkManagedSourceSettings get settings => coordinator.settings;
   final _statuses = <String, String>{};
   final _fetched = <String, IkFetchedSourceUpdate>{};
@@ -39,7 +42,127 @@ class IkSourceUpdater extends ChangeNotifier {
   String? _catalogError;
   bool _disposed = false, busy = false;
   bool _lastBatchSucceeded = false;
+  SourceCollection? _workspaceDraft;
+  String? _workspaceBaseline;
+  int _workspaceViews = 0;
+  bool _workspaceTask = false, _workspaceLease = false;
+  bool _workspaceKeepsHttp = false;
   String? message;
+
+  SourceCollection get workspaceDraft => _workspaceDraft ?? settings.value;
+  bool get workspaceDirty => _workspaceDraft != null &&
+      jsonEncode(_workspaceDraft!.toJson()) != _workspaceBaseline;
+
+  void openWorkspace() {
+    _workspaceViews++;
+    _workspaceDraft ??= settings.value;
+    _workspaceBaseline ??= jsonEncode(settings.value.toJson());
+    _syncWorkspaceLease();
+  }
+
+  void closeWorkspace() {
+    if (_workspaceViews > 0) _workspaceViews--;
+    _syncWorkspaceLease();
+  }
+
+  void _syncWorkspaceLease() {
+    final needed = _workspaceViews > 0 || _workspaceTask || workspaceDirty;
+    if (needed && !_workspaceLease) {
+      coordinator.suspendPublishing();
+      _workspaceLease = true;
+    } else if (!needed && _workspaceLease) {
+      _workspaceLease = false;
+      _workspaceDraft = null;
+      _workspaceBaseline = null;
+      coordinator.resumePublishing();
+    }
+  }
+
+  void editWorkspace(SourceCollection draft) {
+    final before = workspaceDraft;
+    if (draft.autoSwitch != before.autoSwitch ||
+        draft.highestQuality != before.highestQuality ||
+        draft.sourceFirst != before.sourceFirst ||
+        draft.entries.any((entry) => entry.config.enabled &&
+            !before.entries.any((old) => old.id == entry.id && old.config.enabled))) {
+      _workspaceKeepsHttp = false;
+    }
+    _workspaceBaseline ??= jsonEncode(settings.value.toJson());
+    _workspaceDraft = draft;
+    _syncWorkspaceLease();
+    _notify();
+  }
+
+  void cancelWorkspaceOperation() => _activeToken?.cancel();
+
+  void acceptHttpPolicy() {
+    if (settings.preferences.customSource?.enabled != true) return;
+    _workspaceKeepsHttp = true;
+    final draft = _workspaceDraft;
+    if (draft == null) return;
+    _workspaceDraft = draft.copyWith(
+      autoSwitch: false,
+      highestQuality: false,
+      sourceFirst: false,
+      entries: [for (final e in draft.entries) SourceEntry(e.id, e.config.copyWith(enabled: false))],
+    );
+    _syncWorkspaceLease();
+    _notify();
+  }
+
+  Future<void> _workspaceOperation(Future<void> Function(CancelToken) work) async {
+    if (busy) return;
+    _workspaceTask = true;
+    _syncWorkspaceLease();
+    try {
+      await work(CancelToken());
+    } catch (error) {
+      message = _error(error);
+    } finally {
+      _workspaceTask = false;
+      _syncWorkspaceLease();
+      _notify();
+    }
+  }
+
+  Future<void> checkWorkspaceUpdates(SourceCollection draft) {
+    editWorkspace(draft);
+    return _workspaceOperation((token) => checkDraftUpdates(draft, token));
+  }
+
+  Future<void> updateWorkspaceSources(SourceCollection draft) {
+    editWorkspace(draft);
+    return _workspaceOperation((token) => _run(token, () async {
+      await _updateAll(draft, token, onPrepared: _mergeWorkspaceUpdate);
+    }));
+  }
+
+  Future<void> updateWorkspaceEntry(SourceEntry entry) =>
+      _workspaceOperation((token) async {
+        final config = await updateEntry(entry, token);
+        if (!token.isCancelled) _mergeWorkspaceUpdate(entry, config);
+      });
+
+  void _mergeWorkspaceUpdate(SourceEntry original, LxSourceConfig config) {
+    final draft = workspaceDraft;
+    final current = draft.entries.where((e) => e.id == original.id).firstOrNull;
+    if (current == null || current.config.sha256 != original.config.sha256) return;
+    final restricted = _catalogEntry(current)?.downloadRestricted == true;
+    _workspaceDraft = draft.replace(current.id, config.copyWith(
+      enabled: current.config.enabled,
+      allowForDownloads: !restricted && current.config.allowForDownloads,
+    ));
+    _syncWorkspaceLease();
+    _notify();
+  }
+
+  Future<void> saveWorkspaceDraft(SourceCollection draft) async {
+    await saveDraft(draft, preserveHttpPolicy: _workspaceKeepsHttp);
+    _workspaceDraft = settings.value;
+    _workspaceBaseline = jsonEncode(settings.value.toJson());
+    _syncWorkspaceLease();
+    _notify();
+  }
 
   bool get autoUpdate => settings.preferences.box.get(_autoKey) == true;
   DateTime? get lastChecked => DateTime.tryParse(
@@ -58,7 +181,7 @@ class IkSourceUpdater extends ChangeNotifier {
 
   Future<T> _run<T>(CancelToken token, Future<T> Function() work) async {
     if (_disposed || token.isCancelled) throw _cancelled;
-    if (busy || coordinator.busy) {
+    if (busy || coordinator.busy || isLocalImportBusy?.call() == true) {
       throw const LxSourceException('busy', '正在处理音源，请稍后再试');
     }
     busy = true;
@@ -96,6 +219,9 @@ class IkSourceUpdater extends ChangeNotifier {
   }
 
   String? _blocked(SourceEntry source, {bool automatic = false}) {
+    if (source.config.origin.scheme == 'file') {
+      return '本地导入音源没有更新地址，可重新导入新版';
+    }
     final entry = _catalogEntry(source);
     if (entry == null) return null;
     final record = settings.managed.records[entry.sourceKey];
@@ -232,6 +358,7 @@ class IkSourceUpdater extends ChangeNotifier {
     SourceCollection draft,
     CancelToken token, {
     bool automatic = false,
+    void Function(SourceEntry, LxSourceConfig)? onPrepared,
   }) async {
     _lastBatchSucceeded = false;
     await _refresh(token);
@@ -255,6 +382,7 @@ class IkSourceUpdater extends ChangeNotifier {
         } else {
           result = result.replace(entry.id, config);
           updated++;
+          onPrepared?.call(entry, config);
         }
       } catch (error) {
         _statuses[entry.id] = token.isCancelled ? '已取消，保留原版' : _error(error);
@@ -273,13 +401,16 @@ class IkSourceUpdater extends ChangeNotifier {
     return result;
   }
 
-  Future<void> saveDraft(SourceCollection draft, {SourceCollection? expectedBase}) async {
+  Future<void> saveDraft(SourceCollection draft, {
+    SourceCollection? expectedBase,
+    bool preserveHttpPolicy = false,
+  }) async {
     await settings.saveUpdatedDraft(
       draft,
       verified: _verified,
       runtimeId: coordinator.runtimeId,
       expectedBase: expectedBase,
-      automatic: expectedBase != null,
+      automatic: expectedBase != null || preserveHttpPolicy,
     );
     for (final entry in draft.entries) {
       if (_verified[entry.id]?.scriptHash == entry.config.sha256) {
@@ -311,6 +442,7 @@ class IkSourceUpdater extends ChangeNotifier {
   bool _automaticRunning = false;
   Future<void> _automaticTick() async {
     if (_disposed || !autoUpdate || busy || coordinator.busy ||
+        isLocalImportBusy?.call() == true ||
         settings.writesBlocked || settings.editing || isResolving() ||
         settings.value.entries.isEmpty) return;
     final now = DateTime.now();
@@ -353,6 +485,10 @@ class IkSourceUpdater extends ChangeNotifier {
     _disposed = true;
     _timer?.cancel();
     _activeToken?.cancel();
+    if (_workspaceLease) {
+      _workspaceLease = false;
+      settings.endEditing();
+    }
     fetcher.dispose();
     super.dispose();
   }

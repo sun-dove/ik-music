@@ -14,6 +14,7 @@ class VideoPlayerNotifier extends PlayerNotifier {
     CustomSourcePlaybackFallback? customSourceFallback,
     super.audioController,
     super.audioControllerFactory,
+    super.audioDisposeTimeout,
     super.playbackMemoryStore,
     super.notificationController,
     super.keepAliveController,

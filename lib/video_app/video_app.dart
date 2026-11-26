@@ -41,6 +41,7 @@ import '../features/floating_lyrics/presentation/providers/floating_lyrics_provi
 import 'built_in/catalog_panel.dart';
 import 'built_in/source_updater.dart';
 import 'built_in/source_update_panel.dart';
+import 'built_in/local_lx_source_bridge.dart';
 
 import '../features/auth/presentation/pages/login_page.dart';
 import '../features/auth/presentation/providers/auth_provider.dart';
@@ -2730,6 +2731,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   Widget _embeddedSourceManager() {
     final updater = ref.read(ikSourceUpdaterProvider);
+    final localBridge = ref.read(ikLocalLxSourceBridgeProvider);
     final settings = widget.sourceSettings!;
     final engine = widget.sourceEngine!;
     Widget manager() => SourceManagerPage(
@@ -2737,7 +2739,15 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       embedded: true,
       refinedLayout: true,
       modernPolicyMenu: true,
-      initial: settings.value,
+      initial: updater?.workspaceDraft ?? settings.value,
+      keepBackgroundDraft: updater != null,
+      backgroundBusy: updater?.busy == true || localBridge?.busy == true,
+      backgroundDirty: updater?.workspaceDirty ?? false,
+      onDraftChanged: updater?.editWorkspace,
+      onBackgroundCheck: updater?.checkWorkspaceUpdates,
+      onBackgroundUpdateAll: updater?.updateWorkspaceSources,
+      onBackgroundUpdateEntry: updater?.updateWorkspaceEntry,
+      onCancelBackground: updater?.cancelWorkspaceOperation,
       warning: settings.loadError,
       runtimeId: '${Theme.of(context).platform.name}-lx3',
       initialChecks: SourceCheckStore(widget.preferences.box).load(),
@@ -2746,7 +2756,11 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (updater != null) IkSourceUpdatePanel(updater: updater),
-          const IkSourceCatalogPanel(refinedLayout: true, showCheckAction: false),
+          if (localBridge != null) _localSourceMigrationPanel(localBridge),
+          IgnorePointer(
+            ignoring: updater?.busy == true || localBridge?.busy == true,
+            child: const IkSourceCatalogPanel(refinedLayout: true, showCheckAction: false),
+          ),
         ],
       ),
       onCheckUpdates: updater?.checkDraftUpdates,
@@ -2767,7 +2781,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       },
       onSave: (value) async {
         if (updater != null) {
-          await updater.saveDraft(value);
+          await updater.saveWorkspaceDraft(value);
         } else {
           await settings.save(value);
         }
@@ -2794,10 +2808,44 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         });
       },
     );
-    return IkSourceEditingScope(
-      child: updater == null
-          ? manager()
-          : AnimatedBuilder(animation: updater, builder: (_, _) => manager()),
+    return updater == null
+        ? IkSourceEditingScope(child: manager())
+        : IkSourceWorkspaceScope(
+            updater: updater,
+            child: AnimatedBuilder(
+              animation: Listenable.merge([updater, if (localBridge != null) localBridge]),
+              builder: (_, _) => manager(),
+            ),
+          );
+  }
+
+  Widget _localSourceMigrationPanel(IkLocalLxSourceBridge bridge) {
+    if (bridge.results.isEmpty && !bridge.busy) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        title: const Text('来自本机 LX 的音源'),
+        subtitle: Text(bridge.message ?? '正在读取…', style: Theme.of(context).textTheme.bodySmall),
+        children: [
+          if (bridge.busy) const LinearProgressIndicator(minHeight: 2),
+          for (final item in bridge.results)
+            ListTile(
+              dense: true,
+              title: Text('${item.name} · ${item.version}${item.selected ? ' · LX 当前选择' : ''}'),
+              subtitle: Text(item.status),
+            ),
+          if (bridge.results.any((item) => item.retryable))
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: bridge.busy ? null : () => unawaited(bridge.retryFailures()),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('重试未导入的音源'),
+              ),
+            ),
+        ],
+      ),
     );
   }
 
@@ -2915,6 +2963,9 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     }
     await widget.preferences.setCustomSource(config);
     widget.onCustomSourceChanged?.call();
+    if (widget.quickExperienceRefinements && PlatformUtils.isWindows) {
+      ref.read(ikSourceUpdaterProvider)?.acceptHttpPolicy();
+    }
     if (draft.token.trim().isEmpty) {
       await widget.customSourceCredentials.deleteToken(config.id);
     } else {

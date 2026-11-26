@@ -58,6 +58,7 @@ import 'video_app/lx_source/lx_runtime.dart';
 import 'video_app/lx_source/lx_runtime_v3.dart';
 import 'video_app/multi_source/source_coordinator.dart';
 import 'video_app/multi_source/source_service.dart';
+import 'video_app/multi_source/quick_source_transport.dart';
 import 'video_app/multi_source/multi_source_player.dart';
 import 'video_app/built_in/catalog.dart';
 import 'video_app/built_in/catalog_coordinator.dart';
@@ -66,6 +67,7 @@ import 'video_app/built_in/catalog_sandbox.dart';
 import 'video_app/built_in/fixed_importer.dart';
 import 'video_app/built_in/managed_settings.dart';
 import 'video_app/built_in/source_updater.dart';
+import 'video_app/built_in/local_lx_source_bridge.dart';
 import 'video_app/multi_source/source_candidates_v3.dart';
 import 'video_app/playback/video_platforms.dart';
 import 'video_app/playback/video_stream_state.dart';
@@ -132,13 +134,25 @@ Future<void> main() async {
       return state.currentSong != null || state.isTransitioning;
     },
   );
+  IkLocalLxSourceBridge? localSourceBridge;
   final sourceUpdater = PlatformUtils.isWindows
       ? IkSourceUpdater(
           coordinator: catalogCoordinator,
           engine: sourceEngine,
           isResolving: () => container.read(playerProvider).isTransitioning,
+          isLocalImportBusy: () => localSourceBridge?.busy == true,
         )
       : null;
+  if (PlatformUtils.isWindows) {
+    localSourceBridge = IkLocalLxSourceBridge(
+      settings: sourceSettings,
+      engine: sourceEngine,
+      directory: Directory('${File(Platform.resolvedExecutable).parent.path}/local-lx-sources'),
+      runtimeId: '${Platform.operatingSystem}-lx3',
+      isSourceWorkBusy: () => catalogCoordinator.busy || sourceUpdater?.busy == true ||
+          container.read(playerProvider).isTransitioning,
+    );
+  }
   final windowsAppearance = windowsStorage == null
       ? null
       : WindowsAppearance(
@@ -149,6 +163,7 @@ Future<void> main() async {
           directory: Directory('${windowsStorage.path}/appearance'),
           window: WindowsWindowController(
             beforeExit: () async {
+              localSourceBridge?.dispose();
               sourceUpdater?.dispose();
               catalogCoordinator.dispose();
               await windowsSandbox!.shutdown();
@@ -180,6 +195,7 @@ Future<void> main() async {
   );
   const customSourceCredentials = SecureCustomSourceCredentialStore();
   final customSourceDio = Dio();
+  if (PlatformUtils.isWindows) QuickSourceTransport.install(customSourceDio);
   void Function(Song, CustomSourceResult)? customSourceResolved;
   final customSourceResolver = _PreferenceCustomSourceResolver(
     preferences: preferences,
@@ -201,6 +217,7 @@ Future<void> main() async {
       ikCompactLyricsEnabledProvider.overrideWithValue(PlatformUtils.isWindows),
       ikSourceCatalogProvider.overrideWithValue(catalogCoordinator),
       ikSourceUpdaterProvider.overrideWithValue(sourceUpdater),
+      ikLocalLxSourceBridgeProvider.overrideWithValue(localSourceBridge),
       floatingLyricsProvider.overrideWith(
         (ref) => IkStrictFloatingLyricsNotifier(),
       ),
@@ -363,6 +380,11 @@ Future<void> main() async {
   attachVideoSessionGuard(qqDio, PlatformType.qq, auth);
   attachVideoSessionGuard(neteaseDio, PlatformType.netease, auth);
   attachVideoSessionGuard(kugouDio, PlatformType.kugou, auth);
+  if (PlatformUtils.isWindows) {
+    for (final dio in [qqDio, neteaseDio, kugouDio, sourceEngine.dio]) {
+      QuickSourceTransport.install(dio);
+    }
+  }
   qqApi = VideoQqPlaybackApi(dio: qqDio);
   PlatformRegistry.register(
     VideoQqPlatform(
@@ -408,7 +430,11 @@ Future<void> main() async {
     ),
   );
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(catalogCoordinator.prepareOnce().whenComplete(() => sourceUpdater?.start()));
+    unawaited(() async {
+      await localSourceBridge?.importOnce();
+      await catalogCoordinator.prepareOnce();
+      sourceUpdater?.start();
+    }());
   });
 }
 

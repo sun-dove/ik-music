@@ -92,7 +92,9 @@ Future<String?> _kugouCover(
 ) async {
   final api = adapter.api;
   Map<String, dynamic> response;
-  if (playlist.editId?.isNotEmpty == true) {
+  final ownPlaylist = playlist.editId?.isNotEmpty == true ||
+      (playlist.editable && RegExp(r'^\d+$').hasMatch(playlist.id));
+  if (ownPlaylist) {
     response = await api.getUserPlaylistSongs(playlist.editableId, page: 1, limit: 1);
   } else if (playlist.id.startsWith('collection_')) {
     response = await api.getSharedPlaylistSongs(playlist.id, page: 1, limit: 1);
@@ -101,31 +103,91 @@ Future<String?> _kugouCover(
   }
   if (!current()) return null;
   _check(response);
+  final playlistCover = _kugouPlaylistImage(response);
+  if (playlistCover != null) return playlistCover;
   var row = _kugouFirst(response);
-  if (row.isEmpty && playlist.editId == null) {
+  if (row.isEmpty && !ownPlaylist) {
     final parts = playlist.id.split('_');
     final listId = playlist.id.startsWith('collection_')
         ? (parts.length >= 4 ? parts[3] : null)
         : playlist.id;
     if (listId != null && listId.isNotEmpty && listId != '0' && current()) {
       response = await api.getUserPlaylistSongs(listId, page: 1, limit: 1);
+      if (!current()) return null;
       _check(response);
+      final fallbackCover = _kugouPlaylistImage(response);
+      if (fallbackCover != null) return fallbackCover;
       row = _kugouFirst(response);
     }
   }
-  return _text([
+  final cover = _kugouSongImage(row);
+  if (cover != null) return cover;
+  final hash = _text([
+    row['hash'],
+    row['FileHash'],
+    row['filehash'],
+    _map(row['audio_info'])['hash'],
+  ]);
+  if (hash == null || !RegExp(r'^[0-9a-fA-F]{32}$').hasMatch(hash) || !current()) {
+    return null;
+  }
+  final metadata = await api.getSongInfo(hash);
+  if (!current()) return null;
+  _check(metadata);
+  final data = _map(metadata['data']);
+  return _kugouSongImage(data) ?? _kugouSongImage(metadata);
+}
+
+String? _kugouPlaylistImage(Map response) {
+  final data = _map(response['data']);
+  for (final node in [_map(data['list_info']), _map(response['list_info']), data, response]) {
+    final cover = _kugouImage([
+      node['pic'],
+      node['imgurl'],
+      node['image'],
+      node['cover'],
+      node['flexible_cover'],
+      node['sizable_cover'],
+    ]);
+    if (cover != null) return cover;
+  }
+  return null;
+}
+
+String? _kugouSongImage(Map row) => _kugouImage([
     _map(row['trans_param'])['union_cover'],
     row['album_img'],
     row['image'],
     row['cover'],
     row['album_sizable_cover'],
-  ])?.replaceAll('{size}', '480');
+    row['sizable_cover'],
+    row['imgUrl'],
+    row['imgurl'],
+    _map(row['info'])['image'],
+    _map(row['albuminfo'])['cover'],
+    _map(row['albuminfo'])['image'],
+    _map(row['album_info'])['cover'],
+  ]);
+
+String? _kugouImage(Iterable<Object?> values) {
+  for (final value in values) {
+    final text = _text([value])?.replaceAll('{size}', '480');
+    if (text == null) continue;
+    final uri = Uri.tryParse(text);
+    if (uri == null || uri.host.isEmpty ||
+        (uri.scheme.isNotEmpty && uri.scheme != 'http' && uri.scheme != 'https')) {
+      continue;
+    }
+    return uri.scheme.isEmpty ? uri.replace(scheme: 'https').toString() : text;
+  }
+  return null;
 }
 
 Map _kugouFirst(Map response) {
   for (final node in [_map(response['data']), response]) {
     for (final key in const ['info', 'songs', 'list', 'data', 'lists']) {
-      if (node[key] is List) return _first(node[key]);
+      final row = _first(node[key]);
+      if (row.isNotEmpty) return row;
     }
   }
   return const {};

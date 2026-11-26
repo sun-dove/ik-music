@@ -13,6 +13,7 @@ import '../../features/player/data/spatial_audio_capability.dart';
 import '../../models/audio_quality.dart';
 import '../../models/platform_type.dart';
 import '../../models/song.dart';
+import '../../l10n/ik_source_recovery_strings.dart';
 import '../../platform/base/music_platform.dart';
 import '../custom_source/custom_source_playback.dart';
 import '../playback/video_platforms.dart';
@@ -20,6 +21,7 @@ import '../playback/video_player_notifier.dart';
 import '../ik/ik_user_gain.dart';
 import 'source_collection.dart';
 import 'source_coordinator.dart';
+import 'quick_source_transport.dart';
 
 class SourcePlaybackView {
   const SourcePlaybackView({
@@ -118,6 +120,7 @@ class _SourceAudio
     this.router, {
     IkUserGainController? userGain,
     this.isolateRequests = false,
+    this.quickRecovery = false,
     this.loadTimeout = const Duration(seconds: 10),
   })
     : _gain = userGain?.attach(
@@ -127,6 +130,7 @@ class _SourceAudio
   final PlayerAudioController delegate;
   final PreparedSourceRouter router;
   final bool isolateRequests;
+  final bool quickRecovery;
   final Duration loadTimeout;
   final IkGainBinding? _gain;
   int _gainPlayGeneration = 0;
@@ -187,6 +191,14 @@ class _SourceAudio
   Future<void> setUrl(String url) async {
     final requestedToken = router.mediaToken;
     _requestToken = requestedToken;
+    if (isolateRequests &&
+        (_disposed ||
+            requestedToken.isCancelled ||
+            (router.guarded &&
+                (router.prepared?.url.toString() != url ||
+                    router.failedUrls.contains(url))))) {
+      throw const SourceFailure('load', SourceStrings.invalidAudio);
+    }
     final initialRemaining = router.timeLeft?.call() ?? loadTimeout;
     final loadWindow = initialRemaining < loadTimeout
         ? initialRemaining
@@ -247,7 +259,7 @@ class _SourceAudio
     }
     try {
       await Future.any<void>([
-        delegate.setUrl(url),
+        quickRecovery ? _loadWithFeedback(url, token) : delegate.setUrl(url),
         token.whenCancel.then(
           (_) => throw const SourceFailure(
             'cancelled',
@@ -283,6 +295,45 @@ class _SourceAudio
     }
   }
 
+  Future<void> _loadWithFeedback(String url, CancelToken token) async {
+    final failure = Completer<void>();
+    final ready = Completer<void>();
+    final subscription = delegate.playerStateStream.listen(
+      (_) {},
+      onError: (Object error, StackTrace trace) {
+        if (!failure.isCompleted) failure.completeError(error, trace);
+      },
+    );
+    final durationSubscription = delegate is MediaKitWindowsAudioController
+        ? delegate.durationStream.listen((duration) {
+            if (duration != null &&
+                duration > Duration.zero &&
+                !ready.isCompleted) {
+              ready.complete();
+            }
+          })
+        : null;
+    try {
+      Future<void> load() async {
+        await delegate.setUrl(url);
+        if (durationSubscription != null) await ready.future;
+      }
+      await Future.any<void>([
+        load(),
+        failure.future,
+        token.whenCancel.then(
+          (_) => throw const SourceFailure(
+            'cancelled',
+            SourceStrings.loadCancelled,
+          ),
+        ),
+      ]);
+    } finally {
+      await subscription.cancel();
+      await durationSubscription?.cancel();
+    }
+  }
+
   @override
   Future<void> play() {
     if (isolateRequests &&
@@ -298,7 +349,20 @@ class _SourceAudio
     final gain = _gain;
     final generation = _gainPlayGeneration;
     final token = router.mediaToken;
+    if (quickRecovery && router.guarded) {
+      return _playReadyForToken(token, generation);
+    }
     return _playForToken(token, gain, generation);
+  }
+
+  Future<void> _playReadyForToken(CancelToken token, int generation) async {
+    try {
+      if (generation != _gainPlayGeneration || !_current) return;
+      await delegate.play().timeout(const Duration(seconds: 1));
+    } catch (_) {
+      if (_disposed || token.isCancelled || token != router.mediaToken) return;
+      rethrow;
+    }
   }
 
   Future<void> _playForToken(
@@ -328,13 +392,19 @@ class _SourceAudio
   @override
   Future<void> stop() {
     if (_gain != null) _gainPlayGeneration++;
-    return delegate.stop();
+    final operation = delegate.stop();
+    return quickRecovery && router.guarded
+        ? operation.timeout(const Duration(seconds: 1))
+        : operation;
   }
 
   @override
   Future<void> pause() {
     if (_gain != null) _gainPlayGeneration++;
-    return delegate.pause();
+    final operation = delegate.pause();
+    return quickRecovery && router.guarded
+        ? operation.timeout(const Duration(seconds: 1))
+        : operation;
   }
 
   @override
@@ -427,9 +497,13 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     super.isOfflineModeEnabled,
   }) : _offlinePath = offlineFilePathResolver,
        _offlineMode = isOfflineModeEnabled,
+       _legacyFallback = legacyFallback,
        super(
          platformResolver: router.platform,
          requestedQuality: router.quality,
+         audioDisposeTimeout: quickSourceRecovery
+             ? const Duration(milliseconds: 500)
+             : const Duration(seconds: 3),
          audioController: audioController == null
              ? null
              : _SourceAudio(
@@ -438,8 +512,9 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
                  userGain: userGain,
                  isolateRequests:
                      preservePlaybackOnSettingsChange || quickSourceRecovery,
+                 quickRecovery: quickSourceRecovery,
                  loadTimeout: quickSourceRecovery
-                     ? const Duration(seconds: 6)
+                     ? const Duration(seconds: 3)
                      : const Duration(seconds: 10),
                ),
          audioControllerFactory: () => _SourceAudio(
@@ -448,8 +523,9 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
            userGain: userGain,
            isolateRequests:
                preservePlaybackOnSettingsChange || quickSourceRecovery,
+           quickRecovery: quickSourceRecovery,
            loadTimeout: quickSourceRecovery
-               ? const Duration(seconds: 6)
+               ? const Duration(seconds: 3)
                : const Duration(seconds: 10),
          ),
          customSourceFallback: legacyFallback,
@@ -510,6 +586,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
   final void Function(SourcePlaybackView)? onProgress;
   final OfflineFilePathResolver? _offlinePath;
   final bool Function()? _offlineMode;
+  final CustomSourcePlaybackFallback? _legacyFallback;
   late final void Function() _unlisten;
   SourceSession? _session;
   ResolvedSource? _active;
@@ -520,6 +597,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
   AudioLevel? _fixedOverride;
   SourceCollection? _sessionPolicy;
   bool _settingsPending = false;
+  Set<String> _failedHosts = {};
 
   bool get _multiEnabled =>
       settings.value.autoSwitch ||
@@ -538,6 +616,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
 
   bool get _usesManagedPlayback =>
       _multiEnabled ||
+      (quickSourceRecovery && state.currentSong?.platform != PlatformType.local) ||
       (preservePlaybackOnSettingsChange &&
           router.guarded &&
           state.currentSong == _song);
@@ -588,7 +667,10 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     _song = song;
     router.song = song;
     router.failedUrls.clear();
-    router.guarded = _multiEnabled && song.platform != PlatformType.local;
+    _failedHosts = {};
+    router.guarded =
+        (_multiEnabled || quickSourceRecovery) &&
+        song.platform != PlatformType.local;
     if (!router.guarded) {
       await super.playSong(song);
       if (preservePlaybackOnSettingsChange &&
@@ -641,6 +723,11 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
   void _createSession(Song song) {
     _sessionPolicy = settings.value;
     _settingsPending = false;
+    final failedHosts = _failedHosts;
+    final useLegacyHttp =
+        quickSourceRecovery &&
+        !_multiEnabled &&
+        _legacyFallback?.config()?.id != 'lx';
     late final SourceSession session;
     session = SourceSession(
       exclusions: exclusionsFor(
@@ -651,19 +738,62 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
         song,
         _fixedOverride ?? router.fixedQuality(song.platform),
       ),
-      resolve: (candidate, token) => resolve(song, candidate, token),
+      resolve: (candidate, token) => quickSourceRecovery
+          ? QuickSourceTransport.run(
+              token,
+              () => _resolveQuickSource(
+                song,
+                candidate,
+                token,
+                useLegacyHttp: useLegacyHttp,
+              ),
+              failedHosts: failedHosts,
+            )
+          : resolve(song, candidate, token),
       onChanged: () {
         if (identical(_session, session)) _report();
       },
       budget: quickSourceRecovery
-          ? const Duration(seconds: 25)
+          ? const Duration(seconds: 9)
           : const Duration(seconds: 45),
       resolveTimeout: quickSourceRecovery
-          ? const Duration(seconds: 7)
+          ? const Duration(seconds: 3)
           : const Duration(seconds: 15),
+      skipUnreachableSources: quickSourceRecovery,
     );
     _session = session;
     router.timeLeft = () => session.timeLeft;
+  }
+
+  Future<ResolvedSource> _resolveQuickSource(
+    Song song,
+    SourceCandidate candidate,
+    CancelToken token, {
+    required bool useLegacyHttp,
+  }) async {
+    try {
+      return await resolve(song, candidate, token);
+    } catch (error) {
+      final fallback = _legacyFallback;
+      if (!useLegacyHttp ||
+          !candidate.official ||
+          fallback == null ||
+          token.isCancelled) {
+        rethrow;
+      }
+      final result = await fallback.resolve(song, candidate.quality, error);
+      if (result == null || token.isCancelled) rethrow;
+      return ResolvedSource(
+        SourceCandidate(
+          id: candidate.id,
+          name: result.sourceName,
+          quality: candidate.quality,
+        ),
+        result.url,
+        format: result.format,
+        bitrate: result.bitrate,
+      );
+    }
   }
 
   void _report() {
@@ -691,7 +821,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
             SourceStage.resolved => SourceStrings.loading(last.candidate.label),
             SourceStage.playing => SourceStrings.playback(
               qualityNotice,
-              last.candidate.name,
+              _active?.candidate.name ?? last.candidate.name,
               last.candidate.quality.displayName,
               evidence,
               router.seekFailed,
@@ -726,12 +856,28 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
         if (!mounted || generation != _generation || _paused) return;
         if (resolved == null) {
           router.prepared = null;
+          final canContinue = session.budgetExpired && session.canContinue;
+          final failureMessage = quickSourceRecovery
+              ? canContinue
+                    ? IkSourceRecoveryStrings.budgetUsed(
+                        session.attempts
+                            .where(
+                              (attempt) =>
+                                  attempt.stage != SourceStage.skipped,
+                            )
+                            .length,
+                        session.remaining,
+                      )
+                    : session.remaining == 0
+                    ? IkSourceRecoveryStrings.unavailable
+                    : IkSourceRecoveryStrings.interrupted
+              : canContinue
+              ? SourceStrings.budgetUsed
+              : SourceStrings.noPlayback;
           state = state.copyWith(
             isPlaying: false,
             isTransitioning: false,
-            error: () => session.budgetExpired && session.canContinue
-                ? SourceStrings.budgetUsed
-                : SourceStrings.noPlayback,
+            error: () => failureMessage,
           );
           onProgress?.call(
             SourcePlaybackView(
