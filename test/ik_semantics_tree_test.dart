@@ -4,6 +4,13 @@ import 'dart:io';
 import 'dart:ui' as ui;
 import 'dart:ui' show Tristate;
 
+import 'package:drift/drift.dart'
+    show
+        ApplyInterceptor,
+        QueryExecutor,
+        QueryExecutorUser,
+        QueryInterceptor,
+        TransactionExecutor;
 import 'package:drift/native.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -132,7 +139,7 @@ void main() {
     for (final name in ['local_music', 'listening_stats', 'smart_playlists']) {
       await Hive.openBox<dynamic>(name);
     }
-    suiteDb = _SemanticsDatabase();
+    suiteDb = _SemanticsDatabase(ioZone);
     initializeApplicationDatabase(suiteDb);
     await suiteDb.customSelect('SELECT 1').get();
     final messenger = binding.defaultBinaryMessenger;
@@ -163,11 +170,13 @@ void main() {
     // 数据库单例仅初始化一次；每个场景清空本门真实内存SQLite的全部表。
     // 历史 DAO 的写队列会记住注册回调的测试时钟，不能跨场景复用。
     suiteDb.scenarioHistory = HistoryDao(suiteDb);
-    await suiteDb.transaction(() async {
-      for (final table in suiteDb.allTables.toList().reversed) {
-        await suiteDb.delete(table).go();
-      }
-    });
+    await suiteDb
+        .transaction(() async {
+          for (final table in suiteDb.allTables.toList().reversed) {
+            await suiteDb.delete(table).go();
+          }
+        })
+        .timeout(const Duration(seconds: 8));
     await settings.put('video.cacheInitialized', true);
     for (final platform in PlatformType.musicServices) {
       PlatformRegistry.register(_Content(platform));
@@ -4191,11 +4200,32 @@ void _dumpMarkers(WidgetTester tester, _TreeTrace trace) {
 }
 
 class _SemanticsDatabase extends AppDatabase {
-  _SemanticsDatabase() : super.forTesting(NativeDatabase.memory());
+  _SemanticsDatabase(Zone ioZone)
+    : super.forTesting(
+        NativeDatabase.memory().interceptWith(_StorageClock(ioZone)),
+      );
 
   late HistoryDao scenarioHistory;
   @override
   HistoryDao get historyDao => scenarioHistory;
+}
+
+// 连接和事务锁由跨场景的真实时钟释放；语句、事务回调和界面仍使用原上下文。
+class _StorageClock extends QueryInterceptor {
+  _StorageClock(this.io);
+  final Zone io;
+  @override
+  TransactionExecutor beginTransaction(QueryExecutor parent) =>
+      io.run(parent.beginTransaction);
+  @override
+  Future<bool> ensureOpen(QueryExecutor executor, QueryExecutorUser user) =>
+      io.run(() => executor.ensureOpen(user));
+  @override
+  Future<void> commitTransaction(TransactionExecutor executor) =>
+      io.run(executor.send);
+  @override
+  Future<void> rollbackTransaction(TransactionExecutor executor) =>
+      io.run(executor.rollback);
 }
 
 class _RootHarness {
