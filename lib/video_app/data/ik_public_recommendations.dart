@@ -144,8 +144,9 @@ class IkPublicRecommendations {
         )
         .timeout(_timeout);
     final body = _map(response.data);
-    if (_integer(body['code']) != 0)
+    if (_integer(body['code']) != 0) {
       throw const FormatException('QQ catalog rejected');
+    }
     final data = _map(body['data']);
     final rows = _rows(data['list']);
     final total = _integer(data['sum']);
@@ -189,15 +190,17 @@ class IkPublicRecommendations {
         )
         .timeout(_timeout);
     final body = _map(response.data);
-    if (_integer(body['code']) != 200)
+    if (_integer(body['code']) != 200) {
       throw const FormatException('Netease catalog rejected');
+    }
     final rows = _rows(body['playlists']);
     final total = _integer(body['total']);
     final more = body['more'] is bool ? body['more'] as bool : null;
     final next = offset + rows.length;
     final hasMore = more ?? (total == null ? false : next < total);
-    if (hasMore && rows.isEmpty)
+    if (hasMore && rows.isEmpty) {
       throw const FormatException('Incomplete Netease catalog page');
+    }
     return _batch(
       PlatformType.netease,
       rows,

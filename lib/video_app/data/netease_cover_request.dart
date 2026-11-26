@@ -49,8 +49,9 @@ Future<Uint8List> loadNeteaseCoverBytes(Uri uri) async {
       await for (final chunk in response) {
         bytes.add(chunk);
       }
-      if (bytes.isEmpty)
+      if (bytes.isEmpty) {
         throw HttpException('Empty image response', uri: target);
+      }
       return bytes.takeBytes();
     })().timeout(_timeout);
   } finally {

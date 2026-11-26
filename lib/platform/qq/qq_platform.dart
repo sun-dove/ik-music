@@ -1132,8 +1132,9 @@ class QqPlatform extends MusicPlatform {
           return outcome(PersonalDailyStatus.invalidResponse);
         }
         for (final section in [shelf, if (niches is List) ...niches]) {
-          if (section is! Map)
+          if (section is! Map) {
             return outcome(PersonalDailyStatus.invalidResponse);
+          }
           final entries = section['v_card'];
           if (entries == null) continue;
           if (entries is! List || entries.any((entry) => entry is! Map)) {
@@ -1166,8 +1167,9 @@ class QqPlatform extends MusicPlatform {
           code: 'daily_thirty_unavailable',
         );
       }
-      if (dailyIds.length != 1)
+      if (dailyIds.length != 1) {
         return outcome(PersonalDailyStatus.invalidResponse);
+      }
       final playlistId = dailyIds.single;
       final uniqueSongs = <String, Song>{};
       var fetched = 0;
@@ -1181,8 +1183,9 @@ class QqPlatform extends MusicPlatform {
           songBegin: fetched,
           songNum: 50,
         );
-        if (!scopeIsCurrent())
+        if (!scopeIsCurrent()) {
           return outcome(PersonalDailyStatus.sessionChanged);
+        }
         final detail = payload(response);
         if (detail.failure != null) return detail.failure!;
         final data = detail.data!;

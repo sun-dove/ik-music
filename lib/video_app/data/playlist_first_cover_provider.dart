@@ -28,8 +28,9 @@ final playlistFirstCoverProvider = FutureProvider.autoDispose
       var current = true;
       ref.onDispose(() => current = false);
       if (playlist.songCount <= 0) return null;
-      if (playlist.platform != PlatformType.local && account == null)
+      if (playlist.platform != PlatformType.local && account == null) {
         return null;
+      }
       final adapter = playlist.platform == PlatformType.local
           ? null
           : PlatformRegistry.get(playlist.platform);
