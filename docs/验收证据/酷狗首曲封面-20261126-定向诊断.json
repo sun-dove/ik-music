@@ -1,0 +1,49 @@
+{
+  "日期": "2026-11-26",
+  "目的": "定位第五份酷狗117首歌单首曲封面缺失；非GUI或全量验收",
+  "隐私处理": "只记录响应结构与状态，不保留账号、凭据、列表ID、曲名、完整响应或图片URL",
+  "歌单目录": {
+    "端点": "/v7/get_all_list",
+    "status": 1,
+    "error_code": 0,
+    "返回列表数": 3,
+    "数量": [0, 117, 0],
+    "pic均为空": true
+  },
+  "原首曲接口": {
+    "端点": "/v4/get_list_all_file",
+    "page": 1,
+    "pagesize": 1,
+    "show_album_info": 1,
+    "status": 0,
+    "error_code": 20010,
+    "首曲条数": 0
+  },
+  "新首曲接口": {
+    "端点": "/v4/get_list_all_file_v3",
+    "page": 1,
+    "pagesize": 1,
+    "type": 0,
+    "area_code": 1,
+    "allplatform": 1,
+    "show_cover": 1,
+    "status": 1,
+    "error_code": 0,
+    "count": 117,
+    "首曲条数": 1,
+    "图片字段": ["data.info[0].cover", "data.info[0].trans_param.union_cover"]
+  },
+  "图片请求": {
+    "选择字段": "trans_param.union_cover",
+    "模板尺寸": 480,
+    "协议": "http",
+    "主机": "imge.kugou.com",
+    "HTTP状态": 200,
+    "Content-Type": "image/jpeg",
+    "字节数": 46962,
+    "尺寸": [480, 480],
+    "像素解码成功": true,
+    "磁盘写入图片": false
+  },
+  "未执行": ["产品tests", "analyze", "format", "成品GUI", "全量个人歌单抓取", "歌曲播放"]
+}

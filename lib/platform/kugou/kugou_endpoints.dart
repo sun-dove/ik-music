@@ -100,6 +100,10 @@ class KugouEndpoints {
   static const String userPlaylistSongs =
       'https://gateway.kugou.com/v4/get_list_all_file';
 
+  /// 歌单首曲封面预览，旧全量歌单端点保持不变。
+  static const String userPlaylistCoverPreview =
+      'https://gateway.kugou.com/v4/get_list_all_file_v3';
+
   /// Collect / uncollect a song. **Cleartext with the session token in the
   /// query string** — accepted residual risk, not an oversight:
   /// `mobilecdn.kugou.com` has no usable TLS (probe 2026-10-06:

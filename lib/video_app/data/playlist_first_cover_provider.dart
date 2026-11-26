@@ -95,7 +95,7 @@ Future<String?> _kugouCover(
   final ownPlaylist = playlist.editId?.isNotEmpty == true ||
       (playlist.editable && RegExp(r'^\d+$').hasMatch(playlist.id));
   if (ownPlaylist) {
-    response = await api.getUserPlaylistSongs(playlist.editableId, page: 1, limit: 1);
+    response = await api.getUserPlaylistCoverPreview(playlist.editableId);
   } else if (playlist.id.startsWith('collection_')) {
     response = await api.getSharedPlaylistSongs(playlist.id, page: 1, limit: 1);
   } else {
@@ -112,7 +112,7 @@ Future<String?> _kugouCover(
         ? (parts.length >= 4 ? parts[3] : null)
         : playlist.id;
     if (listId != null && listId.isNotEmpty && listId != '0' && current()) {
-      response = await api.getUserPlaylistSongs(listId, page: 1, limit: 1);
+      response = await api.getUserPlaylistCoverPreview(listId);
       if (!current()) return null;
       _check(response);
       final fallbackCover = _kugouPlaylistImage(response);

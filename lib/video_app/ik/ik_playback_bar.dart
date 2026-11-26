@@ -444,10 +444,10 @@ class IkPlaybackBar extends ConsumerWidget {
                       ? songWidth : availableSongWidth,
                   child: songInformation,
                 ),
-                if (likeButton != null)
-                  SizedBox(width: 48, child: likeButton),
                 const SizedBox(width: 12),
                 Expanded(child: lyric),
+                if (likeButton != null)
+                  SizedBox(width: 48, child: likeButton),
               ],
             );
           }
@@ -457,10 +457,16 @@ class IkPlaybackBar extends ConsumerWidget {
             children: [
               Align(
                 alignment: Alignment.centerLeft,
-                child: SizedBox(width: songWidth + 48, child: title),
+                child: SizedBox(width: songWidth, child: songInformation),
               ),
               const SizedBox(height: 4),
-              lyric,
+              Row(
+                children: [
+                  Expanded(child: lyric),
+                  if (likeButton != null)
+                    SizedBox(width: 48, child: likeButton),
+                ],
+              ),
             ],
           );
         },
@@ -566,7 +572,13 @@ class IkPlaybackBar extends ConsumerWidget {
                         ),
                       ],
                       const SizedBox(height: 2),
-                      progress,
+                      Align(
+                        alignment: Alignment.center,
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 680),
+                          child: SizedBox(width: double.infinity, child: progress),
+                        ),
+                      ),
                     ],
                   );
                 }
