@@ -1008,11 +1008,32 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   void _openPlayer() {
     if (widget.redesign) {
+      if (widget.quickExperienceRefinements && PlatformUtils.isWindows &&
+          _leaveChecks.isNotEmpty) {
+        unawaited(_openPlayerAfterSourceDraft());
+        return;
+      }
       context.push('/player');
       return;
     }
     Navigator.of(context)
         .push(MaterialPageRoute<void>(builder: (_) => _playerPage()));
+  }
+
+  Future<void> _openPlayerAfterSourceDraft() async {
+    if (_leavingWorkspacePage) return;
+    final router = GoRouter.of(context);
+    final origin = router.routerDelegate.currentConfiguration;
+    _leavingWorkspacePage = true;
+    try {
+      for (final check in List.of(_leaveChecks.values).reversed) {
+        if (!await check() || !mounted ||
+            !identical(router.routerDelegate.currentConfiguration, origin)) return;
+      }
+      if (mounted) unawaited(router.push<void>('/player'));
+    } finally {
+      _leavingWorkspacePage = false;
+    }
   }
 
   Widget _playerPage() => Consumer(
@@ -2754,10 +2775,23 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         if (mounted) setState(() {});
       },
       onHttp: () async {
-        for (final check in List.of(_leaveChecks.values).reversed) {
-          if (!await check() || !mounted) return;
-        }
-        if (mounted) await _httpCustomSource();
+        if (_leavingWorkspacePage) return;
+        final router = GoRouter.of(context);
+        final origin = router.routerDelegate.currentConfiguration;
+        await _httpCustomSource(beforeOpen: () async {
+          if (!mounted || _leavingWorkspacePage ||
+              !identical(router.routerDelegate.currentConfiguration, origin)) return false;
+          _leavingWorkspacePage = true;
+          try {
+            for (final check in List.of(_leaveChecks.values).reversed) {
+              if (!await check() || !mounted ||
+                  !identical(router.routerDelegate.currentConfiguration, origin)) return false;
+            }
+            return mounted;
+          } finally {
+            _leavingWorkspacePage = false;
+          }
+        });
       },
     );
     return IkSourceEditingScope(
@@ -2767,7 +2801,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     );
   }
 
-  Future<void> _httpCustomSource() async {
+  Future<void> _httpCustomSource({Future<bool> Function()? beforeOpen}) async {
     final current = widget.preferences.customSource;
     final token = current == null
         ? ''
@@ -2775,6 +2809,8 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
                 current.credentialRef ?? current.id,
               ) ??
               '';
+    if (!mounted) return;
+    if (beforeOpen != null && !await beforeOpen()) return;
     if (!mounted) return;
     await _pushContent<void>(
       (_) => VideoCustomSourcePage(
