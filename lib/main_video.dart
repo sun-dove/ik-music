@@ -38,6 +38,7 @@ import 'core/share/share_service.dart';
 import 'video_app/ik/ik_share.dart';
 import 'video_app/ik/ik_spatial_runtime.dart';
 import 'video_app/ik/ik_lyrics_action.dart';
+import 'video_app/ik/ik_desktop_lyrics_style.dart';
 import 'video_app/ik/ik_strict_settings.dart';
 import 'video_app/ik/ik_user_gain.dart';
 import 'models/platform_type.dart';
@@ -188,6 +189,7 @@ Future<void> main() async {
   );
   container = ProviderContainer(
     overrides: [
+      ikCompactLyricsEnabledProvider.overrideWithValue(PlatformUtils.isWindows),
       ikSourceCatalogProvider.overrideWithValue(catalogCoordinator),
       floatingLyricsProvider.overrideWith(
         (ref) => IkStrictFloatingLyricsNotifier(),
@@ -370,6 +372,7 @@ Future<void> main() async {
         alignToDesign: true,
         pageInteractionRefinements: true,
         workspacePageRefinements: true,
+        quickExperienceRefinements: true,
         mobileKeyboardLayout: !PlatformUtils.isDesktop,
         dismissSourceMenuOnBack: !PlatformUtils.isDesktop,
         expandedPlatforms: true,

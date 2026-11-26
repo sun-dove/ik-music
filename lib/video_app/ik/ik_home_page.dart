@@ -17,6 +17,7 @@ import '../../models/song.dart';
 import '../ui/catalog_pages.dart';
 import '../ui/video_shell.dart';
 import 'ik_catalog_pages.dart';
+import 'ik_discovery_catalog_page.dart';
 
 /// 仅由独立入口覆盖 provider，旧产品继续使用原刷新行为。
 class IkRecommendationsNotifier extends RecommendationsNotifier {
@@ -35,6 +36,7 @@ class IkHomePage extends ConsumerStatefulWidget {
     this.workspace = false,
     this.alignToDesign = false,
     this.recommendationsInDiscovery = false,
+    this.refinedRecommendations = false,
   });
   final ValueChanged<String> onNavigate;
   final VoidCallback onPlayer;
@@ -44,6 +46,7 @@ class IkHomePage extends ConsumerStatefulWidget {
   final bool workspace;
   final bool alignToDesign;
   final bool recommendationsInDiscovery;
+  final bool refinedRecommendations;
   @override
   ConsumerState<IkHomePage> createState() => _IkHomePageState();
 }
@@ -54,13 +57,13 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
     super.initState();
     ref.listenManual(authProvider.select((state) => state.loggedUsers), (_, _) {
       Future.microtask(() {
-        if (mounted) {
+        if (mounted && !widget.refinedRecommendations) {
           ref.read(recommendationsProvider.notifier).loadRecommendations();
         }
       });
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+      if (mounted && !widget.refinedRecommendations) {
         ref.read(recommendationsProvider.notifier).loadRecommendations();
       }
     });
@@ -68,6 +71,9 @@ class _IkHomePageState extends ConsumerState<IkHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (widget.refinedRecommendations) {
+      return IkDiscoveryCatalogPage(onNavigate: widget.onNavigate);
+    }
     final aligned = widget.workspace && widget.alignToDesign;
     final publicRecommendations = aligned && widget.recommendationsInDiscovery;
     final player = ref.watch(playerProvider);

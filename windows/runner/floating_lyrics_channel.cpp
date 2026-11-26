@@ -146,6 +146,28 @@ FloatingLyricsChannel::FloatingLyricsChannel(
   window_.SetEventCallback([this](const std::string& event) {
     SendEventToFlutter(event);
   });
+  compact_window_.SetEventCallback([this](const std::string& event) {
+    if (!channel_) return;
+    if (event == "windowResized") {
+      flutter::EncodableMap args;
+      args[flutter::EncodableValue("width")] =
+          flutter::EncodableValue(compact_window_.GetWidth());
+      args[flutter::EncodableValue("height")] =
+          flutter::EncodableValue(compact_window_.GetHeight());
+      channel_->InvokeMethod(event,
+          std::make_unique<flutter::EncodableValue>(args));
+    } else if (event == "lockChanged") {
+      channel_->InvokeMethod(event,
+          std::make_unique<flutter::EncodableValue>(compact_window_.IsLocked()));
+    } else if (event == "previous" || event == "playPause" || event == "next") {
+      flutter::EncodableMap args;
+      args[flutter::EncodableValue("action")] = flutter::EncodableValue(event);
+      channel_->InvokeMethod("controlRequested",
+          std::make_unique<flutter::EncodableValue>(args));
+    } else {
+      channel_->InvokeMethod(event, nullptr);
+    }
+  });
 }
 
 FloatingLyricsChannel::~FloatingLyricsChannel() = default;
@@ -181,6 +203,7 @@ void FloatingLyricsChannel::HandleMethodCall(
   }
 
   if (method == "hide") {
+    compact_window_.Hide();
     window_.Hide();
     result->Success(flutter::EncodableValue(true));
     return;
@@ -192,6 +215,44 @@ void FloatingLyricsChannel::HandleMethodCall(
       result->Error("INVALID_ARGUMENTS", "Floating lyrics payload is missing");
       return;
     }
+
+    const auto* presentation = ArgumentsAsMap(
+        FindValue(*arguments, "windowsPresentation"));
+    if (presentation != nullptr && GetInt(*presentation, "version", 0) == 1 &&
+        GetString(*presentation, "style") == "compact") {
+      CompactLyricsContent content;
+      content.text = Utf8ToWide(GetString(*arguments, "text"));
+      content.translation = Utf8ToWide(GetString(*arguments, "translation"));
+      content.next_text = Utf8ToWide(GetString(*arguments, "nextText"));
+      const auto family = GetString(*presentation, "fontFamily");
+      if (!family.empty()) content.font_family = Utf8ToWide(family);
+      content.width = GetInt(*arguments, "width", 320);
+      content.height = GetInt(*arguments, "height", 92);
+      content.font_size = GetDouble(*presentation, "fontSize",
+          GetDouble(*arguments, "fontSize", 23));
+      GetColorArgb(*arguments, "textColor", &content.text_color);
+      GetColorArgb(*arguments, "highlightColor", &content.current_color);
+      content.other_color = content.text_color;
+      GetColorArgb(*presentation, "currentLineColor", &content.current_color);
+      GetColorArgb(*presentation, "otherLineColor", &content.other_color);
+      GetColorArgb(*presentation, "backgroundColor", &content.background_color);
+      content.shadow_opacity = GetDouble(*presentation, "shadowOpacity",
+          GetDouble(*arguments, "shadowOpacity", 0.78));
+      content.stroke_width = GetDouble(*arguments, "strokeWidth", 0.7);
+      content.highlight_progress = GetDouble(*arguments, "highlightProgress", 0);
+      content.highlight_rate = GetDouble(*arguments, "highlightRate", 0);
+      content.current_color_explicit =
+          GetBool(*presentation, "currentLineColorExplicit", false);
+      content.locked = GetBool(*arguments, "isLocked", false);
+      content.playing = GetBool(*arguments, "isPlaying", false);
+      content.has_song = GetBool(*arguments, "hasSong", false);
+      window_.Hide();
+      const bool ok = compact_window_.Present(content, method == "show");
+      result->Success(flutter::EncodableValue(ok));
+      return;
+    }
+    // 缺省请求明确回到旧窗口，不继承上一次 IK 的呈现选择。
+    compact_window_.Hide();
 
     const std::wstring text = Utf8ToWide(GetString(*arguments, "text"));
     const std::wstring translation =

@@ -51,6 +51,7 @@ import 'package:mconnect/features/smart_playlists/presentation/pages/smart_playl
 import 'package:mconnect/features/toplist/presentation/pages/toplists_page.dart';
 import 'package:mconnect/features/toplist/presentation/providers/toplists_provider.dart';
 import 'package:mconnect/l10n/ik_discovery_revision_strings.dart';
+import 'package:mconnect/l10n/ik_library_revision_strings.dart';
 import 'package:mconnect/l10n/ik_player_alignment_strings.dart';
 import 'package:mconnect/l10n/ik_source_catalog_strings.dart';
 import 'package:mconnect/l10n/ik_strings.dart';
@@ -278,6 +279,7 @@ void main() {
     Size? viewport,
     Future<void> Function(Map<String, dynamic>)? audioWrite,
     _Catalog? catalogOverride,
+    _Recommendations? recommendationsOverride,
     bool realDiscovery = false,
     bool interactionIo = false,
     bool pageInteractionRefinements = false,
@@ -304,7 +306,8 @@ void main() {
       window: const _Window(),
     );
     await tester.runAsync(appearance.initialize);
-    final recommendations = _Recommendations(realLoading: realDiscovery);
+    final recommendations =
+        recommendationsOverride ?? _Recommendations(realLoading: realDiscovery);
     if (!recommendationsLoading) {
       recommendations.show(
         RecommendationsState(
@@ -1426,6 +1429,602 @@ void main() {
       await tester.pump();
     }
   });
+
+  for (final hasSong in [true, false]) {
+    for (final anchor in ['搜索导航', '无悬停', '导航', '播放栏上一首']) {
+      _testWindows('E23 新正文框架真实鼠标迟启于$anchor/有歌$hasSong', (tester) async {
+        final app = await mountRoot(
+          tester,
+          hasSong: hasSong,
+          recommendationsLoading: false,
+          pageInteractionRefinements: true,
+          workspacePageRefinements: true,
+          viewport: const Size(1920, 1032),
+          catalogOverride: _Catalog(
+            hotTerms: [for (var i = 0; i < 30; i++) 'E23热词$i'],
+          ),
+        );
+        final trace = binding.trace;
+        final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+        await mouse.addPointer(location: const Offset(1918, 1));
+        final initialTarget = switch (anchor) {
+          '搜索导航' => find.byKey(const ValueKey('ik-workspace-nav-1')),
+          '导航' => find.byKey(const ValueKey('ik-workspace-nav-0')),
+          '播放栏上一首' => find.byTooltip(VideoStrings.previousSong),
+          _ => null,
+        };
+        if (initialTarget != null) {
+          await _hover(tester, mouse, initialTarget, trace);
+        }
+        expect(binding.renderViews.single.owner!.semanticsOwner, isNull);
+        trace.onIssue = () => _dumpMarkers(tester, trace);
+        trace.step = 'E23新正文框架鼠标停于$anchor后迟启语义';
+        final handle = tester.ensureSemantics();
+        Future<void> frames(String stage, int count) async {
+          trace.step = stage;
+          for (var frame = 0; frame < count; frame++) {
+            await _pumpAndCheck(
+              tester,
+              trace,
+              const Duration(milliseconds: 16),
+            );
+          }
+        }
+
+        Future<void> mouseClick(Finder target, String stage) async {
+          expect(target.hitTestable(), findsOneWidget);
+          final point = tester.getCenter(target.hitTestable());
+          await mouse.moveTo(point);
+          await frames('$stage 鼠标移入并显示提示', 70);
+          await mouse.down(point);
+          await frames('$stage 鼠标按下', 1);
+          await mouse.up();
+          await frames('$stage 鼠标释放与页面切换', 24);
+          await mouse.moveTo(const Offset(1918, 1));
+          await frames('$stage 鼠标离开与提示退场', 40);
+          trace.expectValid();
+        }
+
+        try {
+          await frames('E23迟启语义初始逐帧', 4);
+          trace.expectValid();
+          for (final page in [1, 0, 2]) {
+            await mouseClick(
+              find.byKey(ValueKey('ik-workspace-nav-$page')),
+              'E23真实鼠标切主区$page',
+            );
+          }
+          await mouseClick(
+            find.byKey(const ValueKey('ik-library-category-playlists')),
+            'E23真实鼠标进入我的歌单',
+          );
+          final source = find.descendant(
+            of: find.byType(PlatformPlaylistsPage),
+            matching: find.byType(IkSelect<PlatformType>),
+          );
+          await mouseClick(source, 'E23实际歌单来源菜单展开');
+          expect(find.byType(MenuItemButton).hitTestable(), findsWidgets);
+          await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+          await frames('E23歌单来源菜单单次Esc退出', 40);
+          expect(find.byType(MenuItemButton), findsNothing);
+          trace.expectValid();
+        } finally {
+          handle.dispose();
+          await mouse.removePointer();
+          await tester.pumpWidget(const SizedBox.shrink());
+          app.container.dispose();
+          app.appearance.dispose();
+          app.unified.dispose();
+          await tester.pump();
+        }
+      });
+    }
+  }
+
+  _testWindows('E24 真实30热词展开后鼠标跨主区内嵌下载和独立播放器', (tester) async {
+    final terms = [for (var i = 0; i < 30; i++) 'E24热词$i'];
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+      pageInteractionRefinements: true,
+      workspacePageRefinements: true,
+      viewport: const Size(1920, 1032),
+      catalogOverride: _Catalog(hotTerms: terms),
+    );
+    final trace = binding.trace;
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1918, 1));
+    trace.onIssue = () => _dumpMarkers(tester, trace);
+    trace.step = 'E24真实根迟启语义';
+    final handle = tester.ensureSemantics();
+    Future<void> hover(Finder target, String stage) =>
+        _axMouseHover(tester, mouse, trace, target, stage);
+    Future<void> click(Finder target, String stage, {bool leave = true}) =>
+        _axMouseClick(tester, mouse, trace, target, stage, leave: leave);
+    final search = find.byType(IkSearchWorkspace);
+    final searchNav = find.byKey(const ValueKey('ik-workspace-nav-1'));
+    final seek = find.byKey(const ValueKey('ik-bar-seek'));
+    void expectAllTerms() {
+      expect(
+        find.descendant(of: search, matching: find.byType(ActionChip)),
+        findsNWidgets(30),
+      );
+      for (final term in terms) {
+        expect(
+          find.descendant(of: search, matching: find.text(term)).hitTestable(),
+          findsOneWidget,
+          reason: 'E24全部30项必须实际显示，不能抽样',
+        );
+      }
+    }
+
+    try {
+      await _axFrames(tester, trace, 'E24迟启初始逐帧', 4);
+      await click(searchNav, 'E24鼠标进入搜索');
+      expect(
+        find.descendant(of: search, matching: find.byType(ActionChip)),
+        findsNWidgets(10),
+      );
+      await click(
+        find.text(IkLibraryRevisionStrings.expandHotSearch),
+        'E24实际展开全部热词',
+      );
+      expectAllTerms();
+      await hover(find.text(terms.last), 'E24第30项热词悬停');
+      await hover(
+        find.byKey(const ValueKey('ik-workspace-search')),
+        'E24共享搜索输入悬停',
+      );
+      await hover(searchNav, 'E24搜索导航提示显示后切主区');
+      await click(
+        find.byKey(const ValueKey('ik-workspace-nav-0')),
+        'E24鼠标离开展开搜索进入发现',
+        leave: false,
+      );
+      await click(searchNav, 'E24鼠标回到展开搜索', leave: false);
+      expectAllTerms();
+      final router = GoRouter.of(tester.element(search));
+      await hover(seek, 'E24进度滑块悬停后进入内嵌正文');
+      trace.step = 'E24保持滑块悬停push内嵌下载';
+      unawaited(router.push<void>('/downloads'));
+      await _axFrames(tester, trace, 'E24下载正文逐帧', 40);
+      expect(find.byType(IkDownloadsWorkspace).hitTestable(), findsOneWidget);
+      await hover(seek, 'E24内嵌下载进度滑块悬停');
+      await click(
+        find.descendant(
+          of: find.byType(IkPlaybackBar),
+          matching: find.text(_track.name),
+        ),
+        'E24真实鼠标从内嵌下载打开独立播放器',
+        leave: false,
+      );
+      expect(find.byType(WindowsPlayerPage).hitTestable(), findsOneWidget);
+      expect(
+        tester
+            .widget<IkDesktopWorkspace>(find.byType(IkDesktopWorkspace))
+            .fullPage,
+        isTrue,
+      );
+      await hover(
+        find.byKey(const ValueKey('ik-bar-volume')),
+        'E24独立播放器音量滑块悬停',
+      );
+      await hover(seek, 'E24独立播放器进度滑块悬停');
+      trace.step = 'E24保持进度滑块悬停push内嵌queue';
+      unawaited(router.push<void>('/queue'));
+      await _axFrames(tester, trace, 'E24queue正文逐帧', 40);
+      expect(find.byType(QueuePage).hitTestable(), findsOneWidget);
+      await click(find.byType(BackButton).hitTestable(), 'E24鼠标返回独立播放器');
+      expect(find.byType(WindowsPlayerPage).hitTestable(), findsOneWidget);
+      await click(
+        find.descendant(
+          of: find.byType(WindowsPlayerPage),
+          matching: find.text(WindowsMusicStrings.back),
+        ),
+        'E24鼠标返回内嵌下载',
+      );
+      expect(find.byType(IkDownloadsWorkspace).hitTestable(), findsOneWidget);
+      await click(find.byType(BackButton).hitTestable(), 'E24鼠标返回已展开搜索');
+      expectAllTerms();
+      trace.expectValid();
+    } finally {
+      handle.dispose();
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  _testWindows('E25 语义完全关闭重启后鼠标继续操作新正文', (tester) async {
+    final app = await mountRoot(
+      tester,
+      hasSong: true,
+      recommendationsLoading: false,
+      pageInteractionRefinements: true,
+      workspacePageRefinements: true,
+      viewport: const Size(1920, 1032),
+      catalogOverride: _Catalog(
+        hotTerms: [for (var i = 0; i < 30; i++) 'E25热词$i'],
+      ),
+    );
+    final trace = binding.trace;
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1918, 1));
+    trace.onIssue = () => _dumpMarkers(tester, trace);
+    trace.step = 'E25第一代迟启语义';
+    SemanticsHandle? handle = tester.ensureSemantics();
+    Future<void> click(Finder target, String stage) =>
+        _axMouseClick(tester, mouse, trace, target, stage);
+    try {
+      await _axFrames(tester, trace, 'E25第一代初始逐帧', 4);
+      await click(
+        find.byKey(const ValueKey('ik-workspace-nav-1')),
+        'E25第一代进入搜索',
+      );
+      await click(
+        find.text(IkLibraryRevisionStrings.expandHotSearch),
+        'E25第一代实际展开30热词',
+      );
+      for (final anchor in ['搜索导航', '进度滑块']) {
+        final target = find.byKey(
+          ValueKey(anchor == '搜索导航' ? 'ik-workspace-nav-1' : 'ik-bar-seek'),
+        );
+        await _axMouseHover(tester, mouse, trace, target, 'E25关闭前鼠标停于$anchor');
+        trace.expectValid();
+        final oldOwner = binding.renderViews.single.owner!.semanticsOwner;
+        expect(oldOwner, isNotNull);
+        expect(binding.debugOutstandingSemanticsHandles, 1);
+        final oldBatchCount = trace.batches.length;
+        trace.step = 'E25$anchor释放唯一handle并等待语义所有者销毁';
+        handle!.dispose();
+        handle = null;
+        await _axFrames(tester, trace, 'E25$anchor关闭期间逐帧', 4);
+        expect(binding.debugOutstandingSemanticsHandles, 0);
+        expect(binding.semanticsEnabled, isFalse);
+        expect(binding.renderViews.single.owner!.semanticsOwner, isNull);
+        expect(trace.batches.length, oldBatchCount, reason: '语义关闭后不得产生新批次');
+        trace.expectValid();
+        trace.finishDiagnostics(completed: true);
+        // 当前Windows view在false时销毁bridge，true时新建bridge。
+        // 仅在旧代完整有效且owner确已销毁之后重置；不清除活动树问题。
+        trace.clear();
+        trace.onIssue = () => _dumpMarkers(tester, trace);
+        trace.step = 'E25$anchor重建语义bridge对应的新代';
+        handle = tester.ensureSemantics();
+        await _axFrames(tester, trace, 'E25$anchor重启初始完整批次', 4);
+        expect(binding.debugOutstandingSemanticsHandles, 1);
+        expect(binding.semanticsEnabled, isTrue);
+        expect(
+          binding.renderViews.single.owner!.semanticsOwner,
+          isNot(same(oldOwner)),
+        );
+        expect(trace.batches, isNotEmpty);
+        expect(
+          trace.batches.first.any((node) => node.id == 0),
+          isTrue,
+          reason: 'bridge重建后首批必须初始化根0',
+        );
+        trace.expectValid();
+        await click(
+          find.byKey(const ValueKey('ik-workspace-nav-0')),
+          'E25$anchor重启后鼠标进入发现',
+        );
+        await click(
+          find.byKey(const ValueKey('ik-workspace-nav-1')),
+          'E25$anchor重启后鼠标返回搜索',
+        );
+        expect(
+          find.descendant(
+            of: find.byType(IkSearchWorkspace),
+            matching: find.byType(ActionChip),
+          ),
+          findsNWidgets(30),
+        );
+      }
+      await click(
+        find.byKey(const ValueKey('ik-workspace-nav-2')),
+        'E25重启后鼠标进入音乐库',
+      );
+      await click(
+        find.byKey(const ValueKey('ik-library-category-playlists')),
+        'E25重启后鼠标进入我的歌单',
+      );
+      await click(
+        find.descendant(
+          of: find.byType(PlatformPlaylistsPage),
+          matching: find.byType(IkSelect<PlatformType>),
+        ),
+        'E25重启后鼠标打开来源菜单',
+      );
+      expect(find.byType(MenuItemButton).hitTestable(), findsWidgets);
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await _axFrames(tester, trace, 'E25重启后来源菜单Esc退场', 40);
+      expect(find.byType(MenuItemButton), findsNothing);
+      trace.expectValid();
+    } finally {
+      handle?.dispose();
+      await mouse.removePointer();
+      await tester.pumpWidget(const SizedBox.shrink());
+      app.container.dispose();
+      app.appearance.dispose();
+      app.unified.dispose();
+      await tester.pump();
+    }
+  });
+
+  for (final route in ['/downloads', '/player']) {
+    _testWindows('E26 主区隐藏于$route时真实热词推荐迟返', (tester) async {
+      final terms = [for (var i = 0; i < 30; i++) 'E26热词$i'];
+      final catalog = _PendingCatalog(hotTerms: terms);
+      final platforms = {
+        for (final platform in PlatformType.musicServices)
+          platform: _PendingContent(platform),
+      };
+      for (final platform in platforms.values) {
+        PlatformRegistry.register(platform);
+      }
+      final app = await mountRoot(
+        tester,
+        hasSong: true,
+        pageInteractionRefinements: true,
+        workspacePageRefinements: true,
+        viewport: const Size(1920, 1032),
+        catalogOverride: catalog,
+        recommendationsOverride: _PendingRecommendations(),
+      );
+      final trace = binding.trace;
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: const Offset(1918, 1));
+      trace.onIssue = () => _dumpMarkers(tester, trace);
+      trace.step = 'E26$route两类真实加载等待期间迟启语义';
+      final handle = tester.ensureSemantics();
+      Future<void> click(Finder target, String stage) =>
+          _axMouseClick(tester, mouse, trace, target, stage);
+      try {
+        await _axFrames(tester, trace, 'E26$route初始逐帧', 4);
+        expect(catalog.hotLoads, 1);
+        expect(app.container.read(recommendationsProvider).isLoading, isTrue);
+        for (final platform in platforms.values) {
+          expect(platform.recommendationLoads, 1);
+        }
+        await click(
+          find.byKey(const ValueKey('ik-workspace-nav-1')),
+          'E26$route等待期间鼠标进入搜索',
+        );
+        final search = find.byType(IkSearchWorkspace);
+        expect(tester.widget<IkSearchWorkspace>(search).hotLoading, isTrue);
+        expect(tester.widget<IkSearchWorkspace>(search).hotTerms, isEmpty);
+        await _axMouseHover(
+          tester,
+          mouse,
+          trace,
+          find.byKey(const ValueKey('ik-workspace-nav-1')),
+          'E26$route隐藏主区前搜索导航悬停',
+        );
+        final router = GoRouter.of(tester.element(search));
+        trace.step = 'E26$route真实请求未完成时隐藏主区';
+        unawaited(router.push<void>(route));
+        await _axFrames(tester, trace, 'E26$route进入逐帧', 40);
+        final body = route == '/player'
+            ? find.byType(WindowsPlayerPage)
+            : find.byType(IkDownloadsWorkspace);
+        expect(body.hitTestable(), findsOneWidget);
+        expect(search.hitTestable(), findsNothing);
+        await _axMouseHover(
+          tester,
+          mouse,
+          trace,
+          find.byKey(const ValueKey('ik-bar-seek')),
+          'E26$route返回前进度滑块悬停',
+        );
+        expect(app.container.read(recommendationsProvider).isLoading, isTrue);
+        trace.step = 'E26$route主区隐藏时热词Future真实返回';
+        catalog.release();
+        await _axFrames(tester, trace, 'E26$route热词返回逐帧', 4);
+        final hiddenSearch = find.byType(
+          IkSearchWorkspace,
+          skipOffstage: false,
+        );
+        expect(tester.widget<IkSearchWorkspace>(hiddenSearch).hotTerms, terms);
+        expect(
+          tester.widget<IkSearchWorkspace>(hiddenSearch).hotLoading,
+          isFalse,
+        );
+        for (final entry in platforms.entries) {
+          trace.step = 'E26$route主区隐藏时${entry.key.name}推荐Future真实返回';
+          entry.value.release();
+          await _axFrames(tester, trace, 'E26$route${entry.key.name}推荐返回逐帧', 4);
+          final state = app.container.read(recommendationsProvider);
+          expect(state.songsForPlatform(entry.key), [
+            entry.value.recommendedSong,
+          ]);
+          expect(
+            state.sourceForPlatform(entry.key)?.kind,
+            entry.value.source.kind,
+          );
+          expect(body.hitTestable(), findsOneWidget);
+          expect(
+            trace.nodes.values.any(
+              (node) => node.label.contains(entry.value.recommendedSong.name),
+            ),
+            isFalse,
+            reason: '隐藏发现页迟到推荐不得泄漏到当前可见AX树',
+          );
+        }
+        expect(app.container.read(recommendationsProvider).isLoading, isFalse);
+        expect(app.container.read(recommendationsProvider).totalCount, 3);
+        for (final term in terms) {
+          expect(
+            trace.nodes.values.any((node) => node.label == term),
+            isFalse,
+            reason: '隐藏搜索页迟到热词不得泄漏到当前可见AX树',
+          );
+        }
+        await click(
+          route == '/player'
+              ? find.descendant(
+                  of: body,
+                  matching: find.text(WindowsMusicStrings.back),
+                )
+              : find.byType(BackButton).hitTestable(),
+          'E26$route鼠标返回迟到热词已加载的搜索',
+        );
+        expect(search.hitTestable(), findsOneWidget);
+        expect(tester.widget<IkSearchWorkspace>(search).hotLoading, isFalse);
+        await click(
+          find.text(IkLibraryRevisionStrings.expandHotSearch),
+          'E26$route返回后实际展开全部30热词',
+        );
+        expect(
+          find.descendant(of: search, matching: find.byType(ActionChip)),
+          findsNWidgets(30),
+        );
+        for (final term in terms) {
+          expect(
+            find
+                .descendant(of: search, matching: find.text(term))
+                .hitTestable(),
+            findsOneWidget,
+          );
+        }
+        await click(
+          find.byKey(const ValueKey('ik-workspace-nav-0')),
+          'E26$route鼠标返回迟到推荐已加载的发现',
+        );
+        final home = find.byType(IkHomePage);
+        for (final platform in [PlatformType.qq, PlatformType.kugou]) {
+          final song = find.descendant(
+            of: home,
+            matching: find.text(platforms[platform]!.recommendedSong.name),
+          );
+          await tester.scrollUntilVisible(
+            song,
+            240,
+            scrollable: _verticalScrolls(home).single,
+          );
+          await _axFrames(tester, trace, 'E26$route${platform.name}推荐显示', 4);
+          expect(song.hitTestable(), findsOneWidget);
+        }
+        expect(
+          find.descendant(
+            of: home,
+            matching: find.text(
+              platforms[PlatformType.netease]!.recommendedSong.name,
+            ),
+          ),
+          findsNothing,
+          reason: '个性每日推荐不会重回公共发现列表',
+        );
+        trace.expectValid();
+      } finally {
+        handle.dispose();
+        catalog.release();
+        for (final platform in platforms.values) {
+          platform.release();
+        }
+        await mouse.removePointer();
+        await tester.pumpWidget(const SizedBox.shrink());
+        app.container.dispose();
+        app.appearance.dispose();
+        app.unified.dispose();
+        await tester.pump();
+      }
+    });
+  }
+
+  for (final viewport in [const Size(1920, 1032), const Size(390, 844)]) {
+    for (final newWorkspace in [false, true]) {
+      for (final trigger in ['无提示push', '提示可见push', '提示退场鼠标点击']) {
+        _testWindows(
+          'E27 ${viewport.width.toInt()}宽新正文$newWorkspace所有加载完成后$trigger进入独立播放器',
+          (tester) async {
+            final app = await mountRoot(
+              tester,
+              hasSong: true,
+              recommendationsLoading: false,
+              pageInteractionRefinements: true,
+              workspacePageRefinements: newWorkspace,
+              viewport: viewport,
+            );
+            final trace = binding.trace;
+            final mouse = await tester.createGesture(
+              kind: PointerDeviceKind.mouse,
+            );
+            await mouse.addPointer(location: const Offset(1918, 1));
+            trace.onIssue = () => _dumpMarkers(tester, trace);
+            trace.step = 'E27所有加载完成后迟启语义';
+            final handle = tester.ensureSemantics();
+            try {
+              await _axFrames(tester, trace, 'E27初始逐帧', 4);
+              final searchNav = find.byKey(
+                const ValueKey('ik-workspace-nav-1'),
+              );
+              await _axMouseClick(
+                tester,
+                mouse,
+                trace,
+                searchNav,
+                'E27实际鼠标进入搜索后离开',
+              );
+              if (trigger != '无提示push') {
+                await _axMouseHover(
+                  tester,
+                  mouse,
+                  trace,
+                  searchNav,
+                  'E27搜索导航悬停直至提示显示',
+                );
+              }
+              trace.step = 'E27新正文$newWorkspace通过$trigger进入独立播放器';
+              if (trigger == '提示退场鼠标点击') {
+                final song = find
+                    .descendant(
+                      of: find.byType(IkPlaybackBar),
+                      matching: find.text(_track.name),
+                    )
+                    .hitTestable();
+                expect(song, findsOneWidget);
+                final point = tester.getCenter(song);
+                await mouse.moveTo(point);
+                await _axFrames(tester, trace, 'E27鼠标离开导航提示尚在退场', 1);
+                await mouse.down(point);
+                await _axFrames(tester, trace, 'E27真实鼠标按下歌曲', 1);
+                await mouse.up();
+              } else {
+                final router = GoRouter.of(
+                  tester.element(find.byType(IkSearchWorkspace)),
+                );
+                unawaited(router.push<void>('/player'));
+              }
+              await _axFrames(
+                tester,
+                trace,
+                'E27新正文$newWorkspace$trigger播放器进入逐帧',
+                40,
+              );
+              expect(
+                find.byType(WindowsPlayerPage).hitTestable(),
+                findsOneWidget,
+              );
+              trace.expectValid();
+            } finally {
+              handle.dispose();
+              await mouse.removePointer();
+              await tester.pumpWidget(const SizedBox.shrink());
+              app.container.dispose();
+              app.appearance.dispose();
+              app.unified.dispose();
+              await tester.pump();
+            }
+          },
+        );
+      }
+    }
+  }
 
   _testWindows('E16 全开真实根五主区、连续内嵌路由、独立播放器与音源草稿完整AX', (tester) async {
     PlatformRegistry.register(_E16Content());
@@ -3244,6 +3843,50 @@ Future<void> _rootDrain(WidgetTester tester, _TreeTrace trace) async {
   await _pumpAndCheck(tester, trace);
 }
 
+Future<void> _axFrames(
+  WidgetTester tester,
+  _TreeTrace trace,
+  String stage,
+  int count,
+) async {
+  trace.step = stage;
+  for (var frame = 0; frame < count; frame++) {
+    await _pumpAndCheck(tester, trace, const Duration(milliseconds: 16));
+  }
+}
+
+Future<void> _axMouseHover(
+  WidgetTester tester,
+  TestGesture mouse,
+  _TreeTrace trace,
+  Finder target,
+  String stage,
+) async {
+  expect(target.hitTestable(), findsOneWidget);
+  await mouse.moveTo(tester.getCenter(target.hitTestable()));
+  await _axFrames(tester, trace, '$stage 鼠标移入并显示提示', 70);
+}
+
+Future<void> _axMouseClick(
+  WidgetTester tester,
+  TestGesture mouse,
+  _TreeTrace trace,
+  Finder target,
+  String stage, {
+  bool leave = true,
+}) async {
+  await _axMouseHover(tester, mouse, trace, target, stage);
+  await mouse.down(tester.getCenter(target.hitTestable()));
+  await _axFrames(tester, trace, '$stage 鼠标按下', 1);
+  await mouse.up();
+  await _axFrames(tester, trace, '$stage 鼠标释放与页面切换', 24);
+  if (leave) {
+    await mouse.moveTo(const Offset(1918, 1));
+    await _axFrames(tester, trace, '$stage 鼠标离开与提示退场', 40);
+  }
+  trace.expectValid();
+}
+
 Future<void> _allTooltips(
   WidgetTester tester,
   TestGesture mouse,
@@ -3739,6 +4382,39 @@ class _Catalog extends ExpandedVideoCatalog {
   }
 }
 
+class _PendingCatalog extends _Catalog {
+  _PendingCatalog({required super.hotTerms});
+  final _pending = Completer<List<String>>();
+  int hotLoads = 0;
+  @override
+  Future<List<String>> hotSearch() {
+    hotLoads++;
+    return _pending.future;
+  }
+
+  void release() {
+    if (!_pending.isCompleted) _pending.complete(hotTerms);
+  }
+}
+
+class _PendingContent extends _R10Content {
+  _PendingContent(super.platform);
+  final _pending = Completer<RecommendationResult>();
+  @override
+  Future<RecommendationResult> getDailyRecommendation() {
+    recommendationLoads++;
+    return _pending.future;
+  }
+
+  void release() {
+    if (!_pending.isCompleted) {
+      _pending.complete(
+        RecommendationResult(songs: [recommendedSong], source: source),
+      );
+    }
+  }
+}
+
 class _Recommendations extends RecommendationsNotifier {
   _Recommendations({this.realLoading = false})
     : super(supportedTypes: realLoading ? PlatformType.musicServices : null) {
@@ -3751,6 +4427,12 @@ class _Recommendations extends RecommendationsNotifier {
   }
 
   void show(RecommendationsState next) => state = next;
+}
+
+class _PendingRecommendations extends _Recommendations {
+  _PendingRecommendations() : super(realLoading: true);
+  @override
+  Future<void> loadRecommendations() => loadLatestRecommendations();
 }
 
 /// 按生产IkStrictAudioSettings的真实写队列停在落盘前，验收可见busy帧。

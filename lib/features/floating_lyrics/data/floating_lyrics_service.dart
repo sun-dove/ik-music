@@ -18,6 +18,16 @@ class FloatingLyricsService {
 
   static final instance = FloatingLyricsService._();
 
+  /// 新入口仅扩展请求内容，原生事件仍由原 singleton 唯一接收。
+  factory FloatingLyricsService.withPayloadAdapter(
+    Map<String, Object?> Function(
+      FloatingLyricsPayload,
+      FloatingLyricsSettings,
+    ) adapt,
+  ) => _AdaptedFloatingLyricsService(instance, adapt);
+
+  FloatingLyricsService._delegated(this._channel);
+
   final MethodChannel _channel;
   final _closedByUserController = StreamController<void>.broadcast();
   final _lockChangedController = StreamController<bool>.broadcast();
@@ -141,4 +151,46 @@ class FloatingLyricsService {
   Future<bool> hide() async {
     return await _invokeOptional<bool>('hide') ?? false;
   }
+}
+
+class _AdaptedFloatingLyricsService extends FloatingLyricsService {
+  _AdaptedFloatingLyricsService(FloatingLyricsService delegate, this._adapt)
+    : _delegate = delegate,
+      super._delegated(delegate._channel);
+
+  final FloatingLyricsService _delegate;
+  final Map<String, Object?> Function(
+    FloatingLyricsPayload,
+    FloatingLyricsSettings,
+  ) _adapt;
+
+  @override
+  Stream<void> get closedByUserStream => _delegate.closedByUserStream;
+  @override
+  Stream<bool> get lockChangedStream => _delegate.lockChangedStream;
+  @override
+  Stream<({int width, int height})> get windowResizedStream =>
+      _delegate.windowResizedStream;
+  @override
+  Stream<({Color highlightColor, double fontSize})> get styleChangedStream =>
+      _delegate.styleChangedStream;
+  @override
+  Stream<FloatingLyricsControl> get controlRequestedStream =>
+      _delegate.controlRequestedStream;
+  @override
+  Stream<double> get positionChangedStream => _delegate.positionChangedStream;
+
+  @override
+  Future<bool> show(
+    FloatingLyricsPayload payload,
+    FloatingLyricsSettings settings,
+  ) async =>
+      await _invokeOptional<bool>('show', _adapt(payload, settings)) ?? false;
+
+  @override
+  Future<bool> update(
+    FloatingLyricsPayload payload,
+    FloatingLyricsSettings settings,
+  ) async =>
+      await _invokeOptional<bool>('update', _adapt(payload, settings)) ?? false;
 }

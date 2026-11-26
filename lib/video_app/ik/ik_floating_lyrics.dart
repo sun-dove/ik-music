@@ -4,23 +4,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/floating_lyrics/data/floating_lyrics_models.dart';
-import '../../features/floating_lyrics/data/floating_lyrics_service.dart';
 import '../../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../l10n/ik_runtime_strings.dart';
 import '../../l10n/video_strings.dart';
+import 'ik_desktop_lyrics_style.dart';
 
 final ikFloatingFailureProvider = StateProvider<bool>((ref) => false);
 final ikFloatingSyncProvider = Provider<FloatingLyricsSyncController>((ref) {
+  final service = ref.watch(ikFloatingLyricsServiceProvider);
   final controller = FloatingLyricsSyncController(
     ref,
+    service: service,
     strictDelivery: true,
     emptyText: VideoStrings.noLyrics,
     onDelivery: (success) {
       ref.read(ikFloatingFailureProvider.notifier).state = !success;
+      if (success) {
+        ref.read(ikDesktopLyricsStyleDeliveryFailedProvider.notifier).state =
+            false;
+      }
     },
   );
+  ref.listen<bool>(ikDesktopLyricsStyleDeliveryFailedProvider, (_, failed) {
+    ref.read(ikFloatingFailureProvider.notifier).state = failed;
+  });
   var active = true;
   unawaited(
     Future<void>.microtask(() async {
@@ -30,9 +39,7 @@ final ikFloatingSyncProvider = Provider<FloatingLyricsSyncController>((ref) {
   ref.onDispose(() {
     active = false;
     controller.dispose();
-    unawaited(
-      FloatingLyricsService.instance.hide().catchError((Object _) => false),
-    );
+    unawaited(service.hide().catchError((Object _) => false));
   });
   return controller;
 });
@@ -50,7 +57,7 @@ class _IkFloatingLyricsPageState extends ConsumerState<IkFloatingLyricsPage> {
   Future<void> _toggle(bool enabled) async {
     if (_busy) return;
     setState(() => _busy = true);
-    final service = FloatingLyricsService.instance;
+    final service = ref.read(ikFloatingLyricsServiceProvider);
     try {
       if (enabled) {
         var allowed = await service.canDrawOverlays();

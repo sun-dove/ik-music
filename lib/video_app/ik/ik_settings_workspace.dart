@@ -17,6 +17,7 @@ import '../../features/player/presentation/providers/player_provider.dart';
 import '../../features/smart_playlists/presentation/providers/smart_playlists_provider.dart';
 import '../../features/stats/presentation/providers/listening_stats_provider.dart';
 import '../../l10n/ik_alignment_settings_strings.dart';
+import '../../l10n/ik_lyrics_style_strings.dart';
 import '../../l10n/ik_runtime_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
@@ -35,6 +36,8 @@ import 'ik_backup_page.dart';
 import 'ik_controls.dart';
 import 'ik_floating_lyrics.dart';
 import 'ik_lyrics_action.dart';
+import 'ik_desktop_lyrics_style.dart';
+import 'ik_lyrics_style_panel.dart';
 import 'ik_spatial_runtime.dart';
 import 'ik_version.dart';
 
@@ -54,6 +57,7 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
     this.initialSection = 'audio',
     this.sectionRequest = 0,
     this.alignToDesign = false,
+    this.refinedLyrics = false,
   });
   final VideoPreferences preferences;
   final WindowsAppearance? appearance;
@@ -67,6 +71,7 @@ class IkSettingsWorkspace extends ConsumerStatefulWidget {
   final String initialSection;
   final int sectionRequest;
   final bool alignToDesign;
+  final bool refinedLyrics;
   @override
   ConsumerState<IkSettingsWorkspace> createState() =>
       _IkSettingsWorkspaceState();
@@ -1263,6 +1268,9 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
   }
 
   Widget _lyrics() {
+    if (widget.refinedLyrics && ref.watch(ikCompactLyricsEnabledProvider)) {
+      return _refinedDesktopLyrics();
+    }
     final state = ref.watch(floatingLyricsProvider),
         notifier = ref.read(floatingLyricsProvider.notifier);
     final busy = ref.watch(ikLyricsActionProvider),
@@ -1384,6 +1392,143 @@ class _IkSettingsWorkspaceState extends ConsumerState<IkSettingsWorkspace> {
                 : null,
           ),
           description: IkWorkspaceStrings.lyricsLockHint,
+        ),
+      ],
+    );
+  }
+
+  Widget _refinedDesktopLyrics() {
+    final settings = ref.watch(floatingLyricsProvider);
+    final style = ref.watch(ikDesktopLyricsStyleProvider);
+    final value = style.resolve(settings);
+    final actions = ref.read(ikDesktopLyricsStyleProvider.notifier);
+    final capability = ref.watch(ikLyricsCapabilityProvider);
+    final busy = ref.watch(ikLyricsActionProvider);
+    final failed = ref.watch(ikFloatingFailureProvider);
+    final issue = ref.watch(ikLyricsIssueProvider);
+    final shadow = value.shadowOpacity == 0
+        ? const <Shadow>[]
+        : [
+            Shadow(
+              color: Colors.black.withValues(alpha: value.shadowOpacity),
+              blurRadius: 2 + value.shadowOpacity * 8,
+              offset: const Offset(0, 2),
+            ),
+          ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        IkSettingCard(
+          children: [
+            _row(
+              IkStrings.floating,
+              Switch(
+                key: const ValueKey('ik-workspace-lyrics'),
+                value: settings.enabled,
+                onChanged: busy || !capability.supported
+                    ? null
+                    : ref.read(ikLyricsActionProvider.notifier).setEnabled,
+              ),
+              description: !capability.supported
+                  ? capability.message
+                  : failed
+                  ? issue ?? IkRuntimeStrings.floatingFailed
+                  : IkWorkspaceStrings.lyricsHint,
+            ),
+            Container(
+              margin: const EdgeInsets.fromLTRB(20, 6, 20, 20),
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: settings.isLocked
+                      ? Colors.transparent
+                      : value.backgroundColor.withValues(
+                          alpha: value.backgroundOpacity.clamp(0, 1),
+                        ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      IkLyricsStyleStrings.staticPreview,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      IkLyricsStyleStrings.previewMain,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: value.fontFamily,
+                        fontSize: value.fontSize.clamp(14, 48),
+                        fontWeight: FontWeight.w600,
+                        height: 1.5,
+                        color: value.currentLineColor,
+                        shadows: shadow,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      IkLyricsStyleStrings.previewNext,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontFamily: value.fontFamily,
+                        fontSize: value.fontSize.clamp(14, 48) * .75,
+                        height: 1.5,
+                        color: value.otherLineColor,
+                        shadows: shadow,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            _row(
+              IkWorkspaceStrings.lyricsLock,
+              Switch(
+                value: settings.isLocked,
+                onChanged: capability.supported && settings.enabled &&
+                        !_busy.contains('lyric-style')
+                    ? (locked) => _run('lyric-style', () => ref
+                        .read(floatingLyricsProvider.notifier).setLocked(locked))
+                    : null,
+              ),
+              description: IkLyricsStyleStrings.unlockHint,
+              key: 'lyric-style',
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        IkLyricsStylePanel(
+          title: IkLyricsStyleStrings.desktop,
+          systemFonts: widget.appearance?.fonts ?? const [],
+          fontFamily: value.fontFamily,
+          fontSize: value.fontSize,
+          backgroundColor: value.backgroundColor,
+          currentLineColor: value.currentLineColor,
+          otherLineColor: value.otherLineColor,
+          shadowOpacity: value.shadowOpacity,
+          backgroundOpacity: value.backgroundOpacity,
+          busy: !capability.supported || _busy.contains('lyric-style'),
+          issue: _errors['lyric-style'],
+          onFontFamily: (font) => _run('lyric-style', () => actions.setFontFamily(
+              font ?? widget.appearance?.fontFamily ?? 'Microsoft YaHei UI')),
+          onFontSize: (size) => _run('lyric-style', () => actions.setFontSize(size)),
+          onBackgroundColor: (color) =>
+              _run('lyric-style', () => actions.setBackgroundColor(color)),
+          onCurrentLineColor: (color) =>
+              _run('lyric-style', () => actions.setCurrentLineColor(color)),
+          onOtherLineColor: (color) =>
+              _run('lyric-style', () => actions.setOtherLineColor(color)),
+          onShadowOpacity: (opacity) =>
+              _run('lyric-style', () => actions.setShadowOpacity(opacity)),
+          onBackgroundOpacity: (opacity) =>
+              _run('lyric-style', () => actions.setBackgroundOpacity(opacity)),
+          onReset: () => _run('lyric-style', actions.reset),
         ),
       ],
     );

@@ -4,6 +4,7 @@ import '../../features/library/presentation/pages/platform_playlists_page.dart';
 import '../../features/local_music/presentation/pages/local_music_page.dart';
 import '../../features/smart_playlists/presentation/pages/smart_playlists_page.dart';
 import '../../l10n/ik_contextual_error_strings.dart';
+import '../../l10n/ik_quick_workspace_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
 import '../../l10n/video_strings.dart';
@@ -37,6 +38,7 @@ class IkLibraryWorkspace extends StatefulWidget {
     this.simplifySources = false,
     this.stableCategoryTabs = false,
     this.contextualErrors = false,
+    this.compactSyncStatus = false,
     this.expiredPlatform,
     this.downloadsBuilder,
   });
@@ -56,6 +58,7 @@ class IkLibraryWorkspace extends StatefulWidget {
   final bool simplifySources;
   final bool stableCategoryTabs;
   final bool contextualErrors;
+  final bool compactSyncStatus;
   final PlatformType? expiredPlatform;
   final WidgetBuilder? downloadsBuilder;
   @override
@@ -333,6 +336,28 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
     ],
   );
 
+  Iterable<PlatformType> get _syncPlatforms => PlatformType.musicServices.where(
+    (platform) => widget.loggedIn.contains(platform) ||
+        widget.expiredPlatform == platform ||
+        widget.libraries[platform]?.error != null,
+  );
+
+  Widget _compactSyncControl(PlatformType platform) {
+    final error = widget.libraries[platform]?.error;
+    final needsAccount = !widget.loggedIn.contains(platform) ||
+        error?.kind == VideoFailureKind.notLoggedIn ||
+        error?.kind == VideoFailureKind.sessionExpired;
+    return _IkCompactSyncControl(
+      key: ValueKey('ik-library-sync-${platform.name}'),
+      platform: platform,
+      error: error,
+      busy: widget.syncing.contains(platform),
+      needsAccount: needsAccount,
+      onSync: () => widget.onSync(platform),
+      onAccounts: widget.onAccounts,
+    );
+  }
+
   Widget _likes(BuildContext context, {bool includeHeading = true}) {
     final merged = <String, Song>{
       for (final song in widget.localLikes) videoSongKey(song): song,
@@ -458,15 +483,19 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                       icon: const Icon(Icons.person_outline_rounded, size: 18),
                       label: const Text(IkWorkspaceStrings.connect),
                     ),
-                    for (final platform in widget.loggedIn)
-                      TextButton(
-                        onPressed: widget.syncing.contains(platform)
-                            ? null
-                            : () => widget.onSync(platform),
-                        child: Text(
-                          '${IkWorkspaceStrings.sync} · ${videoPlatformLabel(platform)}',
+                    if (widget.compactSyncStatus)
+                      for (final platform in _syncPlatforms)
+                        _compactSyncControl(platform)
+                    else
+                      for (final platform in widget.loggedIn)
+                        TextButton(
+                          onPressed: widget.syncing.contains(platform)
+                              ? null
+                              : () => widget.onSync(platform),
+                          child: Text(
+                            '${IkWorkspaceStrings.sync} · ${videoPlatformLabel(platform)}',
+                          ),
                         ),
-                      ),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -488,21 +517,22 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
                       ),
                     ],
                   ),
-                for (final platform in widget.loggedIn)
-                  if (widget.libraries[platform]?.error case final error?)
-                    if (widget.contextualErrors)
-                      _syncIssue(context, platform, error)
-                    else
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Text(
-                          '${videoPlatformLabel(platform)} · ${error.message}',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
+                if (!widget.compactSyncStatus)
+                  for (final platform in widget.loggedIn)
+                    if (widget.libraries[platform]?.error case final error?)
+                      if (widget.contextualErrors)
+                        _syncIssue(context, platform, error)
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Text(
+                            '${videoPlatformLabel(platform)} · ${error.message}',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
                           ),
                         ),
-                      ),
-                if (widget.contextualErrors)
+                if (widget.contextualErrors && !widget.compactSyncStatus)
                   if (widget.expiredPlatform case final platform?
                       when platform.isMusicService &&
                           !widget.loggedIn.contains(platform))
@@ -727,6 +757,177 @@ class _IkLibraryWorkspaceState extends State<IkLibraryWorkspace> {
             ),
           ],
           if (action != null) ...[const SizedBox(height: 4), action],
+        ],
+      ),
+    );
+  }
+}
+
+class _IkCompactSyncControl extends StatefulWidget {
+  const _IkCompactSyncControl({
+    super.key,
+    required this.platform,
+    required this.error,
+    required this.busy,
+    required this.needsAccount,
+    required this.onSync,
+    required this.onAccounts,
+  });
+  final PlatformType platform;
+  final VideoFailure? error;
+  final bool busy, needsAccount;
+  final VoidCallback onSync, onAccounts;
+
+  @override
+  State<_IkCompactSyncControl> createState() => _IkCompactSyncControlState();
+}
+
+class _IkCompactSyncControlState extends State<_IkCompactSyncControl> {
+  final _menu = MenuController();
+
+  void _menuChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final platform = videoPlatformLabel(widget.platform);
+    final hasIssue = widget.error != null || widget.needsAccount;
+    final canSync = !widget.needsAccount &&
+        (widget.error == null || widget.error!.canRetry);
+    final sync = TextButton.icon(
+      onPressed: widget.busy || !canSync ? null : widget.onSync,
+      icon: widget.busy
+          ? const SizedBox(
+              width: 13,
+              height: 13,
+              child: CircularProgressIndicator(strokeWidth: 1.5),
+            )
+          : const Icon(Icons.sync_rounded, size: 16),
+      label: Text(
+        '${widget.busy ? IkQuickWorkspaceStrings.syncing : IkWorkspaceStrings.sync} · ${IkQuickWorkspaceStrings.platformTab(widget.platform)}',
+      ),
+    );
+    if (!hasIssue) return sync;
+    return PopScope<Object?>(
+      canPop: !_menu.isOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _menu.isOpen) _menu.close();
+      },
+      child: Wrap(
+        spacing: 2,
+        runSpacing: 2,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          sync,
+          MenuAnchor(
+            controller: _menu,
+            onOpen: _menuChanged,
+            onClose: _menuChanged,
+            style: MenuStyle(
+              elevation: const WidgetStatePropertyAll(8),
+              backgroundColor: WidgetStatePropertyAll(colors.surface),
+              surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+              padding: const WidgetStatePropertyAll(EdgeInsets.all(16)),
+              shape: WidgetStatePropertyAll(
+                RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: colors.outlineVariant),
+                ),
+              ),
+            ),
+            menuChildren: [
+              SizedBox(
+                width: (MediaQuery.sizeOf(context).width - 72)
+                    .clamp(160.0, 320.0).toDouble(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.needsAccount
+                                ? IkContextualErrorStrings.syncNeedsAccount(platform)
+                                : IkContextualErrorStrings.syncFailed(platform),
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: IkQuickWorkspaceStrings.closeDetails,
+                          onPressed: _menu.close,
+                          icon: const Icon(Icons.close_rounded, size: 18),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 220),
+                      child: SingleChildScrollView(
+                        child: Text(
+                          widget.error?.message ??
+                              IkQuickWorkspaceStrings.accountUnavailable,
+                          style: TextStyle(
+                            fontSize: 12,
+                            height: 1.5,
+                            color: colors.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (widget.needsAccount || widget.error?.canRetry == true) ...[
+                      const SizedBox(height: 12),
+                      TextButton.icon(
+                        onPressed: widget.busy
+                            ? null
+                            : () {
+                                _menu.close();
+                                if (widget.needsAccount) {
+                                  widget.onAccounts();
+                                } else {
+                                  widget.onSync();
+                                }
+                              },
+                        icon: Icon(
+                          widget.needsAccount
+                              ? Icons.person_outline_rounded
+                              : Icons.refresh_rounded,
+                          size: 16,
+                        ),
+                        label: Text(
+                          widget.needsAccount
+                              ? IkContextualErrorStrings.reconnect
+                              : IkContextualErrorStrings.retrySync,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+            builder: (context, controller, _) => TextButton.icon(
+              key: ValueKey('ik-library-sync-status-${widget.platform.name}'),
+              onPressed: widget.busy
+                  ? null
+                  : () => controller.isOpen
+                      ? controller.close() : controller.open(),
+              style: TextButton.styleFrom(
+                foregroundColor: colors.error,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                visualDensity: VisualDensity.compact,
+              ),
+              icon: const Icon(Icons.info_outline_rounded, size: 14),
+              label: Text(
+                widget.needsAccount
+                    ? IkQuickWorkspaceStrings.reconnectNeeded
+                    : IkQuickWorkspaceStrings.syncIssue,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
         ],
       ),
     );

@@ -34,6 +34,7 @@ import 'ik/ik_download_folder.dart';
 import 'ik/ik_downloads_workspace.dart';
 import 'ik/ik_workspace_theme.dart';
 import 'ik/ik_lyrics_action.dart';
+import 'ik/ik_player_lyrics_style.dart';
 import '../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import 'built_in/catalog_panel.dart';
 
@@ -116,6 +117,7 @@ class VideoMusicApp extends StatefulWidget {
     this.dismissSourceMenuOnBack = false,
     this.pageInteractionRefinements = false,
     this.workspacePageRefinements = false,
+    this.quickExperienceRefinements = false,
   });
   final VideoPreferences preferences;
   final CustomSourceCredentialStore? customSourceCredentials;
@@ -134,6 +136,7 @@ class VideoMusicApp extends StatefulWidget {
   final bool dismissSourceMenuOnBack;
   final bool pageInteractionRefinements;
   final bool workspacePageRefinements;
+  final bool quickExperienceRefinements;
   @override
   State<VideoMusicApp> createState() => _VideoMusicAppState();
 }
@@ -146,7 +149,9 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
       widget.alignToDesign &&
       widget.workspacePageRefinements;
   late final _router = _newPages
-      ? createIkWorkspaceRouter(
+      ? (widget.quickExperienceRefinements
+            ? createIkRefinedWorkspaceRouter
+            : createIkWorkspaceRouter)(
           navigatorKey: _workspaceNavigator,
           workspace: (_, child, path) =>
               _routeContent(_home(routeBody: child, routePath: path)),
@@ -304,6 +309,8 @@ class _VideoMusicAppState extends State<VideoMusicApp> {
     dismissSourceMenuOnBack: widget.dismissSourceMenuOnBack,
     pageInteractionRefinements: widget.pageInteractionRefinements,
     workspacePageRefinements: _newPages,
+    quickExperienceRefinements:
+        _newPages && widget.quickExperienceRefinements,
     routeBody: routeBody,
     routePath: routePath,
     workspaceNavigator: _newPages ? _workspaceNavigator : null,
@@ -344,6 +351,7 @@ class _VideoHome extends ConsumerStatefulWidget {
     this.dismissSourceMenuOnBack = false,
     this.pageInteractionRefinements = false,
     this.workspacePageRefinements = false,
+    this.quickExperienceRefinements = false,
     this.routeBody,
     this.routePath = '/',
     this.workspaceNavigator,
@@ -366,6 +374,7 @@ class _VideoHome extends ConsumerStatefulWidget {
   final bool dismissSourceMenuOnBack;
   final bool pageInteractionRefinements;
   final bool workspacePageRefinements;
+  final bool quickExperienceRefinements;
   final Widget? routeBody;
   final String routePath;
   final GlobalKey<NavigatorState>? workspaceNavigator;
@@ -375,6 +384,10 @@ class _VideoHome extends ConsumerStatefulWidget {
 
 class _VideoHomeState extends ConsumerState<_VideoHome>
     with WidgetsBindingObserver {
+  IkPlayerLyricsPreferences? _playerLyricsPreferences;
+  IkPlayerLyricsPreferences get _playerLyricsStyle =>
+      _playerLyricsPreferences ??=
+          IkPlayerLyricsPreferences(widget.preferences.box);
   final _leaveChecks = <Object, Future<bool> Function()>{};
   bool _leavingWorkspacePage = false;
   int _imperativePages = 0;
@@ -603,6 +616,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
     _query.invalidate();
     WidgetsBinding.instance.removeObserver(this);
     _search.dispose();
+    _playerLyricsPreferences?.dispose();
     super.dispose();
   }
 
@@ -986,6 +1000,10 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           ...song.artists.map((artist) => artist.id),
         ].whereType<String>().where((id) => id.trim().isNotEmpty).firstOrNull;
         return WindowsPlayerPage(
+          refinedLayout: widget.quickExperienceRefinements,
+          lyricsPreferences:
+              widget.quickExperienceRefinements ? _playerLyricsStyle : null,
+          systemFonts: widget.windowsAppearance?.fonts ?? const [],
           alignToDesign: widget.alignToDesign,
           compactLayout: widget.workspacePageRefinements,
           lyricsAutoResumeDelay: _refinePageInteractions
@@ -1594,6 +1612,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
 
   Widget _workspaceSettings([String? section]) => IkSettingsWorkspace(
     alignToDesign: widget.alignToDesign,
+    refinedLyrics: widget.quickExperienceRefinements,
     preferences: widget.preferences,
     unified: _unifiedPreferences,
     appearance: widget.windowsAppearance,
@@ -2812,6 +2831,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
       final localLikes = ref.watch(likesProvider);
       final pages = <Widget>[
         IkHomePage(
+          refinedRecommendations: widget.quickExperienceRefinements,
           workspace: widget.workspace,
           alignToDesign: widget.alignToDesign,
           recommendationsInDiscovery: widget.workspacePageRefinements,
@@ -2826,6 +2846,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
         ),
         if (widget.workspace)
           IkSearchWorkspace(
+            platformResultTabs: widget.quickExperienceRefinements,
             alignToDesign: widget.alignToDesign,
             recommendationsInDiscovery: widget.workspacePageRefinements,
             fullRecommendations: _refinePageInteractions,
@@ -2884,6 +2905,7 @@ class _VideoHomeState extends ConsumerState<_VideoHome>
           ),
         if (widget.workspace)
           IkLibraryWorkspace(
+            compactSyncStatus: widget.quickExperienceRefinements,
             alignToDesign: widget.alignToDesign,
             stableCategoryTabs: _refinePageInteractions,
             contextualErrors: widget.workspacePageRefinements,

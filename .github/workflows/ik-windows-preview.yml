@@ -1,0 +1,86 @@
+name: IK Music Windows 快速预览
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['preview/ik-windows-*']
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  PUB_HOSTED_URL: 'https://pub.flutter-io.cn'
+
+concurrency:
+  group: ik-windows-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: windows-2022
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.5'
+          channel: stable
+          cache: true
+      - name: 获取固定依赖
+        run: |
+          flutter pub get --enforce-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - uses: actions/download-artifact@v4
+        with:
+          name: ik-windows-x64
+          run-id: 45653632421
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/ik-previous
+      - name: 编译新界面并组装预览包（不运行测试）
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $buildRoot = ./scripts/prepare_ik_build.ps1 -FlutterSdk $env:FLUTTER_ROOT -Platform windows -OutputDirectory "$env:RUNNER_TEMP/ik-preview-build"
+          $version = Get-Content -LiteralPath ik-version.json -Raw | ConvertFrom-Json
+          $env:VIDEO_MUSIC_BUILD = '1'
+          Push-Location $buildRoot
+          try {
+            flutter build windows --release --no-pub --target lib/main_video.dart --build-name $version.version --build-number $version.build
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+          $oldBundle = "$env:RUNNER_TEMP/ik-previous-bundle"
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP/ik-previous/ik-0.6.2-windows-x64.zip" -DestinationPath $oldBundle
+          $release = Join-Path $buildRoot 'build/windows/x64/runner/Release'
+          $bundle = "$env:RUNNER_TEMP/ik-preview/IK-Music"
+          New-Item -ItemType Directory -Path $bundle -Force | Out-Null
+          foreach ($file in Get-ChildItem -LiteralPath $release -File) {
+            if ($file.Extension -eq '.dll' -or $file.Name -eq 'yueyin_music.exe') {
+              Copy-Item -LiteralPath $file.FullName -Destination $bundle
+            }
+          }
+          Copy-Item -LiteralPath (Join-Path $release 'data') -Destination (Join-Path $bundle 'data') -Recurse
+          foreach ($file in @('libmpv-2.dll','ik.ico','LICENSE','NOTICE.md','平台图标来源说明.md')) {
+            Copy-Item -LiteralPath (Join-Path $oldBundle $file) -Destination $bundle -Force
+          }
+          Copy-Item -LiteralPath (Join-Path $oldBundle 'data/lx-host') -Destination (Join-Path $bundle 'data/lx-host') -Recurse
+          Copy-Item -LiteralPath (Join-Path $oldBundle 'third-party-audio-licenses') -Destination (Join-Path $bundle 'third-party-audio-licenses') -Recurse
+          $receipt = [ordered]@{
+            product = 'IK Music'
+            version = $version.version
+            build = $version.build
+            source = $env:GITHUB_SHA
+            run = $env:GITHUB_RUN_ID
+            purpose = '快速界面预览，未运行回归及实机验证，不作为公开发行'
+            reusedComponentsSource = '6a5c5ed816bb1a600616ae15db518832f87e388a'
+            reusedComponentsRun = '45653632421'
+            reusedComponents = @('libmpv-2.dll','data/lx-host','third-party-audio-licenses')
+          }
+          $receipt | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $bundle '预览构建说明.json') -Encoding utf8
+          ./scripts/write_ik_bundle_manifest.ps1 -BundleDirectory $bundle -OutputPath "$env:RUNNER_TEMP/ik-preview/ik-preview-manifest.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ik-windows-preview-${{ github.sha }}
+          path: ${{ runner.temp }}/ik-preview/
+          if-no-files-found: error
+          retention-days: 14

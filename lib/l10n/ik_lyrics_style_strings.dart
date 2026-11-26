@@ -1,0 +1,23 @@
+abstract final class IkLyricsStyleStrings {
+  static const style = '歌词样式';
+  static const player = '播放详情歌词';
+  static const desktop = '桌面歌词外观';
+  static const close = '返回封面';
+  static const font = '字体';
+  static const inheritFont = '沿用应用字体';
+  static const fontSize = '字号';
+  static const background = '底色';
+  static const currentLine = '当前播放行';
+  static const otherLines = '其他歌词';
+  static const shadow = '阴影强度';
+  static const opacity = '底色不透明度';
+  static const reset = '恢复默认';
+  static const saveFailed = '歌词样式保存失败，请重试';
+  static const savedFonts = '字体使用本机已有字体';
+  static const unlockHint = '锁定后可点击歌词下方窗口；关闭这里的锁定即可调整。';
+  static const previewMain = '让这一刻，慢慢发光';
+  static const previewNext = '跟着旋律走向更远的地方';
+  static const preview = '外观预览';
+  static const staticPreview = '静态外观预览';
+  static const customColor = '自定义颜色';
+}

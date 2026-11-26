@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import 'ik_router.dart';
+import 'ik_personal_daily_page.dart';
 import '../../features/library/presentation/pages/import_playlist_page.dart';
 import '../../features/smart_playlists/presentation/pages/smart_playlist_editor_page.dart';
 import '../../l10n/ik_strings.dart';
+import '../../models/platform_type.dart';
 
 /// IK新正文导航。旧路由工厂和所有页面构造维持原默认行为。
 GoRouter createIkWorkspaceRouter({
@@ -13,6 +15,37 @@ GoRouter createIkWorkspaceRouter({
   required GlobalKey<NavigatorState> navigatorKey,
   Widget Function(BuildContext, String)? settings,
   WidgetBuilder? downloads,
+}) => _createWorkspaceRouter(
+  workspace: workspace,
+  player: player,
+  navigatorKey: navigatorKey,
+  settings: settings,
+  downloads: downloads,
+);
+
+/// 快速改版只改变新日推装配；旧公开路由工厂与默认页面保持。
+GoRouter createIkRefinedWorkspaceRouter({
+  required Widget Function(BuildContext, Widget, String) workspace,
+  required WidgetBuilder player,
+  required GlobalKey<NavigatorState> navigatorKey,
+  Widget Function(BuildContext, String)? settings,
+  WidgetBuilder? downloads,
+}) => _createWorkspaceRouter(
+  workspace: workspace,
+  player: player,
+  navigatorKey: navigatorKey,
+  settings: settings,
+  downloads: downloads,
+  refinedRecommendations: true,
+);
+
+GoRouter _createWorkspaceRouter({
+  required Widget Function(BuildContext, Widget, String) workspace,
+  required WidgetBuilder player,
+  required GlobalKey<NavigatorState> navigatorKey,
+  Widget Function(BuildContext, String)? settings,
+  WidgetBuilder? downloads,
+  bool refinedRecommendations = false,
 }) {
   final original = createIkRouter(
     home: (_) => const SizedBox.shrink(),
@@ -40,6 +73,24 @@ GoRouter createIkWorkspaceRouter({
                   key: state.pageKey,
                   child: const SizedBox.shrink(),
                 ),
+              )
+            else if (refinedRecommendations && route is GoRoute &&
+                route.path == '/daily')
+              GoRoute(
+                path: route.path,
+                builder: (_, state) {
+                  final name = state.uri.queryParameters['platform'];
+                  final platform = name == null
+                      ? PlatformType.netease
+                      : PlatformType.tryParse(name);
+                  if (platform == null || !platform.isMusicService) {
+                    return const IkRouteError();
+                  }
+                  return IkPersonalDailyPage(
+                    initialPlatform: platform,
+                    refinedRecommendations: true,
+                  );
+                },
               )
             else if (route is GoRoute && route.path == '/import-playlist')
               GoRoute(

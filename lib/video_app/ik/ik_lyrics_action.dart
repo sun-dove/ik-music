@@ -5,12 +5,12 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../core/platform/platform_utils.dart';
 import '../../features/floating_lyrics/data/floating_lyrics_models.dart';
-import '../../features/floating_lyrics/data/floating_lyrics_service.dart';
 import '../../features/floating_lyrics/presentation/providers/floating_lyrics_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../l10n/video_strings.dart';
 import '../../l10n/ik_lyrics_action_strings.dart';
 import 'ik_floating_lyrics.dart';
+import 'ik_desktop_lyrics_style.dart';
 
 final ikLyricsActionProvider = StateNotifierProvider<IkLyricsAction, bool>(
   (ref) => IkLyricsAction(ref),
@@ -63,7 +63,7 @@ class IkLyricsAction extends StateNotifier<bool> {
       return;
     }
     state = true;
-    final service = FloatingLyricsService.instance;
+    final service = ref.read(ikFloatingLyricsServiceProvider);
     final previous = ref.read(floatingLyricsProvider);
     var nativeChanged = false;
     var issue = enabled

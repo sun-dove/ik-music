@@ -10,9 +10,11 @@ import '../../core/widgets/app_scrollbar.dart';
 import '../../features/library/presentation/providers/likes_provider.dart';
 import '../../features/player/presentation/providers/player_provider.dart';
 import '../../l10n/ik_personal_daily_strings.dart';
+import '../../l10n/ik_recommendation_catalog_strings.dart';
 import '../../models/personal_daily_result.dart';
 import '../../models/platform_type.dart';
 import '../../models/song.dart';
+import '../data/ik_daily_presentation_provider.dart';
 import '../data/personal_daily_provider.dart';
 import 'ik_like_action.dart';
 import 'ik_song_table.dart';
@@ -21,9 +23,11 @@ class IkPersonalDailyPage extends ConsumerStatefulWidget {
   const IkPersonalDailyPage({
     super.key,
     this.initialPlatform = PlatformType.netease,
+    this.refinedRecommendations = false,
   });
 
   final PlatformType initialPlatform;
+  final bool refinedRecommendations;
 
   @override
   ConsumerState<IkPersonalDailyPage> createState() =>
@@ -73,6 +77,9 @@ class _IkPersonalDailyPageState extends ConsumerState<IkPersonalDailyPage> {
   Widget build(BuildContext context) {
     final platform = _selected;
     final state = ref.watch(personalDailyProvider(platform));
+    final presentation = widget.refinedRecommendations
+        ? ref.watch(ikDailyPresentationProvider(platform))
+        : null;
     final currentSong = ref.watch(
       playerProvider.select((state) => state.currentSong),
     );
@@ -85,6 +92,13 @@ class _IkPersonalDailyPageState extends ConsumerState<IkPersonalDailyPage> {
     return IkPersonalDailyWorkspace(
       platform: platform,
       state: state,
+      presentation: presentation,
+      onRetryFallback: presentation == null || state.result == null
+          ? null
+          : () => ref.invalidate(ikDailyFallbackProvider((
+              platform: platform,
+              personal: state.result!,
+            ))),
       currentSong: currentSong,
       likedKeys: likedKeys,
       likeBusy: likeAction.busy,
@@ -138,6 +152,8 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
     this.likedKeys = const {},
     this.likeBusy = false,
     this.actionIssue,
+    this.presentation,
+    this.onRetryFallback,
   });
 
   final PlatformType platform;
@@ -151,9 +167,12 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
   final Set<String> likedKeys;
   final bool likeBusy;
   final String? actionIssue;
+  final IkDailyPresentationState? presentation;
+  final VoidCallback? onRetryFallback;
 
   @override
   Widget build(BuildContext context) {
+    if (presentation != null) return _refined(context, presentation!);
     final colors = Theme.of(context).colorScheme;
     final result = state.result?.platform == platform ? state.result : null;
     final songs =
@@ -345,6 +364,206 @@ class IkPersonalDailyWorkspace extends StatelessWidget {
                             onMore: () => onMore(context, song),
                             onMoreWithContext: (buttonContext) =>
                                 onMore(buttonContext, song),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _refined(BuildContext context, IkDailyPresentationState view) {
+    final colors = Theme.of(context).colorScheme;
+    final result = state.result?.platform == platform ? state.result : null;
+    final personalSuccess = !state.isLoading &&
+        result?.status == PersonalDailyStatus.success;
+    final songs = personalSuccess
+        ? result!.songs
+        : view.fallback?.songs ?? const <Song>[];
+    final loading = state.isLoading || view.fallbackLoading;
+    final source = personalSuccess
+        ? IkRecommendationCatalogStrings.personal
+        : view.fallback?.source?.label;
+    final action = !state.isLoading && !personalSuccess
+        ? IkPersonalDailyStrings.actionLabel(result)
+        : null;
+    VoidCallback actionCallback() => switch (result?.status) {
+      PersonalDailyStatus.signedOut ||
+      PersonalDailyStatus.identityIncomplete ||
+      PersonalDailyStatus.sessionExpired => onAccount,
+      PersonalDailyStatus.verificationRequired => onVerification,
+      _ => onRetry,
+    };
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(IkPersonalDailyStrings.title),
+        actions: [
+          IconButton(
+            tooltip: IkPersonalDailyStrings.refresh,
+            onPressed: loading ? null : onRetry,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final item in PlatformType.musicServices)
+                    TextButton(
+                      key: ValueKey('ik-daily-platform-${item.name}'),
+                      onPressed: () => onPlatform(item),
+                      style: TextButton.styleFrom(
+                        foregroundColor: item == platform ? colors.primary : colors.onSurfaceVariant,
+                        backgroundColor: item == platform
+                            ? colors.primary.withValues(alpha: .10)
+                            : Colors.transparent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+                      ),
+                      child: Text(IkPersonalDailyStrings.platformLabel(item)),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: AppScrollbar(
+              key: ValueKey('ik-daily-refined-scroll-${platform.name}'),
+              builder: (controller) => CustomScrollView(
+                controller: controller,
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
+                    sliver: SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            IkPersonalDailyStrings.heading,
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 12),
+                          if (!state.isLoading && !personalSuccess)
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 6,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                Text(
+                                  IkPersonalDailyStrings.stateTitle(result),
+                                  style: TextStyle(color: colors.onSurfaceVariant),
+                                ),
+                                if (action != null)
+                                  TextButton(
+                                    key: const Key('ik-daily-state-action'),
+                                    onPressed: actionCallback(),
+                                    child: Text(action),
+                                  ),
+                                if (result?.status == PersonalDailyStatus.verificationRequired)
+                                  TextButton(
+                                    onPressed: onRetry,
+                                    child: const Text(IkPersonalDailyStrings.verificationRetry),
+                                  ),
+                              ],
+                            ),
+                          if (source != null) ...[
+                            const SizedBox(height: 6),
+                            Text(source, style: Theme.of(context).textTheme.titleSmall),
+                            const SizedBox(height: 10),
+                          ],
+                          Wrap(
+                            spacing: 16,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              FilledButton.icon(
+                                key: const Key('ik-daily-play-all'),
+                                onPressed: songs.isEmpty ? null : () => onPlay(songs.first, songs),
+                                icon: const Icon(Icons.play_arrow_rounded, size: 18),
+                                label: const Text(IkPersonalDailyStrings.playAll),
+                              ),
+                              if (songs.isNotEmpty)
+                                Text(IkPersonalDailyStrings.count(songs.length)),
+                              if (personalSuccess)
+                                Text(
+                                  IkPersonalDailyStrings.acquired(result!.fetchedAt),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                            ],
+                          ),
+                          if (personalSuccess && result!.validCount > songs.length) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              IkPersonalDailyStrings.fullCount(result.validCount, songs.length),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                          if (personalSuccess && result!.sourceDate != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              IkPersonalDailyStrings.sourceDate(result.sourceDate!),
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                          if (actionIssue case final issue?) ...[
+                            const SizedBox(height: 10),
+                            Text(issue, style: TextStyle(color: colors.error)),
+                          ],
+                          if (loading) ...[
+                            const SizedBox(height: 16),
+                            const LinearProgressIndicator(key: Key('ik-daily-progress')),
+                            if (view.fallbackLoading) ...[
+                              const SizedBox(height: 8),
+                              const Text(IkRecommendationCatalogStrings.publicLoading),
+                            ],
+                          ],
+                          if (view.fallbackError case final error?) ...[
+                            const SizedBox(height: 12),
+                            Text(error),
+                            TextButton(
+                              onPressed: onRetryFallback,
+                              child: const Text(IkRecommendationCatalogStrings.publicRetry),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (songs.isNotEmpty) ...[
+                    const SliverPadding(
+                      padding: EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverToBoxAdapter(child: IkSongTableHeader()),
+                    ),
+                    SliverPadding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      sliver: SliverList.builder(
+                        itemCount: songs.length,
+                        itemBuilder: (context, index) {
+                          final song = songs[index];
+                          return IkSongTableRow(
+                            key: ValueKey('ik-daily-song-${song.id}'),
+                            song: song,
+                            index: index,
+                            playing: currentSong?.id == song.id && currentSong?.platform == song.platform,
+                            liked: likedKeys.contains('${song.platform.name}:${song.id}'),
+                            onPlay: () => onPlay(song, songs),
+                            onLike: () { if (!likeBusy) onLike(song); },
+                            onMore: () => onMore(context, song),
+                            onMoreWithContext: (buttonContext) => onMore(buttonContext, song),
                           );
                         },
                       ),

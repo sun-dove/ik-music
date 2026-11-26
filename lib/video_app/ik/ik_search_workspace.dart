@@ -5,6 +5,7 @@ import '../../features/discovery/presentation/providers/recommendations_provider
 import '../../l10n/ik_discovery_revision_strings.dart';
 import '../../l10n/ik_library_revision_strings.dart';
 import '../../l10n/ik_page_revision_strings.dart';
+import '../../l10n/ik_quick_workspace_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/ik_alignment_strings.dart';
 import '../../l10n/ik_workspace_strings.dart';
@@ -34,6 +35,7 @@ class IkSearchWorkspace extends StatefulWidget {
     this.compactDiscovery = false,
     this.fullRecommendations = false,
     this.recommendationsInDiscovery = false,
+    this.platformResultTabs = false,
     this.useSharedSearch = false,
     this.dismissSourceMenuOnBack = false,
     this.hotTerms = const [],
@@ -56,6 +58,7 @@ class IkSearchWorkspace extends StatefulWidget {
   final bool compactDiscovery;
   final bool fullRecommendations;
   final bool recommendationsInDiscovery;
+  final bool platformResultTabs;
   final bool dismissSourceMenuOnBack;
   final List<String> hotTerms;
   final bool hotLoading;
@@ -76,6 +79,8 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
   double? _pendingScrollOffset;
   bool _initialResultsLoading = false;
   PlatformType? _filter;
+  PlatformType? _resultPlatform;
+  String? _resultQuery;
   bool _expandedHotTerms = false;
   PlatformType _recommendationPlatform = PlatformType.netease;
   @override
@@ -116,10 +121,107 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
     });
   }
 
+  List<PlatformType> get _resultPlatforms => [
+    for (final platform in const [
+      PlatformType.netease,
+      PlatformType.qq,
+      PlatformType.kugou,
+      PlatformType.local,
+    ])
+      if (widget.search.platforms.contains(platform)) platform,
+  ];
+
+  PlatformType? get _selectedResultPlatform {
+    final platforms = _resultPlatforms;
+    if (platforms.contains(_resultPlatform)) return _resultPlatform;
+    return platforms.contains(PlatformType.qq)
+        ? PlatformType.qq
+        : platforms.firstOrNull;
+  }
+
+  void _restorePlatformScroll(String key, PlatformType? platform) {
+    final queryChanged = _resultQuery != widget.search.query;
+    if (queryChanged) {
+      _resultQuery = widget.search.query;
+      _scrollOffsets.removeWhere(
+        (savedKey, _) => savedKey.startsWith('ik-search-results-'),
+      );
+    }
+    final group = widget.search.groups[platform];
+    final loading = widget.search.query.isNotEmpty &&
+        group != null && group.loading && group.page == 0;
+    if (queryChanged || _scrollViewKey != key ||
+        (loading && !_initialResultsLoading)) {
+      if (!queryChanged && _scrollViewKey != null &&
+          _pendingScrollOffset == null && _scroll.hasClients) {
+        _scrollOffsets[_scrollViewKey!] = _scroll.position.pixels;
+      }
+      _pendingScrollOffset = _scrollOffsets[key] ?? 0;
+    }
+    _scrollViewKey = key;
+    _initialResultsLoading = loading;
+    final offset = _pendingScrollOffset;
+    if (loading || offset == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients || _scrollViewKey != key ||
+          _initialResultsLoading || _pendingScrollOffset != offset) {
+        return;
+      }
+      _pendingScrollOffset = null;
+      _scroll.jumpTo(offset.clamp(0, _scroll.position.maxScrollExtent));
+    });
+  }
+
+  Widget _platformTabs(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final platform in _resultPlatforms)
+            Semantics(
+              selected: platform == _selectedResultPlatform,
+              button: true,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: TextButton(
+                  key: ValueKey('ik-search-platform-${platform.name}'),
+                  onPressed: () => setState(() => _resultPlatform = platform),
+                  style: TextButton.styleFrom(
+                    foregroundColor: platform == _selectedResultPlatform
+                        ? colors.primary : colors.onSurfaceVariant,
+                    backgroundColor: platform == _selectedResultPlatform
+                        ? colors.primary.withValues(alpha: .08)
+                        : Colors.transparent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14, vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ExcludeSemantics(
+                        child: WindowsPlatformIcon(platform: platform, size: 18),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(IkQuickWorkspaceStrings.platformTab(platform)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.search,
-    builder: (context, _) => widget.alignToDesign
+    builder: (context, _) => widget.alignToDesign || widget.platformResultTabs
         ? _aligned(context)
         : CustomScrollView(
             slivers: [
@@ -257,13 +359,21 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
 
   Widget _aligned(BuildContext context) {
     final preserveScroll =
-        widget.fullRecommendations || widget.recommendationsInDiscovery;
+        widget.fullRecommendations || widget.recommendationsInDiscovery ||
+        widget.platformResultTabs;
+    final selectedPlatform = _selectedResultPlatform;
     final key = widget.search.query.isEmpty
         ? widget.recommendationsInDiscovery
               ? 'ik-search-hot-terms'
               : 'ik-search-recommendations'
+        : widget.platformResultTabs
+        ? 'ik-search-results-${widget.search.query}-${selectedPlatform?.name}'
         : 'ik-search-results-${widget.search.query}';
-    if (preserveScroll) _restoreSearchScroll(key);
+    if (widget.platformResultTabs) {
+      _restorePlatformScroll(key, selectedPlatform);
+    } else if (preserveScroll) {
+      _restoreSearchScroll(key);
+    }
     final scrollView = CustomScrollView(
       key: preserveScroll ? ValueKey(key) : null,
       controller: preserveScroll ? _scroll : null,
@@ -300,7 +410,7 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                     ),
                   ),
                 ],
-                if (!widget.compactDiscovery &&
+                if (!widget.platformResultTabs && !widget.compactDiscovery &&
                     ((!widget.fullRecommendations &&
                             !widget.recommendationsInDiscovery) ||
                         widget.search.query.isNotEmpty)) ...[
@@ -321,9 +431,13 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
                     ),
                   ),
                 ],
+                if (widget.platformResultTabs && widget.search.query.isNotEmpty) ...[
+                  const SizedBox(height: 18),
+                  _platformTabs(context),
+                ],
                 if (widget.search.query.isEmpty &&
                     widget.onRetryHot == null &&
-                    widget.recommendations == null)
+                    (widget.recommendations == null || widget.platformResultTabs))
                   const Padding(
                     padding: EdgeInsets.only(top: 28),
                     child: Text(IkStrings.searchIntro),
@@ -334,14 +448,24 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
         ),
         if (widget.search.query.isEmpty) ..._discoverySlivers(context),
         for (final platform in widget.search.platforms)
-          if (_filter == null || _filter == platform)
+          if (widget.platformResultTabs
+              ? widget.search.query.isNotEmpty && platform == selectedPlatform
+              : _filter == null || _filter == platform)
             if (widget.search.groups[platform] case final group?) ...[
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 sliver: SliverToBoxAdapter(
                   child: Column(
                     children: [
-                      Row(
+                      if (widget.platformResultTabs)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            IkStrings.results(group.songs.length, group.total),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        )
+                      else Row(
                         children: [
                           WindowsPlatformIcon(platform: platform),
                           const SizedBox(width: 10),
@@ -459,9 +583,9 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
             style: Theme.of(context).textTheme.headlineMedium,
           ),
         ),
-        if ((!widget.fullRecommendations &&
+        if (!widget.platformResultTabs && ((!widget.fullRecommendations &&
                 !widget.recommendationsInDiscovery) ||
-            widget.search.query.isNotEmpty) ...[
+            widget.search.query.isNotEmpty)) ...[
           const SizedBox(width: 12),
           SizedBox(
             width: constraints.maxWidth < 460 ? 140 : 180,
@@ -488,7 +612,7 @@ class _IkSearchWorkspaceState extends State<IkSearchWorkspace> {
   );
 
   List<Widget> _discoverySlivers(BuildContext context) {
-    final recommendations = widget.recommendationsInDiscovery
+    final recommendations = widget.recommendationsInDiscovery || widget.platformResultTabs
         ? null
         : widget.recommendations;
     final colors = Theme.of(context).colorScheme;

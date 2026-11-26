@@ -35,6 +35,20 @@ class NeteaseCrypto {
     };
   }
 
+  /// 独立公开目录采用标准weapi双层固定IV，旧请求方法保持原行为。
+  static Map<String, String> encryptPublicRequest(Map<String, dynamic> params) {
+    const iv = '0102030405060708';
+    final secret = _createSecretKey();
+    return {
+      'params': _aesEncrypt(
+        _aesEncrypt(jsonEncode(params), _presetKey, iv),
+        secret,
+        iv,
+      ),
+      'encSecKey': _rsaEncrypt(secret),
+    };
+  }
+
   /// eapi encryption: AES-ECB + MD5 (used by NeteaseCloudMusicApi)
   static Map<String, String> encryptEapi(
     String url,

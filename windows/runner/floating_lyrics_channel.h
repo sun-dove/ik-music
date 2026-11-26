@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "floating_lyrics_window.h"
+#include "compact_floating_lyrics_window.h"
 
 class FloatingLyricsChannel {
  public:
@@ -17,6 +18,7 @@ class FloatingLyricsChannel {
  private:
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
   FloatingLyricsWindow window_;
+  CompactFloatingLyricsWindow compact_window_;
 
   void HandleMethodCall(
       const flutter::MethodCall<flutter::EncodableValue>& call,

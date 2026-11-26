@@ -7,12 +7,15 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../l10n/ik_player_alignment_strings.dart';
+import '../../l10n/ik_lyrics_style_strings.dart';
 import '../../l10n/ik_strings.dart';
 import '../../l10n/video_strings.dart';
 import '../../l10n/windows_music_strings.dart';
 import '../../lyrics/models/lyrics_line.dart';
 import '../../models/platform_type.dart';
 import '../../models/song.dart';
+import '../ik/ik_player_lyrics_style.dart';
+import '../ik/ik_lyrics_style_panel.dart';
 import '../ui/catalog_pages.dart';
 import '../ui/player_page.dart';
 import '../ui/video_shell.dart';
@@ -61,6 +64,9 @@ class WindowsPlayerPage extends StatefulWidget {
     this.desktopLyricsEnabled = false,
     this.alignToDesign = false,
     this.compactLayout = false,
+    this.refinedLayout = false,
+    this.lyricsPreferences,
+    this.systemFonts = const [],
     this.lyricsAutoResumeDelay,
     this.onArtist,
     this.onAlbum,
@@ -83,6 +89,9 @@ class WindowsPlayerPage extends StatefulWidget {
 
   /// 独立播放详情的紧凑排版；缺省保留既有页面布局。
   final bool compactLayout;
+  final bool refinedLayout;
+  final IkPlayerLyricsPreferences? lyricsPreferences;
+  final List<String> systemFonts;
 
   /// 手动浏览结束后的恢复延时；缺省保持手动返回歌词的原行为。
   final Duration? lyricsAutoResumeDelay;
@@ -99,6 +108,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   bool _following = true;
   bool _showTranslation = true;
   bool _sourceExpanded = false;
+  bool _showLyricsStyle = false;
+  bool _lyricsStyleBusy = false;
+  String? _lyricsStyleIssue;
   double _lyricsFontSize = 22;
   Size _lastSize = Size.zero;
   Size? _compactPageSize;
@@ -123,7 +135,100 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.refinedLayout) {
+      _lyricsFontSize = widget.lyricsPreferences?.value.fontSize ?? 22;
+      widget.lyricsPreferences?.addListener(_lyricsStyleChanged);
+    }
     _resetKeys();
+  }
+
+  void _lyricsStyleChanged() {
+    if (!mounted || !widget.refinedLayout) return;
+    setState(() {
+      _lyricsFontSize = widget.lyricsPreferences?.value.fontSize ?? 22;
+    });
+    if (!_following) _scheduleAutoResume();
+    _follow();
+  }
+
+  void _setLyricsStyleVisible(bool visible) {
+    setState(() => _showLyricsStyle = visible);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _informationScroll.hasClients) {
+        _informationScroll.jumpTo(0);
+      }
+    });
+  }
+
+  Future<void> _saveLyricsStyle(IkPlayerLyricsStyle value) async {
+    final preferences = widget.lyricsPreferences;
+    if (preferences == null || _lyricsStyleBusy) return;
+    setState(() {
+      _lyricsStyleBusy = true;
+      _lyricsStyleIssue = null;
+    });
+    try {
+      await preferences.save(value);
+    } catch (_) {
+      if (mounted) {
+        setState(() => _lyricsStyleIssue = IkLyricsStyleStrings.saveFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _lyricsStyleBusy = false);
+    }
+  }
+
+  Future<void> _resetLyricsStyle() async {
+    final preferences = widget.lyricsPreferences;
+    if (preferences == null || _lyricsStyleBusy) return;
+    setState(() {
+      _lyricsStyleBusy = true;
+      _lyricsStyleIssue = null;
+    });
+    try {
+      await preferences.reset();
+    } catch (_) {
+      if (mounted) {
+        setState(() => _lyricsStyleIssue = IkLyricsStyleStrings.saveFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _lyricsStyleBusy = false);
+    }
+  }
+
+  Widget _lyricsStylePanel(BuildContext context) {
+    final value = widget.lyricsPreferences!.value;
+    return IkLyricsStylePanel(
+      key: const ValueKey('ik-player-lyrics-style-panel'),
+      title: IkLyricsStyleStrings.player,
+      systemFonts: widget.systemFonts,
+      fontFamily: value.fontFamily,
+      fontSize: _lyricsFontSize,
+      backgroundColor: value.backgroundColor ?? VideoTheme.canvas(context),
+      currentLineColor: value.currentLineColor ?? VideoTheme.accent(context),
+      otherLineColor: value.otherLineColor ??
+          Theme.of(context).colorScheme.onSurface.withValues(alpha: .62),
+      shadowOpacity: value.shadowOpacity,
+      onFontFamily: (family) =>
+          unawaited(_saveLyricsStyle(value.copyWith(
+            fontFamily: family,
+            clearFont: family == null,
+          ))),
+      onFontSize: (size) =>
+          unawaited(_saveLyricsStyle(value.copyWith(fontSize: size))),
+      onBackgroundColor: (color) =>
+          unawaited(_saveLyricsStyle(value.copyWith(backgroundColor: color))),
+      onCurrentLineColor: (color) =>
+          unawaited(_saveLyricsStyle(value.copyWith(currentLineColor: color))),
+      onOtherLineColor: (color) =>
+          unawaited(_saveLyricsStyle(value.copyWith(otherLineColor: color))),
+      onShadowOpacity: (opacity) =>
+          unawaited(_saveLyricsStyle(value.copyWith(shadowOpacity: opacity))),
+      onReset: () => unawaited(_resetLyricsStyle()),
+      onClose: () => _setLyricsStyleVisible(false),
+      busy: _lyricsStyleBusy,
+      issue: _lyricsStyleIssue,
+    );
   }
 
   void _resetKeys() {
@@ -154,6 +259,16 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   @override
   void didUpdateWidget(WindowsPlayerPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.lyricsPreferences != oldWidget.lyricsPreferences ||
+        widget.refinedLayout != oldWidget.refinedLayout) {
+      if (oldWidget.refinedLayout) {
+        oldWidget.lyricsPreferences?.removeListener(_lyricsStyleChanged);
+      }
+      if (widget.refinedLayout) {
+        _lyricsFontSize = widget.lyricsPreferences?.value.fontSize ?? 22;
+        widget.lyricsPreferences?.addListener(_lyricsStyleChanged);
+      }
+    }
     final changedSong = widget.alignToDesign
         ? widget.song.id != oldWidget.song.id ||
               widget.song.platform != oldWidget.song.platform
@@ -222,7 +337,7 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
       if (line != null) {
         Scrollable.ensureVisible(
           line,
-          alignment: .38,
+          alignment: widget.refinedLayout ? .5 : .38,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOut,
         );
@@ -320,6 +435,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
 
   @override
   void dispose() {
+    if (widget.refinedLayout) {
+      widget.lyricsPreferences?.removeListener(_lyricsStyleChanged);
+    }
     _cancelAutoResume();
     _revision++;
     _scroll.dispose();
@@ -330,7 +448,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final page = widget.alignToDesign
+    final page = widget.refinedLayout
+        ? _compactAlignedPage
+        : widget.alignToDesign
         ? (widget.compactLayout ? _compactAlignedPage : _alignedPage)
         : _page;
     if (Theme.of(context).extension<IkThemeColors>() == null) {
@@ -367,7 +487,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
   );
 
   Widget _compactAlignedContent(BuildContext context) => Scaffold(
-    backgroundColor: VideoTheme.canvas(context),
+    backgroundColor: widget.refinedLayout
+        ? widget.lyricsPreferences?.value.backgroundColor ?? VideoTheme.canvas(context)
+        : VideoTheme.canvas(context),
     body: SafeArea(
       child: Column(
         children: [
@@ -384,6 +506,21 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                         label: const Text(WindowsMusicStrings.back),
                       ),
                       const Spacer(),
+                      if (widget.refinedLayout && widget.lyricsPreferences != null)
+                        TextButton.icon(
+                          key: const ValueKey('ik-player-lyrics-style-toggle'),
+                          onPressed: () =>
+                              _setLyricsStyleVisible(!_showLyricsStyle),
+                          style: TextButton.styleFrom(
+                            foregroundColor: _showLyricsStyle
+                                ? VideoTheme.accent(context)
+                                : VideoTheme.secondaryText(context),
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                          ),
+                          icon: const Icon(Icons.tune_rounded, size: 18),
+                          label: const Text(IkLyricsStyleStrings.style),
+                        ),
                       if (widget.onDesktopLyrics != null)
                         TextButton.icon(
                           onPressed: widget.onDesktopLyrics,
@@ -402,7 +539,9 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                   Expanded(
                     child: Center(
                       child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1240),
+                        constraints: BoxConstraints(
+                          maxWidth: widget.refinedLayout ? 1460 : 1240,
+                        ),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             final fontSize = MediaQuery.textScalerOf(context)
@@ -419,18 +558,33 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                               40.0,
                             );
                             final informationWidth = wide
-                                ? (constraints.maxWidth - gap) * .4
+                                ? (constraints.maxWidth - gap) *
+                                    (widget.refinedLayout ? .35 : .4)
                                 : constraints.maxWidth;
                             final coverSize = wide
                                 ? math.min(
-                                    math.min(420.0, informationWidth * .92),
+                                    math.min(widget.refinedLayout ? 320.0 : 420.0,
+                                        informationWidth * .92),
                                     math.max(
-                                      160.0,
+                                      widget.refinedLayout ? 96.0 : 160.0,
                                       constraints.maxHeight - 210,
                                     ),
                                   )
                                 : 68.0;
-                            final information = Scrollbar(
+                            final information = widget.refinedLayout &&
+                                    _showLyricsStyle && widget.lyricsPreferences != null
+                                ? Scrollbar(
+                                    controller: _informationScroll,
+                                    thumbVisibility: true,
+                                    thickness: 3,
+                                    child: SingleChildScrollView(
+                                      key: const ValueKey('ik-player-style-scroll'),
+                                      controller: _informationScroll,
+                                      padding: const EdgeInsets.only(right: 8),
+                                      child: _lyricsStylePanel(context),
+                                    ),
+                                  )
+                                : Scrollbar(
                               key: const ValueKey(
                                 'ik-player-information-scrollbar',
                               ),
@@ -506,8 +660,12 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                     children: [
                                       SizedBox(
                                         height: math.min(
-                                          300,
-                                          constraints.maxHeight * .43,
+                                          widget.refinedLayout
+                                              ? (_showLyricsStyle ? 300 : 240) : 300,
+                                          constraints.maxHeight *
+                                              (widget.refinedLayout
+                                                  ? (_showLyricsStyle ? .46 : .35)
+                                                  : .43),
                                         ),
                                         child: information,
                                       ),
@@ -1024,10 +1182,11 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                   ),
                   _translationControl(context),
-                  SizedBox(
-                    width: math.min(190, constraints.maxWidth),
-                    child: _lyricsSizeControl(context),
-                  ),
+                  if (!widget.refinedLayout)
+                    SizedBox(
+                      width: math.min(190, constraints.maxWidth),
+                      child: _lyricsSizeControl(context),
+                    ),
                   if (widget.lyrics.isNotEmpty && widget.timedLyrics)
                     Text(
                       _following
@@ -1592,6 +1751,19 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
     ],
   );
   Widget _lyrics(BuildContext context) {
+    final style = widget.refinedLayout ? widget.lyricsPreferences?.value : null;
+    final currentColor = style?.currentLineColor ?? VideoTheme.accent(context);
+    final otherColor = style?.otherLineColor ??
+        Theme.of(context).colorScheme.onSurface.withValues(alpha: .62);
+    final shadows = style != null && style.shadowOpacity > 0
+        ? [
+            Shadow(
+              color: Colors.black.withValues(alpha: style.shadowOpacity),
+              offset: const Offset(0, 2),
+              blurRadius: 8,
+            ),
+          ]
+        : null;
     if (widget.lyrics.isEmpty) {
       final empty = Column(
         mainAxisSize: MainAxisSize.min,
@@ -1696,18 +1868,25 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                     if (widget.alignToDesign) _follow();
                                   }
                                 : null,
-                            child: Padding(
+                            child: Container(
+                              width: widget.refinedLayout ? double.infinity : null,
                               padding: const EdgeInsets.symmetric(
                                 vertical: 13,
                                 horizontal: 6,
                               ),
                               child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                crossAxisAlignment: widget.refinedLayout
+                                    ? CrossAxisAlignment.center
+                                    : CrossAxisAlignment.start,
                                 children: [
                                   Text(
                                     widget.lyrics[i].text,
+                                    textAlign: widget.refinedLayout
+                                        ? TextAlign.center : null,
                                     style: TextStyle(
-                                      fontSize: widget.alignToDesign
+                                      fontFamily: style?.fontFamily,
+                                      shadows: shadows,
+                                      fontSize: widget.alignToDesign || widget.refinedLayout
                                           ? _lyricsFontSize *
                                                 (!widget.timedLyrics ||
                                                         i == _active
@@ -1719,11 +1898,8 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                           ? FontWeight.w600
                                           : FontWeight.w400,
                                       color: i == _active
-                                          ? VideoTheme.accent(context)
-                                          : Theme.of(context)
-                                                .colorScheme
-                                                .onSurface
-                                                .withValues(alpha: .62),
+                                          ? currentColor
+                                          : otherColor,
                                     ),
                                   ),
                                   if (widget.lyrics[i].hasTranslation &&
@@ -1731,14 +1907,19 @@ class _WindowsPlayerPageState extends State<WindowsPlayerPage> {
                                           _showTranslation))
                                     Text(
                                       widget.lyrics[i].translation!,
+                                      textAlign: widget.refinedLayout
+                                          ? TextAlign.center : null,
                                       style: TextStyle(
-                                        fontSize: widget.alignToDesign
+                                        fontFamily: style?.fontFamily,
+                                        shadows: shadows,
+                                        fontSize: widget.alignToDesign || widget.refinedLayout
                                             ? _lyricsFontSize * 13 / 22
                                             : 13,
                                         height: 1.6,
-                                        color: VideoTheme.secondaryText(
-                                          context,
-                                        ),
+                                        color: widget.refinedLayout
+                                            ? (i == _active ? currentColor : otherColor)
+                                                .withValues(alpha: .72)
+                                            : VideoTheme.secondaryText(context),
                                       ),
                                     ),
                                 ],

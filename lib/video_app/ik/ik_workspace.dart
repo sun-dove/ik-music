@@ -145,6 +145,11 @@ class IkDesktopWorkspace extends StatelessWidget {
   Widget _keyboardChrome(Widget child, bool hidden) =>
       mobileKeyboardLayout ? Offstage(offstage: hidden, child: child) : child;
 
+  Widget _navigationOverlay(Widget child) => routeBody == null
+      ? child
+      // 导航隐藏时一起移除提示浮层，避免继续提交已离开语义树的提示文字。
+      : Overlay.wrap(clipBehavior: Clip.none, child: child);
+
   Widget _content() {
     final primary = IndexedStack(index: index, children: _pageChildren());
     if (routeBody == null) return primary;
@@ -182,42 +187,46 @@ class IkDesktopWorkspace extends StatelessWidget {
               Offstage(
                 offstage: fullPage,
                 child: _keyboardChrome(
-                  Container(
-                    color: sidebar,
-                    padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(child: _brand(compact: true)),
-                            IconButton(
-                              key: const ValueKey('ik-workspace-nav-4'),
-                              tooltip: IkWorkspaceStrings.settings,
-                              onPressed: () => onSelect(4),
-                              icon: const Icon(
-                                Icons.settings_outlined,
-                                size: 20,
+                  _navigationOverlay(
+                    Container(
+                      color: sidebar,
+                      padding: const EdgeInsets.fromLTRB(16, 10, 12, 0),
+                      child: Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(child: _brand(compact: true)),
+                              IconButton(
+                                key: const ValueKey('ik-workspace-nav-4'),
+                                tooltip: IkWorkspaceStrings.settings,
+                                onPressed: () => onSelect(4),
+                                icon: const Icon(
+                                  Icons.settings_outlined,
+                                  size: 20,
+                                ),
                               ),
-                            ),
-                            IconButton(
-                              key: const ValueKey('ik-workspace-account'),
-                              tooltip: IkWorkspaceStrings.connect,
-                              onPressed: onAccount,
-                              icon: const Icon(
-                                Icons.person_outline_rounded,
-                                size: 20,
+                              IconButton(
+                                key: const ValueKey('ik-workspace-account'),
+                                tooltip: IkWorkspaceStrings.connect,
+                                onPressed: onAccount,
+                                icon: const Icon(
+                                  Icons.person_outline_rounded,
+                                  size: 20,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            for (var i = 0; i < 4; i++)
-                              Expanded(child: _nav(context, i, compact: true)),
-                          ],
-                        ),
-                      ],
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              for (var i = 0; i < 4; i++)
+                                Expanded(
+                                  child: _nav(context, i, compact: true),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                   keyboardVisible,
@@ -230,80 +239,83 @@ class IkDesktopWorkspace extends StatelessWidget {
                   if (wide)
                     Offstage(
                       offstage: fullPage,
-                      child: Container(
-                        width: MediaQuery.sizeOf(context).width >= 1100
-                            ? 204
-                            : 168,
-                        color: sidebar,
-                        padding: const EdgeInsets.fromLTRB(16, 28, 16, 18),
-                        child: Column(
-                          children: [
-                            _brand(),
-                            const SizedBox(height: 36),
-                            for (var i = 0; i < 4; i++)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 5),
-                                child: _nav(context, i),
-                              ),
-                            const Spacer(),
-                            _nav(context, 4),
-                            const SizedBox(height: 18),
-                            const Divider(height: 1),
-                            InkWell(
-                              key: const ValueKey('ik-workspace-account'),
-                              onTap: onAccount,
-                              borderRadius: BorderRadius.circular(8),
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                  horizontal: 4,
+                      child: _navigationOverlay(
+                        Container(
+                          width: MediaQuery.sizeOf(context).width >= 1100
+                              ? 204
+                              : 168,
+                          color: sidebar,
+                          padding: const EdgeInsets.fromLTRB(16, 28, 16, 18),
+                          child: Column(
+                            children: [
+                              _brand(),
+                              const SizedBox(height: 36),
+                              for (var i = 0; i < 4; i++)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 5),
+                                  child: _nav(context, i),
                                 ),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    const SizedBox(
-                                      width: 30,
-                                      height: 30,
-                                      child: Center(
-                                        child: Icon(
-                                          Icons.person_outline_rounded,
-                                          size: 20,
+                              const Spacer(),
+                              _nav(context, 4),
+                              const SizedBox(height: 18),
+                              const Divider(height: 1),
+                              InkWell(
+                                key: const ValueKey('ik-workspace-account'),
+                                onTap: onAccount,
+                                borderRadius: BorderRadius.circular(8),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 16,
+                                    horizontal: 4,
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      const SizedBox(
+                                        width: 30,
+                                        height: 30,
+                                        child: Center(
+                                          child: Icon(
+                                            Icons.person_outline_rounded,
+                                            size: 20,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    const Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            IkWorkspaceStrings.connect,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              height: 1.4,
+                                      const SizedBox(width: 8),
+                                      const Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              IkWorkspaceStrings.connect,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                height: 1.4,
+                                              ),
                                             ),
-                                          ),
-                                          SizedBox(height: 3),
-                                          Text(
-                                            IkWorkspaceStrings.sync,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              height: 1.4,
+                                            SizedBox(height: 3),
+                                            Text(
+                                              IkWorkspaceStrings.sync,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                height: 1.4,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
