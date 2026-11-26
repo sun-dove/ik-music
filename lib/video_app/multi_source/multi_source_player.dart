@@ -349,7 +349,9 @@ class _SourceAudio
     final gain = _gain;
     final generation = _gainPlayGeneration;
     final token = router.mediaToken;
-    if (quickRecovery && router.guarded) {
+    if (quickRecovery &&
+        router.guarded &&
+        delegate is MediaKitWindowsAudioController) {
       return _playReadyForToken(token, generation);
     }
     return _playForToken(token, gain, generation);
@@ -393,7 +395,9 @@ class _SourceAudio
   Future<void> stop() {
     if (_gain != null) _gainPlayGeneration++;
     final operation = delegate.stop();
-    return quickRecovery && router.guarded
+    return quickRecovery &&
+            router.guarded &&
+            delegate is MediaKitWindowsAudioController
         ? operation.timeout(const Duration(seconds: 1))
         : operation;
   }
@@ -402,7 +406,9 @@ class _SourceAudio
   Future<void> pause() {
     if (_gain != null) _gainPlayGeneration++;
     final operation = delegate.pause();
-    return quickRecovery && router.guarded
+    return quickRecovery &&
+            router.guarded &&
+            delegate is MediaKitWindowsAudioController
         ? operation.timeout(const Duration(seconds: 1))
         : operation;
   }
@@ -484,6 +490,9 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
     this.onProgress,
     this.preservePlaybackOnSettingsChange = false,
     this.quickSourceRecovery = false,
+    this.quickResolveTimeout = const Duration(seconds: 3),
+    this.quickLoadTimeout = const Duration(seconds: 3),
+    this.quickBudget = const Duration(seconds: 9),
     CustomSourcePlaybackFallback? legacyFallback,
     PlayerAudioController? audioController,
     PlayerAudioController Function()? audioControllerFactory,
@@ -501,7 +510,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
        super(
          platformResolver: router.platform,
          requestedQuality: router.quality,
-         audioDisposeTimeout: quickSourceRecovery
+         audioDisposeTimeout: quickSourceRecovery && PlatformUtils.isWindows
              ? const Duration(milliseconds: 500)
              : const Duration(seconds: 3),
          audioController: audioController == null
@@ -514,7 +523,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
                      preservePlaybackOnSettingsChange || quickSourceRecovery,
                  quickRecovery: quickSourceRecovery,
                  loadTimeout: quickSourceRecovery
-                     ? const Duration(seconds: 3)
+                     ? quickLoadTimeout
                      : const Duration(seconds: 10),
                ),
          audioControllerFactory: () => _SourceAudio(
@@ -525,7 +534,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
                preservePlaybackOnSettingsChange || quickSourceRecovery,
            quickRecovery: quickSourceRecovery,
            loadTimeout: quickSourceRecovery
-               ? const Duration(seconds: 3)
+               ? quickLoadTimeout
                : const Duration(seconds: 10),
          ),
          customSourceFallback: legacyFallback,
@@ -583,6 +592,7 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
   final MultiSourceResolve resolve;
   final bool preservePlaybackOnSettingsChange;
   final bool quickSourceRecovery;
+  final Duration quickResolveTimeout, quickLoadTimeout, quickBudget;
   final void Function(SourcePlaybackView)? onProgress;
   final OfflineFilePathResolver? _offlinePath;
   final bool Function()? _offlineMode;
@@ -748,16 +758,17 @@ class MultiSourceVideoPlayerNotifier extends VideoPlayerNotifier {
                 useLegacyHttp: useLegacyHttp,
               ),
               failedHosts: failedHosts,
+              timeout: quickResolveTimeout,
             )
           : resolve(song, candidate, token),
       onChanged: () {
         if (identical(_session, session)) _report();
       },
       budget: quickSourceRecovery
-          ? const Duration(seconds: 9)
+          ? quickBudget
           : const Duration(seconds: 45),
       resolveTimeout: quickSourceRecovery
-          ? const Duration(seconds: 3)
+          ? quickResolveTimeout
           : const Duration(seconds: 15),
       skipUnreachableSources: quickSourceRecovery,
     );

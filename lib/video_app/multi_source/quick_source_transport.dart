@@ -20,8 +20,9 @@ abstract final class QuickSourceTransport {
     CancelToken token,
     Future<T> Function() request, {
     required Set<String> failedHosts,
+    Duration timeout = const Duration(seconds: 3),
   }) {
-    final scope = _QuickSourceScope(token, failedHosts);
+    final scope = _QuickSourceScope(token, failedHosts, timeout);
     return runZoned(
       () => Future.any<T>([request(), scope.failure.future]),
       zoneValues: {_scopeKey: scope},
@@ -30,8 +31,8 @@ abstract final class QuickSourceTransport {
 }
 
 class _QuickSourceScope {
-  _QuickSourceScope(this.token, this.failedHosts)
-    : deadline = DateTime.now().add(const Duration(seconds: 3));
+  _QuickSourceScope(this.token, this.failedHosts, Duration timeout)
+    : deadline = DateTime.now().add(timeout);
   final CancelToken token;
   final Set<String> failedHosts;
   final activeHosts = <String>{};

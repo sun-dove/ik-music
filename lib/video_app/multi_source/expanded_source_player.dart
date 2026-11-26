@@ -17,6 +17,9 @@ class ExpandedSourcePlayerNotifier extends MultiSourceVideoPlayerNotifier {
     super.userGain,
     super.preservePlaybackOnSettingsChange,
     super.quickSourceRecovery,
+    super.quickResolveTimeout,
+    super.quickLoadTimeout,
+    super.quickBudget,
   });
   @override
   List<SourceCandidate> candidatesFor(Song song, AudioLevel quality) =>

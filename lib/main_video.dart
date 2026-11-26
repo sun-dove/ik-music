@@ -195,7 +195,9 @@ Future<void> main() async {
   );
   const customSourceCredentials = SecureCustomSourceCredentialStore();
   final customSourceDio = Dio();
-  if (PlatformUtils.isWindows) QuickSourceTransport.install(customSourceDio);
+  if (PlatformUtils.isWindows || PlatformUtils.isAndroid) {
+    QuickSourceTransport.install(customSourceDio);
+  }
   void Function(Song, CustomSourceResult)? customSourceResolved;
   final customSourceResolver = _PreferenceCustomSourceResolver(
     preferences: preferences,
@@ -309,7 +311,10 @@ Future<void> main() async {
       playerProvider.overrideWith(
         (ref) => IkCatalogPlayerNotifier(
           preservePlaybackOnSettingsChange: PlatformUtils.isWindows,
-          quickSourceRecovery: PlatformUtils.isWindows,
+          quickSourceRecovery: PlatformUtils.isWindows || PlatformUtils.isAndroid,
+          quickResolveTimeout: const Duration(seconds: 2),
+          quickLoadTimeout: const Duration(milliseconds: 2500),
+          quickBudget: const Duration(seconds: 6),
           userGain: ref.read(ikUserGainProvider.notifier),
           catalogCoordinator: catalogCoordinator,
           settings: sourceSettings,
@@ -380,7 +385,7 @@ Future<void> main() async {
   attachVideoSessionGuard(qqDio, PlatformType.qq, auth);
   attachVideoSessionGuard(neteaseDio, PlatformType.netease, auth);
   attachVideoSessionGuard(kugouDio, PlatformType.kugou, auth);
-  if (PlatformUtils.isWindows) {
+  if (PlatformUtils.isWindows || PlatformUtils.isAndroid) {
     for (final dio in [qqDio, neteaseDio, kugouDio, sourceEngine.dio]) {
       QuickSourceTransport.install(dio);
     }
